@@ -1,0 +1,30 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+.DS_Store
+*.log
+test-results/
+playwright-report/
+.env-manager-audit/
+
+# Local planning, agent guidance, and machine-specific Codex settings.
+/docs/
+/AGENTS.md
+/.codex/
+
+# Generated development artifacts.
+/src-tauri/gen/
+/src-tauri/icons/icon.ppm
+
+# Env Manager values are never committed.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Synthetic fixtures are explicitly allowlisted.
+!crates/env-test-support/fixtures/.env
+!crates/env-test-support/fixtures/.env.*
+!tests/fixtures/.env
+!tests/fixtures/.env.*

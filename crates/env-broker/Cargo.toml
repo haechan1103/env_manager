@@ -1,0 +1,20 @@
+[package]
+name = "env-broker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+env-core = { path = "../env-core" }
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+env-test-support = { path = "../env-test-support" }
+
+[[bin]]
+name = "env-manager-broker"
+path = "src/main.rs"

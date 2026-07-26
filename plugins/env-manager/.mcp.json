@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "env-manager": {
+      "command": "env-manager-broker",
+      "startup_timeout_sec": 20,
+      "tool_timeout_sec": 60
+    }
+  }
+}

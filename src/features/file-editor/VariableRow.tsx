@@ -1,0 +1,238 @@
+import { useEffect, useState } from "react";
+
+import * as api from "../../lib/api";
+import type { CodexAccess, OccurrenceProjection } from "../../lib/types";
+
+interface Props {
+  projectId: string;
+  file: string;
+  variable: OccurrenceProjection;
+  currentGroup: string;
+  groups: string[];
+  onMutate: (operation: () => Promise<unknown>, success: string) => Promise<void>;
+  onLink: () => void;
+}
+
+export function VariableRow({
+  projectId,
+  file,
+  variable,
+  currentGroup,
+  groups,
+  onMutate,
+  onLink,
+}: Props) {
+  const [draft, setDraft] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [description, setDescription] = useState(variable.description.join("\n"));
+
+  useEffect(() => {
+    setDescription(variable.description.join("\n"));
+  }, [variable.description]);
+
+  useEffect(() => {
+    if (revealed === null) return;
+    const timeout = window.setTimeout(() => setRevealed(null), 12000);
+    return () => window.clearTimeout(timeout);
+  }, [revealed]);
+
+  const value = dirty ? draft : revealed ?? "";
+  const placeholder =
+    variable.valueState === "present" ? "값 있음  ••••••••••••" : "값을 입력하세요";
+
+  const changeAccess = async (access: CodexAccess) => {
+    const downgrade = access === "read-write" && variable.codexAccess !== "read-write";
+    if (
+      downgrade &&
+      !window.confirm(
+        `${variable.key}의 실제 값을 Codex가 명시적 도구로 읽고 수정할 수 있게 합니다. 계속할까요?`,
+      )
+    ) {
+      return;
+    }
+    await onMutate(
+      () => api.setCodexAccess(projectId, variable.key, access, downgrade),
+      `${variable.key}의 Codex 접근 정책을 변경했습니다.`,
+    );
+  };
+
+  return (
+    <article className={variable.duplicate ? "variable-row has-error" : "variable-row"}>
+      <div className="variable-main">
+        <div className="variable-meta">
+          <div className="key-line">
+            <strong>{variable.key}</strong>
+            {variable.linkedCount > 0 && <span className="badge linked">↔ {variable.linkedCount}곳</span>}
+            {variable.duplicate && <span className="badge error">중복 키</span>}
+          </div>
+          {variable.description.length > 0 ? (
+            <button className="description-button" onClick={() => setEditingDescription((open) => !open)}>
+              {variable.description.join(" ")}
+            </button>
+          ) : (
+            <button className="description-button muted" onClick={() => setEditingDescription(true)}>설명 추가</button>
+          )}
+        </div>
+
+        <div className="value-editor">
+          <input
+            type={revealed !== null || dirty ? "text" : "password"}
+            value={value}
+            placeholder={placeholder}
+            aria-label={`${variable.key} 값`}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setDirty(true);
+              setRevealed(null);
+            }}
+          />
+          <button
+            className="icon-button"
+            title={revealed === null ? "12초 동안 값 보기" : "값 숨기기"}
+            onClick={() => {
+              if (revealed !== null) {
+                setRevealed(null);
+                return;
+              }
+              void api
+                .readValue(projectId, file, variable.key)
+                .then(setRevealed)
+                .catch(() => setRevealed(null));
+            }}
+          >
+            {revealed === null ? "◉" : "○"}
+          </button>
+          <button
+            className="icon-button"
+            title="값 복사"
+            onClick={() => void api.copyValue(projectId, file, variable.key)}
+          >
+            ⧉
+          </button>
+        </div>
+
+        <div className="variable-actions">
+          <select
+            className={`access-select ${variable.codexAccess}`}
+            value={variable.codexAccess}
+            aria-label={`${variable.key} Codex 접근`}
+            onChange={(event) => void changeAccess(event.target.value as CodexAccess)}
+          >
+            <option value="protected">보호됨</option>
+            <option value="unclassified">미분류</option>
+            <option value="read-write">Codex 허용</option>
+          </select>
+          {dirty ? (
+            <button
+              className="primary-button compact"
+              disabled={variable.duplicate}
+              onClick={() =>
+                void onMutate(
+                  () => api.saveValue(projectId, { file, key: variable.key, newValue: draft }),
+                  variable.linkedCount > 1
+                    ? `${variable.linkedCount}개 파일에 저장했습니다.`
+                    : `${variable.key} 값을 저장했습니다.`,
+                ).then(() => {
+                  setDirty(false);
+                  setDraft("");
+                })
+              }
+            >
+              {variable.linkedCount > 1 ? `${variable.linkedCount}개 파일에 저장` : "저장"}
+            </button>
+          ) : variable.linkId ? (
+            <button
+              className="quiet-button compact"
+              onClick={() => {
+                if (window.confirm("현재 파일만 연결에서 분리하고 값은 그대로 유지합니다.")) {
+                  void onMutate(
+                    () => api.detachLink(projectId, variable.linkId!, file),
+                    `${file}을 연결에서 분리했습니다.`,
+                  );
+                }
+              }}
+            >
+              연결 해제
+            </button>
+          ) : (
+            <button className="quiet-button compact" onClick={onLink}>연결</button>
+          )}
+          <button
+            className="quiet-button compact"
+            title="다른 그룹으로 이동"
+            onClick={() => {
+              const choices = groups.filter((group) => group !== currentGroup);
+              if (choices.length === 0) return;
+              const target = window
+                .prompt(`이동할 그룹 이름\n${choices.join(" · ")}`, choices[0])
+                ?.trim();
+              if (!target || !choices.includes(target)) return;
+              void onMutate(
+                () =>
+                  api.moveVariable(projectId, {
+                    file,
+                    key: variable.key,
+                    targetGroup: target,
+                  }),
+                `${variable.key}를 ${target} 그룹으로 이동했습니다.`,
+              );
+            }}
+          >
+            이동
+          </button>
+          <button
+            className="danger-quiet-button compact"
+            title="변수와 바로 위 설명 삭제"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `${file}에서 ${variable.key}와 바로 위 설명을 삭제합니다. 이 작업은 되돌릴 수 없습니다.`,
+                )
+              ) {
+                void onMutate(
+                  () => api.deleteVariable(projectId, { file, key: variable.key }),
+                  `${variable.key}를 삭제했습니다.`,
+                );
+              }
+            }}
+          >
+            삭제
+          </button>
+        </div>
+      </div>
+
+      {variable.linkedFiles.length > 0 && (
+        <div className="linked-paths">
+          {variable.linkedFiles.map((path) => <span key={path}>{path}</span>)}
+        </div>
+      )}
+
+      {editingDescription && (
+        <div className="description-editor">
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+          <div>
+            <button className="quiet-button compact" onClick={() => setEditingDescription(false)}>취소</button>
+            <button
+              className="secondary-button compact"
+              onClick={() =>
+                void onMutate(
+                  () =>
+                    api.saveDescription(projectId, {
+                      file,
+                      key: variable.key,
+                      lines: description.trim() ? description.split("\n") : [],
+                    }),
+                  `${variable.key} 설명을 저장했습니다.`,
+                ).then(() => setEditingDescription(false))
+              }
+            >
+              설명 저장
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
