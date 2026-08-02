@@ -6,6 +6,11 @@
 | --- | --- |
 | Inspect | `inspect_project` |
 | Replace allowed value | `plan_set_allowed_value` → approval → `apply_plan` |
+| Add empty variable | `plan_add_variable` → approval → `apply_plan` |
+| Create group | `plan_create_group` → approval → `apply_plan` |
+| Rename group | `plan_rename_group` → approval → `apply_plan` |
+| Move variable | `plan_move_variable` → approval → `apply_plan` |
+| Update description | `plan_update_description` → approval → `apply_plan` |
 | Link N occurrences | `plan_link` → approval → `apply_plan` |
 | Detach one member | `plan_detach` → approval → `apply_plan` |
 | Change access | `plan_classification` → approval → `apply_plan` |
@@ -22,6 +27,9 @@
 - `PLAN_EXPIRED`: create a fresh plan and present it again.
 - `LINK_VALUE_CONFLICT`: ask which selected file is authoritative; never choose by
   filename, ordering, or guessed environment.
+- Invalid or ambiguous group target: inspect again. `기타` means the ungrouped area;
+  create a new explicit group before moving to it. Never select among duplicate
+  group names by position.
 
 ## Output allowlist
 

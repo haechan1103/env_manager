@@ -16,10 +16,11 @@
 - `.env`, `.env.local`, `.env.dev`, `.env.development` 등 env 파일 자동 발견
 - `.env.example`을 포함한 example 변형 제외
 - 실제 값은 기본적으로 가리고 존재 여부만 표시
-- `# @group GPT` 형식의 그룹과 일반 주석 기반 설명 지원
+- `# @group GPT` 형식의 그룹 생성·이름 변경·변수 이동과 일반 주석 기반 설명 지원
 - 기존 파일의 순서, 주석, 줄바꿈과 알 수 없는 구문을 최대한 보존
 - 같은 변수를 2개 이상의 파일에 명시적으로 연결하거나 개별 해제
-- Next.js, Vite 기준으로 실제 적용되는 occurrence 설명
+- 연결된 어느 파일에서 입력해도 모든 멤버에 함께 저장
+- 같은 이름이지만 연결되지 않은 변수는 별도 상태로 표시하고 연결을 제안
 - Codex가 원문 전체를 읽지 않고 redacted broker를 통해 작업하도록 지원
 
 ## 동작 방식
@@ -81,6 +82,7 @@ codex plugin add env-manager@env-manager
 이 프로젝트 env 구조를 값 없이 점검해줘.
 GPT_API_KEY를 local과 development에서 연결해줘.
 기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘.
+GPT 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
 ```
 
 플러그인이 프로젝트를 임의로 등록하지는 않습니다. Env Manager 앱에서 먼저

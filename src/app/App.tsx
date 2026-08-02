@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { EffectiveValues } from "../features/effective-values/EffectiveValues";
 import { FileEditor } from "../features/file-editor/FileEditor";
 import { Overview } from "../features/overview/Overview";
 import { ProjectSidebar } from "../features/projects/ProjectSidebar";
 import { useEnvManager } from "../hooks/useEnvManager";
 
-type View = { kind: "overview" } | { kind: "effective" } | { kind: "file"; path: string };
+type View = { kind: "overview" } | { kind: "file"; path: string };
 
 export function App() {
   const manager = useEnvManager();
@@ -159,14 +158,6 @@ export function App() {
                 <Overview
                   projection={manager.projection}
                   onOpenFile={(path) => setView({ kind: "file", path })}
-                  onOpenEffective={() => setView({ kind: "effective" })}
-                />
-              )}
-              {view.kind === "effective" && (
-                <EffectiveValues
-                  projectId={manager.selectedProject.id}
-                  projection={manager.projection}
-                  onError={manager.showError}
                 />
               )}
               {view.kind === "file" && (

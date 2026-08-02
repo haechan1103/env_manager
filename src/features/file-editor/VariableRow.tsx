@@ -9,6 +9,7 @@ interface Props {
   variable: OccurrenceProjection;
   currentGroup: string;
   groups: string[];
+  sameKeyFiles: string[];
   onMutate: (operation: () => Promise<unknown>, success: string) => Promise<void>;
   onLink: () => void;
 }
@@ -19,6 +20,7 @@ export function VariableRow({
   variable,
   currentGroup,
   groups,
+  sameKeyFiles,
   onMutate,
   onLink,
 }: Props) {
@@ -41,6 +43,11 @@ export function VariableRow({
   const value = dirty ? draft : revealed ?? "";
   const placeholder =
     variable.valueState === "present" ? "값 있음  ••••••••••••" : "값을 입력하세요";
+  const hasIndependentPeers = variable.linkId === null && sameKeyFiles.length > 1;
+  const unlinkedPeerFiles =
+    variable.linkId === null
+      ? []
+      : sameKeyFiles.filter((path) => !variable.linkedFiles.includes(path));
 
   const changeAccess = async (access: CodexAccess) => {
     const downgrade = access === "read-write" && variable.codexAccess !== "read-write";
@@ -64,7 +71,12 @@ export function VariableRow({
         <div className="variable-meta">
           <div className="key-line">
             <strong>{variable.key}</strong>
-            {variable.linkedCount > 0 && <span className="badge linked">↔ {variable.linkedCount}곳</span>}
+            {variable.linkedCount > 1 && (
+              <span className="badge linked">{variable.linkedCount}개 파일 연결됨</span>
+            )}
+            {hasIndependentPeers && (
+              <span className="badge available">같은 변수 {sameKeyFiles.length}곳</span>
+            )}
             {variable.duplicate && <span className="badge error">중복 키</span>}
           </div>
           {variable.description.length > 0 ? (
@@ -142,23 +154,7 @@ export function VariableRow({
             >
               {variable.linkedCount > 1 ? `${variable.linkedCount}개 파일에 저장` : "저장"}
             </button>
-          ) : variable.linkId ? (
-            <button
-              className="quiet-button compact"
-              onClick={() => {
-                if (window.confirm("현재 파일만 연결에서 분리하고 값은 그대로 유지합니다.")) {
-                  void onMutate(
-                    () => api.detachLink(projectId, variable.linkId!, file),
-                    `${file}을 연결에서 분리했습니다.`,
-                  );
-                }
-              }}
-            >
-              연결 해제
-            </button>
-          ) : (
-            <button className="quiet-button compact" onClick={onLink}>연결</button>
-          )}
+          ) : null}
           <button
             className="quiet-button compact"
             title="다른 그룹으로 이동"
@@ -203,9 +199,60 @@ export function VariableRow({
         </div>
       </div>
 
-      {variable.linkedFiles.length > 0 && (
-        <div className="linked-paths">
-          {variable.linkedFiles.map((path) => <span key={path}>{path}</span>)}
+      {variable.linkId && variable.linkedFiles.length > 1 && (
+        <div className="relationship-panel linked-relationship">
+          <span className="relationship-icon" aria-hidden="true">↔</span>
+          <div className="relationship-copy">
+            <strong>{variable.linkedFiles.length}개 파일에서 함께 관리</strong>
+            <span>어느 파일에서 값을 바꿔도 아래 파일에 모두 저장됩니다.</span>
+            <div className="relationship-paths">
+              {variable.linkedFiles.map((path) => (
+                <code className={path === file ? "current" : ""} key={path}>
+                  {path}
+                  {path === file && <small>현재</small>}
+                </code>
+              ))}
+            </div>
+            {unlinkedPeerFiles.length > 0 && (
+              <span className="unlinked-peer-note">
+                별도 관리 중: {unlinkedPeerFiles.join(" · ")}
+              </span>
+            )}
+          </div>
+          <button
+            className="quiet-button compact relationship-action"
+            onClick={() => {
+              if (window.confirm("현재 파일만 연결에서 분리하고 값은 그대로 유지합니다.")) {
+                void onMutate(
+                  () => api.detachLink(projectId, variable.linkId!, file),
+                  `${file}을 연결에서 분리했습니다.`,
+                );
+              }
+            }}
+          >
+            이 파일 연결 해제
+          </button>
+        </div>
+      )}
+
+      {hasIndependentPeers && (
+        <div className="relationship-panel available-relationship">
+          <span className="relationship-icon" aria-hidden="true">＋</span>
+          <div className="relationship-copy">
+            <strong>같은 변수가 {sameKeyFiles.length}개 파일에 있습니다</strong>
+            <span>현재는 각각 따로 관리됩니다. 연결하면 한 번의 입력으로 함께 저장할 수 있어요.</span>
+            <div className="relationship-paths">
+              {sameKeyFiles.map((path) => (
+                <code className={path === file ? "current" : ""} key={path}>
+                  {path}
+                  {path === file && <small>현재</small>}
+                </code>
+              ))}
+            </div>
+          </div>
+          <button className="secondary-button compact relationship-action" onClick={onLink}>
+            함께 관리
+          </button>
         </div>
       )}
 

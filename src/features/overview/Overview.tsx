@@ -3,10 +3,9 @@ import type { ProjectProjection } from "../../lib/types";
 interface Props {
   projection: ProjectProjection;
   onOpenFile: (path: string) => void;
-  onOpenEffective: () => void;
 }
 
-export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
+export function Overview({ projection, onOpenFile }: Props) {
   const variables = projection.files.flatMap((file) =>
     file.groups.flatMap((group) => group.variables.map((variable) => ({ ...variable, file: file.path }))),
   );
@@ -21,7 +20,6 @@ export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
           <p className="eyebrow">PROJECT HEALTH</p>
           <h2>지금 확인할 항목</h2>
         </div>
-        <button className="secondary-button" onClick={onOpenEffective}>실제 적용값 확인</button>
       </div>
 
       <div className="stats-grid">

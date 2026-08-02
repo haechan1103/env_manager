@@ -2,10 +2,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use env_core::{
-    AddVariableRequest, CodexAccess, DeleteVariableRequest, EffectiveContext, EffectiveOccurrence,
-    EffectiveProjection, EnvError, LinkRequest, MoveVariableRequest, MutationSummary,
-    ProjectProjection, SaveDescriptionRequest, SaveGroupRequest, SaveValueRequest,
-    resolve_effective,
+    AddVariableRequest, CodexAccess, CreateGroupRequest, DeleteVariableRequest, EnvError,
+    LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection, RenameGroupRequest,
+    SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -66,14 +65,6 @@ pub struct ValueRequest {
     project_id: String,
     file: String,
     key: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EffectiveRequest {
-    project_id: String,
-    key: String,
-    context: EffectiveContext,
 }
 
 #[derive(Deserialize)]
@@ -151,13 +142,24 @@ pub fn save_description(
 }
 
 #[tauri::command]
-pub fn save_group(
-    payload: ProjectMutation<SaveGroupRequest>,
+pub fn create_group(
+    payload: ProjectMutation<CreateGroupRequest>,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<MutationSummary> {
     runtime
         .service(&payload.project_id)?
-        .save_group(payload.request)
+        .create_group(payload.request)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn rename_group(
+    payload: ProjectMutation<RenameGroupRequest>,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<MutationSummary> {
+    runtime
+        .service(&payload.project_id)?
+        .rename_group(payload.request)
         .map_err(Into::into)
 }
 
@@ -266,33 +268,6 @@ pub fn copy_value(request: ValueRequest, runtime: State<'_, AppRuntime>) -> Comm
         }
     });
     Ok(())
-}
-
-#[tauri::command]
-pub fn get_effective_value(
-    request: EffectiveRequest,
-    runtime: State<'_, AppRuntime>,
-) -> CommandResult<EffectiveProjection> {
-    let projection = runtime.service(&request.project_id)?.scan()?;
-    let occurrences = projection
-        .files
-        .iter()
-        .filter(|file| {
-            file.groups
-                .iter()
-                .flat_map(|group| &group.variables)
-                .any(|variable| variable.key == request.key)
-        })
-        .map(|file| EffectiveOccurrence {
-            file: file.path.clone(),
-            key: request.key.clone(),
-        })
-        .collect::<Vec<_>>();
-    Ok(resolve_effective(
-        &request.context,
-        &request.key,
-        &occurrences,
-    ))
 }
 
 #[tauri::command]

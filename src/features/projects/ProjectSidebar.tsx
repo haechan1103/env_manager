@@ -1,7 +1,7 @@
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
 
 interface View {
-  kind: "overview" | "effective" | "file";
+  kind: "overview" | "file";
   path?: string;
 }
 
@@ -11,7 +11,7 @@ interface Props {
   projection: ProjectProjection | null;
   view: View;
   onSelectProject: (projectId: string) => void;
-  onSelectView: (view: { kind: "overview" } | { kind: "effective" } | { kind: "file"; path: string }) => void;
+  onSelectView: (view: { kind: "overview" } | { kind: "file"; path: string }) => void;
   onRegister: () => void;
 }
 
@@ -66,12 +66,6 @@ export function ProjectSidebar({
             {(projection.issueCount > 0 || projection.unclassifiedCount > 0) && (
               <b>{projection.issueCount + projection.unclassifiedCount}</b>
             )}
-          </button>
-          <button
-            className={view.kind === "effective" ? "nav-item active" : "nav-item"}
-            onClick={() => onSelectView({ kind: "effective" })}
-          >
-            <span>↳</span> 실제 적용값
           </button>
           <p className="file-label">ENV FILES</p>
           {projection.files.map((file) => (

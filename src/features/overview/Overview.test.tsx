@@ -10,7 +10,6 @@ describe("Overview", () => {
       <Overview
         projection={demoProjection}
         onOpenFile={vi.fn()}
-        onOpenEffective={vi.fn()}
       />,
     );
 

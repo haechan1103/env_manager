@@ -1,6 +1,6 @@
 ---
 name: manage-project-env
-description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks Codex to inspect env structure, classify variable access, add or replace an allowed variable, normalize existing group comments, explain effective occurrences, link the same key across two or more env files, or detach a link. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, or Env Manager.
+description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks Codex to inspect env structure, classify variable access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, or detach a link. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, or Env Manager.
 ---
 
 # Manage Project Env
@@ -37,6 +37,16 @@ or generic editing tools.
 
 ## Structural changes
 
+- Use `plan_create_group` to create an empty explicit group and
+  `plan_rename_group` to rename exactly one existing group. `기타` is the virtual
+  ungrouped area and cannot be created or renamed as an explicit group.
+- Use `plan_add_variable` to add a variable with an empty value. This tool has no
+  value argument. Tell the user to enter a protected value in the desktop app.
+- Use `plan_move_variable` to move a variable and its contiguous description to an
+  existing group. To move into a new group, create and apply that group first, then
+  make a separate move plan.
+- Use `plan_update_description` for ordinary comment lines attached to one variable.
+  Do not encode group markers or other `# @` directives as descriptions.
 - Use `plan_migration` for strong visual headings such as `# === GPT ===`,
   `# ** GPT **`, or `# [GPT]`. Ordinary comments remain descriptions or preserved
   notes.
@@ -45,6 +55,8 @@ or generic editing tools.
 - For conflicting non-empty link members, require the user to choose the source file.
 - Support two or more peers; do not model whole-file inheritance.
 - Detach preserves the occurrence's current value.
+- If duplicate group names make a target ambiguous, stop and ask the user to rename
+  or resolve them; never choose the first matching marker.
 
 Read [tool-safety.md](references/tool-safety.md) when a tool is rejected, a plan
 expires, or an operation involves multiple files.

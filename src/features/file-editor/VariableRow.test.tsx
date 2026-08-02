@@ -36,6 +36,7 @@ describe("VariableRow", () => {
         variable={variable}
         currentGroup="GPT"
         groups={["GPT", "App"]}
+        sameKeyFiles={[".env.local", ".env.development", "apps/api/.env"]}
         onMutate={async (operation) => {
           await operation();
         }}
@@ -58,6 +59,7 @@ describe("VariableRow", () => {
         variable={variable}
         currentGroup="GPT"
         groups={["GPT", "App"]}
+        sameKeyFiles={[".env.local", ".env.development", "apps/api/.env"]}
         onMutate={async (operation) => {
           await operation();
         }}
@@ -68,5 +70,53 @@ describe("VariableRow", () => {
     expect(screen.queryByDisplayValue("fake_preview_value")).not.toBeInTheDocument();
     await user.click(screen.getByTitle("12초 동안 값 보기"));
     expect(await screen.findByDisplayValue("fake_preview_value")).toBeInTheDocument();
+  });
+
+  it("shows every file in a linked peer group", () => {
+    render(
+      <VariableRow
+        projectId="demo"
+        file=".env.local"
+        variable={variable}
+        currentGroup="GPT"
+        groups={["GPT", "App"]}
+        sameKeyFiles={[".env.local", ".env.development", "apps/api/.env"]}
+        onMutate={async (operation) => {
+          await operation();
+        }}
+        onLink={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("3개 파일에서 함께 관리")).toBeInTheDocument();
+    expect(screen.getByText(".env.development")).toBeInTheDocument();
+    expect(screen.getByText("apps/api/.env")).toBeInTheDocument();
+  });
+
+  it("suggests an explicit link for unlinked same-name occurrences", () => {
+    const unlinked = {
+      ...variable,
+      linkedCount: 0,
+      linkId: null,
+      linkedFiles: [],
+    };
+
+    render(
+      <VariableRow
+        projectId="demo"
+        file=".env.local"
+        variable={unlinked}
+        currentGroup="GPT"
+        groups={["GPT", "App"]}
+        sameKeyFiles={[".env.local", ".env.development"]}
+        onMutate={async (operation) => {
+          await operation();
+        }}
+        onLink={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("같은 변수가 2개 파일에 있습니다")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "함께 관리" })).toBeInTheDocument();
   });
 });

@@ -4,8 +4,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { demoProjection, demoProjects } from "./demo";
 import type {
   CodexAccess,
-  EffectiveContext,
-  EffectiveProjection,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -71,12 +69,20 @@ export async function saveDescription(
   return call("save_description", { payload: { projectId, request } });
 }
 
-export async function saveGroup(
+export async function createGroup(
+  projectId: string,
+  request: { file: string; name: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
+  return call("create_group", { payload: { projectId, request } });
+}
+
+export async function renameGroup(
   projectId: string,
   request: { file: string; currentName: string; newName: string },
 ): Promise<MutationSummary> {
   if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
-  return call("save_group", { payload: { projectId, request } });
+  return call("rename_group", { payload: { projectId, request } });
 }
 
 export async function addVariable(
@@ -151,25 +157,6 @@ export async function readValue(
 export async function copyValue(projectId: string, file: string, key: string): Promise<void> {
   if (!isTauriRuntime) return;
   return call("copy_value", { request: { projectId, file, key } });
-}
-
-export async function getEffectiveValue(
-  projectId: string,
-  key: string,
-  context: EffectiveContext,
-): Promise<EffectiveProjection> {
-  if (!isTauriRuntime) {
-    const directory =
-      context.workingDirectory === "." ? "" : context.workingDirectory.replace(/\/$/, "");
-    return {
-      key,
-      winner: directory ? `${directory}/.env.local` : ".env.local",
-      shadowed: [".env.development", ".env"],
-      reason: "데모 모드의 예측 결과입니다.",
-      confidence: "demo",
-    };
-  }
-  return call("get_effective_value", { request: { projectId, key, context } });
 }
 
 export async function planMigration(

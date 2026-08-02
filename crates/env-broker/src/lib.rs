@@ -7,8 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use env_core::{
-    ClassificationSource, CodexAccess, EnvError, EnvErrorCode, LinkRequest, MigrationPlan,
-    ProjectService, SaveValueRequest,
+    AddVariableRequest, ClassificationSource, CodexAccess, CreateGroupRequest, EnvError,
+    EnvErrorCode, LinkRequest, MigrationPlan, MoveVariableRequest, ProjectService,
+    RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -40,6 +41,11 @@ struct StoredPlan {
 
 enum PlannedOperation {
     SetAllowedValue(SaveValueRequest),
+    AddVariable(AddVariableRequest),
+    CreateGroup(CreateGroupRequest),
+    RenameGroup(RenameGroupRequest),
+    MoveVariable(MoveVariableRequest),
+    UpdateDescription(SaveDescriptionRequest),
     Link(LinkRequest),
     Detach { link_id: String, file: String },
     Classification { key: String, access: CodexAccess },
@@ -80,6 +86,52 @@ struct PlanValueArgs {
     file: String,
     key: String,
     new_value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanAddVariableArgs {
+    project_path: String,
+    file: String,
+    key: String,
+    group: String,
+    #[serde(default)]
+    description: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanCreateGroupArgs {
+    project_path: String,
+    file: String,
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanRenameGroupArgs {
+    project_path: String,
+    file: String,
+    current_name: String,
+    new_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanMoveVariableArgs {
+    project_path: String,
+    file: String,
+    key: String,
+    target_group: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanDescriptionArgs {
+    project_path: String,
+    file: String,
+    key: String,
+    lines: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,6 +200,11 @@ impl Broker {
             "inspect_project" => self.inspect(parse(arguments)?),
             "read_allowed_value" => self.read_allowed(parse(arguments)?),
             "plan_set_allowed_value" => self.plan_value(parse(arguments)?),
+            "plan_add_variable" => self.plan_add_variable(parse(arguments)?),
+            "plan_create_group" => self.plan_create_group(parse(arguments)?),
+            "plan_rename_group" => self.plan_rename_group(parse(arguments)?),
+            "plan_move_variable" => self.plan_move_variable(parse(arguments)?),
+            "plan_update_description" => self.plan_update_description(parse(arguments)?),
             "plan_link" => self.plan_link(parse(arguments)?),
             "plan_detach" => self.plan_detach(parse(arguments)?),
             "plan_classification" => self.plan_classification(parse(arguments)?),
@@ -205,6 +262,98 @@ impl Broker {
             vec![args.file],
             vec![args.key],
             "value-write",
+            None,
+        )
+    }
+
+    fn plan_add_variable(&self, args: PlanAddVariableArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::AddVariable(AddVariableRequest {
+                file: args.file.clone(),
+                key: args.key.clone(),
+                group: args.group,
+                description: args.description,
+                value: String::new(),
+            }),
+            format!("{} 빈 변수를 추가합니다.", args.key),
+            vec![args.file],
+            vec![args.key],
+            "structural-write",
+            None,
+        )
+    }
+
+    fn plan_create_group(&self, args: PlanCreateGroupArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::CreateGroup(CreateGroupRequest {
+                file: args.file.clone(),
+                name: args.name.clone(),
+            }),
+            format!("{} 그룹을 만듭니다.", args.name),
+            vec![args.file],
+            Vec::new(),
+            "structural-write",
+            None,
+        )
+    }
+
+    fn plan_rename_group(&self, args: PlanRenameGroupArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::RenameGroup(RenameGroupRequest {
+                file: args.file.clone(),
+                current_name: args.current_name.clone(),
+                new_name: args.new_name.clone(),
+            }),
+            format!(
+                "{} 그룹 이름을 {}로 바꿉니다.",
+                args.current_name, args.new_name
+            ),
+            vec![args.file],
+            Vec::new(),
+            "structural-write",
+            None,
+        )
+    }
+
+    fn plan_move_variable(&self, args: PlanMoveVariableArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::MoveVariable(MoveVariableRequest {
+                file: args.file.clone(),
+                key: args.key.clone(),
+                target_group: args.target_group.clone(),
+            }),
+            format!(
+                "{} 변수를 {} 그룹으로 옮깁니다.",
+                args.key, args.target_group
+            ),
+            vec![args.file],
+            vec![args.key],
+            "structural-write",
+            None,
+        )
+    }
+
+    fn plan_update_description(&self, args: PlanDescriptionArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::UpdateDescription(SaveDescriptionRequest {
+                file: args.file.clone(),
+                key: args.key.clone(),
+                lines: args.lines,
+            }),
+            format!("{} 변수 설명을 변경합니다.", args.key),
+            vec![args.file],
+            vec![args.key],
+            "structural-write",
             None,
         )
     }
@@ -362,6 +511,21 @@ impl Broker {
                 }
                 serde_json::to_value(service.save_value(request)?)
             }
+            PlannedOperation::AddVariable(request) => {
+                serde_json::to_value(service.add_variable(request)?)
+            }
+            PlannedOperation::CreateGroup(request) => {
+                serde_json::to_value(service.create_group(request)?)
+            }
+            PlannedOperation::RenameGroup(request) => {
+                serde_json::to_value(service.rename_group(request)?)
+            }
+            PlannedOperation::MoveVariable(request) => {
+                serde_json::to_value(service.move_variable(request)?)
+            }
+            PlannedOperation::UpdateDescription(request) => {
+                serde_json::to_value(service.save_description(request)?)
+            }
             PlannedOperation::Link(request) => serde_json::to_value(service.create_link(request)?),
             PlannedOperation::Detach { link_id, file } => {
                 service.detach_link_member(&link_id, &file)?;
@@ -515,6 +679,57 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "plan_add_variable",
+            "Plan adding a variable with an empty value. This tool never accepts or returns a value.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" },
+                    "key": { "type": "string" }, "group": { "type": "string" },
+                    "description": { "type": "array", "items": { "type": "string" } }
+                }, "required": ["projectPath", "file", "key", "group"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_create_group",
+            "Plan adding one explicit # @group marker without reading or changing values.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" }, "name": { "type": "string" }
+                }, "required": ["projectPath", "file", "name"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_rename_group",
+            "Plan renaming one unambiguous explicit group marker.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" },
+                    "currentName": { "type": "string" }, "newName": { "type": "string" }
+                }, "required": ["projectPath", "file", "currentName", "newName"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_move_variable",
+            "Plan moving an existing variable and its attached description to an existing group.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" },
+                    "key": { "type": "string" }, "targetGroup": { "type": "string" }
+                }, "required": ["projectPath", "file", "key", "targetGroup"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_update_description",
+            "Plan replacing the ordinary comment lines attached to one variable without reading its value.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" },
+                    "key": { "type": "string" },
+                    "lines": { "type": "array", "items": { "type": "string" } }
+                }, "required": ["projectPath", "file", "key", "lines"], "additionalProperties": false
+            })
+        ),
+        tool(
             "plan_link",
             "Plan an N-way peer link without returning any values.",
             json!({
@@ -665,6 +880,137 @@ mod tests {
         assert_eq!(
             project.read(".env.local"),
             format!("GPT_API_KEY={CANARY}\nPORT=fake_4200\n").as_bytes()
+        );
+    }
+
+    #[test]
+    fn structural_group_plans_create_move_and_rename_without_value_output() {
+        let (project, _) = registered_project();
+        let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
+
+        for (tool_name, arguments) in [
+            (
+                "plan_create_group",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "name": "Database"
+                }),
+            ),
+            (
+                "plan_move_variable",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "key": "PORT",
+                    "targetGroup": "Database"
+                }),
+            ),
+            (
+                "plan_rename_group",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "currentName": "Database",
+                    "newName": "Runtime"
+                }),
+            ),
+        ] {
+            let plan = broker.call_tool(tool_name, arguments).expect("plan");
+            assert!(!plan.to_string().contains(CANARY));
+            let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+            broker
+                .call_tool(
+                    "apply_plan",
+                    json!({ "planId": plan_id, "confirmed": true }),
+                )
+                .expect("apply");
+        }
+
+        let output = String::from_utf8(project.read(".env.local")).expect("utf8");
+        assert!(output.contains("# @group Runtime"));
+        assert!(
+            output.find("# @group Runtime").expect("group") < output.find("PORT=").expect("key")
+        );
+        assert!(output.contains(&format!("GPT_API_KEY={CANARY}")));
+    }
+
+    #[test]
+    fn codex_adds_only_an_empty_variable_and_can_update_its_description() {
+        let (project, _) = registered_project();
+        let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
+        let plan = broker
+            .call_tool(
+                "plan_add_variable",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "key": "DATABASE_URL",
+                    "group": "Database",
+                    "description": ["fake database description"]
+                }),
+            )
+            .expect("add plan");
+        let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+        broker
+            .call_tool(
+                "apply_plan",
+                json!({ "planId": plan_id, "confirmed": true }),
+            )
+            .expect("add apply");
+
+        let added = String::from_utf8(project.read(".env.local")).expect("utf8");
+        assert!(added.contains("DATABASE_URL=\n"));
+        assert!(added.contains("# @group Database"));
+
+        let description_plan = broker
+            .call_tool(
+                "plan_update_description",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "key": "DATABASE_URL",
+                    "lines": ["fake updated description"]
+                }),
+            )
+            .expect("description plan");
+        let plan_id = description_plan
+            .get("planId")
+            .and_then(Value::as_str)
+            .expect("plan id");
+        broker
+            .call_tool(
+                "apply_plan",
+                json!({ "planId": plan_id, "confirmed": true }),
+            )
+            .expect("description apply");
+
+        let output = String::from_utf8(project.read(".env.local")).expect("utf8");
+        assert!(output.contains("# fake updated description\nDATABASE_URL=\n"));
+        assert!(output.contains(&format!("GPT_API_KEY={CANARY}")));
+    }
+
+    #[test]
+    fn add_variable_tool_rejects_a_value_argument() {
+        let (project, _) = registered_project();
+        let error = Broker::with_registered_roots(vec![project.root().to_path_buf()])
+            .call_tool(
+                "plan_add_variable",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "key": "DATABASE_URL",
+                    "group": "Database",
+                    "value": "fake_must_not_be_accepted"
+                }),
+            )
+            .expect_err("value argument must be rejected");
+        assert_eq!(error.code(), EnvErrorCode::InvalidRequest);
+        assert!(
+            !project
+                .read(".env.local")
+                .windows(25)
+                .any(|bytes| bytes == b"fake_must_not_be_accepted")
         );
     }
 

@@ -56,24 +56,6 @@ export interface MigrationPlanProjection {
   };
 }
 
-export type FrameworkKind = "next-js" | "vite" | "custom";
-
-export interface EffectiveContext {
-  framework: FrameworkKind;
-  mode: string;
-  workingDirectory: string;
-  processKeys: string[];
-  customPrecedence: string[];
-}
-
-export interface EffectiveProjection {
-  key: string;
-  winner: string | null;
-  shadowed: string[];
-  reason: string;
-  confidence: string;
-}
-
 export interface CommandError {
   code?: string;
   message?: string;

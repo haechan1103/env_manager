@@ -14,16 +14,18 @@
   "interface": {
     "displayName": "Env Manager",
     "shortDescription": "Manage registered env files without broad file access.",
-    "longDescription": "Adds a focused Skill and local MCP broker for redacted inspection, access classification, migration plans, and N-way variable links.",
+    "longDescription": "Adds a focused Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, and N-way variable links.",
     "developerName": "haechan1103",
     "category": "Productivity",
     "capabilities": [
       "Redacted env inspection",
       "Approval-bound mutation plans",
+      "Group and variable structure",
       "N-way variable links"
     ],
     "defaultPrompt": [
       "이 프로젝트 env 구조를 값 없이 점검해줘.",
+      "GPT 그룹을 만들고 빈 환경변수를 추가해줘.",
       "기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘.",
       "같은 변수를 local과 development에서 연결해줘."
     ],
