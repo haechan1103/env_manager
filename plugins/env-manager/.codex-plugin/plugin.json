@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker.",
   "author": {
     "name": "haechan1103",
@@ -9,7 +9,12 @@
   "homepage": "https://github.com/haechan1103/env_manager",
   "repository": "https://github.com/haechan1103/env_manager",
   "license": "MIT",
-  "keywords": ["environment-variables", "env", "codex", "tauri"],
+  "keywords": [
+    "environment-variables",
+    "env",
+    "codex",
+    "tauri"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Env Manager",
@@ -19,7 +24,8 @@
     "category": "Productivity",
     "capabilities": [
       "Redacted env inspection",
-      "Approval-bound mutation plans",
+      "Request-authorized mutation plans",
+      "Safe env file creation",
       "Group and variable structure",
       "N-way variable links"
     ],

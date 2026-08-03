@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use env_core::{
-    AddVariableRequest, ClassificationSource, CodexAccess, CreateGroupRequest, EnvError,
-    EnvErrorCode, LinkRequest, MigrationPlan, MoveVariableRequest, ProjectService,
-    RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
+    AddVariableRequest, ClassificationSource, CodexAccess, CreateEnvFileRequest,
+    CreateGroupRequest, EnvError, EnvErrorCode, LinkRequest, MigrationPlan, MoveVariableRequest,
+    ProjectService, RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -41,6 +41,7 @@ struct StoredPlan {
 
 enum PlannedOperation {
     SetAllowedValue(SaveValueRequest),
+    CreateEnvFile(CreateEnvFileRequest),
     AddVariable(AddVariableRequest),
     CreateGroup(CreateGroupRequest),
     RenameGroup(RenameGroupRequest),
@@ -86,6 +87,13 @@ struct PlanValueArgs {
     file: String,
     key: String,
     new_value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanCreateEnvFileArgs {
+    project_path: String,
+    file: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,12 +160,11 @@ struct PlanDetachArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PlanClassificationArgs {
     project_path: String,
     key: String,
     access: CodexAccess,
-    confirmed: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,10 +175,9 @@ struct PlanMigrationArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ApplyArgs {
     plan_id: String,
-    confirmed: bool,
 }
 
 #[derive(Serialize)]
@@ -200,6 +206,7 @@ impl Broker {
             "inspect_project" => self.inspect(parse(arguments)?),
             "read_allowed_value" => self.read_allowed(parse(arguments)?),
             "plan_set_allowed_value" => self.plan_value(parse(arguments)?),
+            "plan_create_env_file" => self.plan_create_env_file(parse(arguments)?),
             "plan_add_variable" => self.plan_add_variable(parse(arguments)?),
             "plan_create_group" => self.plan_create_group(parse(arguments)?),
             "plan_rename_group" => self.plan_rename_group(parse(arguments)?),
@@ -262,6 +269,21 @@ impl Broker {
             vec![args.file],
             vec![args.key],
             "value-write",
+            None,
+        )
+    }
+
+    fn plan_create_env_file(&self, args: PlanCreateEnvFileArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        self.store_plan(
+            &service,
+            PlannedOperation::CreateEnvFile(CreateEnvFileRequest {
+                file: args.file.clone(),
+            }),
+            format!("{} 빈 env 파일을 만듭니다.", args.file),
+            vec![args.file],
+            Vec::new(),
+            "file-create",
             None,
         )
     }
@@ -397,13 +419,6 @@ impl Broker {
 
     fn plan_classification(&self, args: PlanClassificationArgs) -> Result<Value, EnvError> {
         let service = self.open_registered(&args.project_path)?;
-        let current = service.codex_access(&args.key)?;
-        if args.access == CodexAccess::ReadWrite
-            && current != CodexAccess::ReadWrite
-            && !args.confirmed
-        {
-            return Err(EnvError::confirmation_required(&args.key));
-        }
         self.store_plan(
             &service,
             PlannedOperation::Classification {
@@ -487,9 +502,6 @@ impl Broker {
     }
 
     fn apply(&self, args: ApplyArgs) -> Result<Value, EnvError> {
-        if !args.confirmed {
-            return Err(EnvError::invalid("계획 적용에는 명시적 확인이 필요합니다."));
-        }
         let stored = self
             .plans
             .lock()
@@ -510,6 +522,9 @@ impl Broker {
                     return Err(EnvError::access_blocked(&request.key));
                 }
                 serde_json::to_value(service.save_value(request)?)
+            }
+            PlannedOperation::CreateEnvFile(request) => {
+                serde_json::to_value(service.create_env_file(request)?)
             }
             PlannedOperation::AddVariable(request) => {
                 serde_json::to_value(service.add_variable(request)?)
@@ -545,7 +560,7 @@ impl Broker {
             "apply_plan",
             &[],
             &[],
-            "approved",
+            "request-authorized",
             "OK",
         );
         Ok(result)
@@ -679,6 +694,15 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "plan_create_env_file",
+            "Plan creating one empty env file inside an existing registered-project directory. Existing files and example variants are rejected.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "file": { "type": "string" }
+                }, "required": ["projectPath", "file"], "additionalProperties": false
+            })
+        ),
+        tool(
             "plan_add_variable",
             "Plan adding a variable with an empty value. This tool never accepts or returns a value.",
             json!({
@@ -751,13 +775,12 @@ pub fn tool_definitions() -> Value {
         ),
         tool(
             "plan_classification",
-            "Plan a Codex access classification. Downgrades to read-write require confirmed=true.",
+            "Plan an explicitly requested Codex access classification without a second confirmation round trip.",
             json!({
                 "type": "object", "properties": {
                     "projectPath": { "type": "string" }, "key": { "type": "string" },
-                    "access": { "type": "string", "enum": ["read-write", "protected", "unclassified"] },
-                    "confirmed": { "type": "boolean" }
-                }, "required": ["projectPath", "key", "access", "confirmed"], "additionalProperties": false
+                    "access": { "type": "string", "enum": ["read-write", "protected", "unclassified"] }
+                }, "required": ["projectPath", "key", "access"], "additionalProperties": false
             })
         ),
         tool(
@@ -771,11 +794,11 @@ pub fn tool_definitions() -> Value {
         ),
         tool(
             "apply_plan",
-            "Apply one unexpired redacted plan after user approval.",
+            "Apply one unexpired redacted plan authorized by the current user request.",
             json!({
                 "type": "object", "properties": {
-                    "planId": { "type": "string" }, "confirmed": { "type": "boolean" }
-                }, "required": ["planId", "confirmed"], "additionalProperties": false
+                    "planId": { "type": "string" }
+                }, "required": ["planId"], "additionalProperties": false
             })
         )
     ])
@@ -856,7 +879,68 @@ mod tests {
     }
 
     #[test]
-    fn approved_plan_updates_only_an_allowed_value() {
+    fn creates_a_new_env_file_and_adds_empty_variables_without_approval() {
+        let project = SyntheticProject::new();
+        fs::create_dir_all(project.root().join("apps/mobile")).expect("fixture directory");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
+
+        let file_plan = broker
+            .call_tool(
+                "plan_create_env_file",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": "apps/mobile/.env"
+                }),
+            )
+            .expect("file plan");
+        let plan_id = file_plan
+            .get("planId")
+            .and_then(Value::as_str)
+            .expect("plan id");
+        broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("file apply");
+
+        for key in [
+            "EXPO_PUBLIC_API_BASE_URL",
+            "EXPO_PUBLIC_SUPABASE_URL",
+            "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        ] {
+            let variable_plan = broker
+                .call_tool(
+                    "plan_add_variable",
+                    json!({
+                        "projectPath": project.root().to_string_lossy(),
+                        "file": "apps/mobile/.env",
+                        "key": key,
+                        "group": "Mobile"
+                    }),
+                )
+                .expect("variable plan");
+            let plan_id = variable_plan
+                .get("planId")
+                .and_then(Value::as_str)
+                .expect("plan id");
+            broker
+                .call_tool("apply_plan", json!({ "planId": plan_id }))
+                .expect("variable apply");
+        }
+
+        let output = String::from_utf8(project.read("apps/mobile/.env")).expect("utf8");
+        assert_eq!(output.matches("# @group Mobile").count(), 1);
+        for key in [
+            "EXPO_PUBLIC_API_BASE_URL",
+            "EXPO_PUBLIC_SUPABASE_URL",
+            "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        ] {
+            assert!(output.contains(&format!("{key}=\n")));
+        }
+    }
+
+    #[test]
+    fn request_authorized_plan_updates_only_an_allowed_value() {
         let (project, _) = registered_project();
         let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
         let plan = broker
@@ -872,14 +956,78 @@ mod tests {
             .expect("plan");
         let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
         broker
-            .call_tool(
-                "apply_plan",
-                json!({ "planId": plan_id, "confirmed": true }),
-            )
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
             .expect("apply");
         assert_eq!(
             project.read(".env.local"),
             format!("GPT_API_KEY={CANARY}\nPORT=fake_4200\n").as_bytes()
+        );
+    }
+
+    #[test]
+    fn apply_plan_accepts_only_the_plan_id() {
+        let (project, _) = registered_project();
+        let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
+        let plan = broker
+            .call_tool(
+                "plan_set_allowed_value",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": ".env.local",
+                    "key": "PORT",
+                    "newValue": "fake_4300"
+                }),
+            )
+            .expect("plan");
+        let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+
+        let obsolete_argument = broker
+            .call_tool(
+                "apply_plan",
+                json!({ "planId": plan_id, "confirmed": true }),
+            )
+            .expect_err("obsolete confirmation argument must be rejected");
+        assert_eq!(obsolete_argument.code(), EnvErrorCode::InvalidRequest);
+
+        broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("request-authorized apply");
+        assert_eq!(
+            project.read(".env.local"),
+            format!("GPT_API_KEY={CANARY}\nPORT=fake_4300\n").as_bytes()
+        );
+    }
+
+    #[test]
+    fn explicitly_requested_access_change_needs_no_second_confirmation() {
+        let (project, service) = registered_project();
+        assert_eq!(
+            service.codex_access("GPT_API_KEY").expect("initial policy"),
+            CodexAccess::Protected
+        );
+        let broker = Broker::with_registered_roots(vec![project.root().to_path_buf()]);
+        let plan = broker
+            .call_tool(
+                "plan_classification",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "key": "GPT_API_KEY",
+                    "access": "read-write"
+                }),
+            )
+            .expect("classification plan");
+        let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+
+        broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("classification apply");
+
+        let reopened = ProjectService::open(project.root()).expect("service");
+        assert_eq!(
+            reopened
+                .codex_access("GPT_API_KEY")
+                .expect("updated policy"),
+            CodexAccess::ReadWrite
         );
     }
 
@@ -920,10 +1068,7 @@ mod tests {
             assert!(!plan.to_string().contains(CANARY));
             let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
             broker
-                .call_tool(
-                    "apply_plan",
-                    json!({ "planId": plan_id, "confirmed": true }),
-                )
+                .call_tool("apply_plan", json!({ "planId": plan_id }))
                 .expect("apply");
         }
 
@@ -953,10 +1098,7 @@ mod tests {
             .expect("add plan");
         let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
         broker
-            .call_tool(
-                "apply_plan",
-                json!({ "planId": plan_id, "confirmed": true }),
-            )
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
             .expect("add apply");
 
         let added = String::from_utf8(project.read(".env.local")).expect("utf8");
@@ -979,10 +1121,7 @@ mod tests {
             .and_then(Value::as_str)
             .expect("plan id");
         broker
-            .call_tool(
-                "apply_plan",
-                json!({ "planId": plan_id, "confirmed": true }),
-            )
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
             .expect("description apply");
 
         let output = String::from_utf8(project.read(".env.local")).expect("utf8");

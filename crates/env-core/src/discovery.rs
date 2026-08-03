@@ -102,7 +102,7 @@ fn visit_directory(
     Ok(())
 }
 
-fn is_env_candidate(name: &str) -> bool {
+pub(crate) fn is_env_candidate(name: &str) -> bool {
     if name == ".env.example" || name.ends_with(".example") {
         return false;
     }

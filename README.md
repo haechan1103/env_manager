@@ -14,6 +14,7 @@
 
 - 사용자가 등록한 프로젝트만 탐색
 - `.env`, `.env.local`, `.env.dev`, `.env.development` 등 env 파일 자동 발견
+- 등록 프로젝트 안에 새 env 파일과 빈 변수를 Codex로 생성
 - `.env.example`을 포함한 example 변형 제외
 - 실제 값은 기본적으로 가리고 존재 여부만 표시
 - `# @group GPT` 형식의 그룹 생성·이름 변경·변수 이동과 일반 주석 기반 설명 지원
@@ -62,6 +63,10 @@ npm run tauri build
 
 Codex 플러그인은 자연어로 env 정리, 분류, 연결 작업을 요청할 때 전용
 Skill과 로컬 MCP broker를 사용합니다.
+
+Codex는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별도의 재승인
+질문 없이 바로 적용합니다. 값 충돌처럼 원본 파일을 정할 정보가 부족한
+경우에만 필요한 선택을 물어봅니다.
 
 먼저 이 저장소에서 broker 실행 파일을 설치합니다.
 

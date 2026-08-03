@@ -25,8 +25,8 @@ pub use model::{
 pub use parser::{AssignmentRef, Document, NewlineStyle, Node, Span};
 pub use policy::{ClassificationSuggestion, suggest_access};
 pub use service::{
-    AddVariableRequest, CreateGroupRequest, DeleteVariableRequest, LinkRequest,
-    MoveVariableRequest, MutationSummary, ProjectService, RenameGroupRequest,
+    AddVariableRequest, CreateEnvFileRequest, CreateGroupRequest, DeleteVariableRequest,
+    LinkRequest, MoveVariableRequest, MutationSummary, ProjectService, RenameGroupRequest,
     SaveDescriptionRequest, SaveValueRequest,
 };
 pub use transaction::{FileRevision, PlannedFileChange, TransactionPlan};

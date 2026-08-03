@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
 use crate::manifest::MANIFEST_FILE_NAME;
 use crate::{
@@ -27,6 +29,12 @@ pub struct SaveDescriptionRequest {
     pub file: String,
     pub key: String,
     pub lines: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateEnvFileRequest {
+    pub file: String,
 }
 
 #[derive(Deserialize)]
@@ -146,6 +154,33 @@ impl ProjectService {
 
     pub fn scan(&self) -> EnvResult<ProjectProjection> {
         self.initialize()
+    }
+
+    pub fn create_env_file(&self, request: CreateEnvFileRequest) -> EnvResult<MutationSummary> {
+        let relative = PathBuf::from(&request.file);
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let mut options = DiscoveryOptions::default();
+        options
+            .ignored_files
+            .extend(manifest.scan.ignored_files.iter().cloned());
+        options
+            .ignored_directories
+            .extend(manifest.scan.ignored_directories.iter().cloned());
+        let target = safe_new_env_target(&self.root, &relative, &options)?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .map_err(|error| EnvError::io(&relative, error))?;
+        if let Err(error) = file.sync_all() {
+            drop(file);
+            let _ = fs::remove_file(&target);
+            return Err(EnvError::io(&relative, error));
+        }
+        Ok(MutationSummary {
+            affected_files: vec![request.file],
+            keys: Vec::new(),
+        })
     }
 
     pub fn save_value(&self, request: SaveValueRequest) -> EnvResult<MutationSummary> {
@@ -915,6 +950,57 @@ fn safe_existing_target(root: &Path, relative: &Path) -> EnvResult<PathBuf> {
     Ok(target)
 }
 
+fn safe_new_env_target(
+    root: &Path,
+    relative: &Path,
+    options: &DiscoveryOptions,
+) -> EnvResult<PathBuf> {
+    if relative.as_os_str().is_empty()
+        || relative.is_absolute()
+        || !relative
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(EnvError::path_outside(relative));
+    }
+    let name = relative
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| EnvError::invalid("생성할 env 파일 이름이 올바르지 않습니다."))?;
+    if !is_env_candidate(name) {
+        return Err(EnvError::invalid(
+            "새 파일은 .env 또는 .env.* 형식이어야 하며 example 파일은 만들 수 없습니다.",
+        ));
+    }
+    let manifest_path = to_manifest_path(relative);
+    if options.ignored_files.contains(&manifest_path) {
+        return Err(EnvError::invalid("manifest에서 제외한 env 파일입니다."));
+    }
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    if parent.components().any(|component| {
+        options
+            .ignored_directories
+            .contains(&component.as_os_str().to_string_lossy().into_owned())
+    }) {
+        return Err(EnvError::invalid(
+            "관리 제외 디렉터리에는 env 파일을 만들 수 없습니다.",
+        ));
+    }
+    let parent_target = root
+        .join(parent)
+        .canonicalize()
+        .map_err(|error| EnvError::io(parent, error))?;
+    if !parent_target.starts_with(root) || !parent_target.is_dir() {
+        return Err(EnvError::path_outside(relative));
+    }
+    let target = parent_target.join(name);
+    match fs::symlink_metadata(&target) {
+        Ok(_) => Err(EnvError::invalid("같은 경로의 파일이 이미 있습니다.")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(target),
+        Err(error) => Err(EnvError::io(relative, error)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use env_test_support::SyntheticProject;
@@ -937,6 +1023,46 @@ mod tests {
         assert_eq!(variables[1].codex_access, CodexAccess::ReadWrite);
         assert_eq!(variables[2].codex_access, CodexAccess::Unclassified);
         assert!(variables.iter().all(|item| item.display_value.is_none()));
+    }
+
+    #[test]
+    fn creates_empty_env_file_only_inside_an_existing_project_directory() {
+        let project = SyntheticProject::new();
+        fs::create_dir_all(project.root().join("apps/mobile")).expect("fixture directory");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        service
+            .create_env_file(CreateEnvFileRequest {
+                file: "apps/mobile/.env".to_owned(),
+            })
+            .expect("create env file");
+
+        assert_eq!(project.read("apps/mobile/.env"), b"");
+        let projection = service.scan().expect("scan");
+        assert_eq!(projection.files[0].path, "apps/mobile/.env");
+    }
+
+    #[test]
+    fn refuses_example_overwrite_and_path_escape_for_new_env_files() {
+        let project = SyntheticProject::new();
+        project.write(".env", "PORT=fake_3000\n");
+        fs::create_dir_all(project.root().join("node_modules/pkg"))
+            .expect("excluded fixture directory");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        for file in [".env.example", ".env", "../.env", "node_modules/pkg/.env"] {
+            assert!(
+                service
+                    .create_env_file(CreateEnvFileRequest {
+                        file: file.to_owned(),
+                    })
+                    .is_err(),
+                "must reject {file}"
+            );
+        }
+        assert_eq!(project.read(".env"), b"PORT=fake_3000\n");
     }
 
     #[test]
