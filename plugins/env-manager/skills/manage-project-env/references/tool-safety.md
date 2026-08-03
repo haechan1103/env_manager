@@ -23,8 +23,9 @@
 - Invalid new-file path: use only `.env` or `.env.*` below an existing project
   directory. Never overwrite an existing file, create an example variant, or fall
   back to generic filesystem tools.
-- `CODEX_ACCESS_BLOCKED`: keep the value protected; direct the user to desktop input
-  or ask whether they want to review classification.
+- `CODEX_ACCESS_BLOCKED`: this stable protocol code means agent access is blocked.
+  Keep the value protected; direct the user to desktop input or ask whether they want
+  to review classification.
 - `FILE_CHANGED_EXTERNALLY`: inspect again, create a new plan, and never force apply.
 - `PLAN_EXPIRED`: create a fresh plan and present it again.
 - `LINK_VALUE_CONFLICT`: ask which selected file is authoritative; never choose by

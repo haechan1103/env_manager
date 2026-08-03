@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import * as api from "../../lib/api";
 import type { CodexAccess, OccurrenceProjection } from "../../lib/types";
@@ -27,8 +27,11 @@ export function VariableRow({
   const [draft, setDraft] = useState("");
   const [dirty, setDirty] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [revealActivity, setRevealActivity] = useState(0);
+  const [keyCopied, setKeyCopied] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [description, setDescription] = useState(variable.description.join("\n"));
+  const revealedValueRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setDescription(variable.description.join("\n"));
@@ -36,9 +39,22 @@ export function VariableRow({
 
   useEffect(() => {
     if (revealed === null) return;
-    const timeout = window.setTimeout(() => setRevealed(null), 12000);
+    const timeout = window.setTimeout(() => setRevealed(null), 30000);
     return () => window.clearTimeout(timeout);
-  }, [revealed]);
+  }, [revealed, revealActivity]);
+
+  useEffect(() => {
+    if (!keyCopied) return;
+    const timeout = window.setTimeout(() => setKeyCopied(false), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [keyCopied]);
+
+  useLayoutEffect(() => {
+    const field = revealedValueRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, 240)}px`;
+  }, [revealed, draft, dirty]);
 
   const value = dirty ? draft : revealed ?? "";
   const placeholder =
@@ -49,19 +65,23 @@ export function VariableRow({
       ? []
       : sameKeyFiles.filter((path) => !variable.linkedFiles.includes(path));
 
+  const keepRevealActive = () => {
+    if (revealed !== null) setRevealActivity((activity) => activity + 1);
+  };
+
   const changeAccess = async (access: CodexAccess) => {
     const downgrade = access === "read-write" && variable.codexAccess !== "read-write";
     if (
       downgrade &&
       !window.confirm(
-        `${variable.key}의 실제 값을 Codex가 명시적 도구로 읽고 수정할 수 있게 합니다. 계속할까요?`,
+        `${variable.key}의 실제 값을 연결된 AI 도구가 명시적 Env Manager 도구로 읽고 수정할 수 있게 합니다. 계속할까요?`,
       )
     ) {
       return;
     }
     await onMutate(
       () => api.setCodexAccess(projectId, variable.key, access, downgrade),
-      `${variable.key}의 Codex 접근 정책을 변경했습니다.`,
+      `${variable.key}의 AI 접근 정책을 변경했습니다.`,
     );
   };
 
@@ -71,6 +91,18 @@ export function VariableRow({
         <div className="variable-meta">
           <div className="key-line">
             <strong>{variable.key}</strong>
+            <button
+              className={keyCopied ? "key-copy-button copied" : "key-copy-button"}
+              aria-label={`${variable.key} 환경변수명 복사`}
+              title={keyCopied ? "복사됨" : "환경변수명 복사"}
+              onClick={() => {
+                void api
+                  .copyKey(projectId, variable.key)
+                  .then(() => setKeyCopied(true));
+              }}
+            >
+              {keyCopied ? "✓" : "⧉"}
+            </button>
             {variable.linkedCount > 1 && (
               <span className="badge linked">{variable.linkedCount}개 파일 연결됨</span>
             )}
@@ -88,30 +120,58 @@ export function VariableRow({
           )}
         </div>
 
-        <div className="value-editor">
-          <input
-            type={revealed !== null || dirty ? "text" : "password"}
-            value={value}
-            placeholder={placeholder}
-            aria-label={`${variable.key} 값`}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              setDirty(true);
-              setRevealed(null);
-            }}
-          />
+        <div
+          className="value-editor"
+          onFocus={keepRevealActive}
+          onKeyDown={keepRevealActive}
+          onPointerDown={keepRevealActive}
+          onWheel={keepRevealActive}
+        >
+          {revealed !== null ? (
+            <textarea
+              ref={revealedValueRef}
+              className="revealed-value-field"
+              value={value}
+              aria-label={`${variable.key} 값`}
+              rows={1}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setDirty(true);
+                keepRevealActive();
+              }}
+            />
+          ) : (
+            <input
+              type="password"
+              value={value}
+              placeholder={placeholder}
+              aria-label={`${variable.key} 값`}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setDirty(true);
+              }}
+            />
+          )}
           <button
             className="icon-button"
-            title={revealed === null ? "12초 동안 값 보기" : "값 숨기기"}
+            title={revealed === null ? "값 보기 · 30초 미활동 시 숨김" : "값 숨기기"}
             onClick={() => {
               if (revealed !== null) {
                 setRevealed(null);
                 return;
               }
-              void api
-                .readValue(projectId, file, variable.key)
-                .then(setRevealed)
-                .catch(() => setRevealed(null));
+              if (dirty) {
+                setRevealed(draft);
+                setRevealActivity((activity) => activity + 1);
+              } else {
+                void api
+                  .readValue(projectId, file, variable.key)
+                  .then((nextValue) => {
+                    setRevealed(nextValue);
+                    setRevealActivity((activity) => activity + 1);
+                  })
+                  .catch(() => setRevealed(null));
+              }
             }}
           >
             {revealed === null ? "◉" : "○"}
@@ -129,12 +189,12 @@ export function VariableRow({
           <select
             className={`access-select ${variable.codexAccess}`}
             value={variable.codexAccess}
-            aria-label={`${variable.key} Codex 접근`}
+            aria-label={`${variable.key} AI 접근`}
             onChange={(event) => void changeAccess(event.target.value as CodexAccess)}
           >
             <option value="protected">보호됨</option>
             <option value="unclassified">미분류</option>
-            <option value="read-write">Codex 허용</option>
+            <option value="read-write">AI 허용</option>
           </select>
           {dirty ? (
             <button

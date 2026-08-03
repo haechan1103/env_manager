@@ -1,7 +1,7 @@
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
 
 interface View {
-  kind: "overview" | "file";
+  kind: "overview" | "file" | "integrations";
   path?: string;
 }
 
@@ -11,7 +11,9 @@ interface Props {
   projection: ProjectProjection | null;
   view: View;
   onSelectProject: (projectId: string) => void;
-  onSelectView: (view: { kind: "overview" } | { kind: "file"; path: string }) => void;
+  onSelectView: (
+    view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" },
+  ) => void;
   onRegister: () => void;
 }
 
@@ -29,7 +31,7 @@ export function ProjectSidebar({
       <div className="brand">
         <span className="brand-mark">E</span>
         <span>Env Manager</span>
-        <span className="version">v0.1</span>
+        <span className="version">v0.2.1</span>
       </div>
 
       <div className="sidebar-section-title">
@@ -54,6 +56,16 @@ export function ProjectSidebar({
             등록된 프로젝트 없음
           </div>
         )}
+      </nav>
+
+      <nav className="agent-navigation" aria-label="AI 도구">
+        <button
+          className={view.kind === "integrations" ? "nav-item active" : "nav-item"}
+          onClick={() => onSelectView({ kind: "integrations" })}
+        >
+          <span>◇</span>
+          <span className="agent-nav-label">AI 도구 연결</span>
+        </button>
       </nav>
 
       {projection && (

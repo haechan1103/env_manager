@@ -1,13 +1,14 @@
 ---
 name: manage-project-env
-description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks Codex to inspect env structure, create a new env file, classify variable access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, or detach a link. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, or Env Manager.
+description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, or detach a link. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, secrets, or Env Manager.
 ---
 
 # Manage Project Env
 
-Use only the `env-manager` MCP tools for every `.env` or `.env.*` operation. Never
-read, search, print, patch, or write an env file with shell, filesystem, interpreter,
-or generic editing tools.
+Use only the `env-manager` MCP tools for every `.env` or `.env.*` operation, regardless
+of whether the host is Codex, Claude Code, GitHub Copilot, or another compatible
+agent. Never read, search, print, patch, or write an env file with shell, filesystem,
+interpreter, or generic editing tools.
 
 ## Workflow
 
@@ -20,7 +21,7 @@ or generic editing tools.
    requests an access-policy change.
 5. Create a plan for every mutation, verify that its paths, names, impact, and risk
    match the current request, then call `apply_plan` immediately. Do not ask for a
-   second approval.
+   second approval unless the host enforces its own unavoidable tool permission.
 6. Ask one concise clarification only when a required factual choice is missing, such
    as the authoritative file for conflicting link values.
 7. Report only names, relative paths, groups, link membership, policy, and sanitized
@@ -32,7 +33,7 @@ or generic editing tools.
   manifest policy is already `read-write`.
 - Never ask the user to paste a protected value into chat or an MCP argument.
 - Change a key to `read-write` only when the current task explicitly requests that
-  access change. Plan and apply it without another confirmation round trip.
+  agent access change. Plan and apply it without another confirmation round trip.
 - Prefer `protected` for credential-like names and `unclassified` when uncertain.
 - A public/client prefix does not make a credential-looking key safe.
 

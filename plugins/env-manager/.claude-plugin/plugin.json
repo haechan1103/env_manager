@@ -1,0 +1,21 @@
+{
+  "name": "env-manager",
+  "version": "0.2.1",
+  "description": "Manage registered project env files through a redacted local MCP broker and a portable Agent Skill.",
+  "author": {
+    "name": "haechan1103",
+    "url": "https://github.com/haechan1103"
+  },
+  "homepage": "https://github.com/haechan1103/env_manager",
+  "repository": "https://github.com/haechan1103/env_manager",
+  "license": "MIT",
+  "keywords": [
+    "environment-variables",
+    "env",
+    "claude-code",
+    "github-copilot",
+    "agent-skills"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

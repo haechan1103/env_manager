@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
-import { demoProjection, demoProjects } from "./demo";
+import { demoAgentIntegrations, demoProjection, demoProjects } from "./demo";
 import type {
+  AgentIntegrationId,
+  AgentIntegrationStatus,
   CodexAccess,
   MutationSummary,
   MigrationPlanProjection,
@@ -26,6 +28,28 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export async function listProjects(): Promise<ProjectSummary[]> {
   if (isTauriRuntime) return call("list_projects");
   return new URLSearchParams(window.location.search).has("empty") ? [] : demoProjects;
+}
+
+export async function listAgentIntegrations(): Promise<AgentIntegrationStatus[]> {
+  if (!isTauriRuntime) return demoAgentIntegrations;
+  return call("list_agent_integrations");
+}
+
+export async function installAgentIntegration(
+  id: AgentIntegrationId,
+): Promise<AgentIntegrationStatus> {
+  if (!isTauriRuntime) {
+    const integration = demoAgentIntegrations.find((item) => item.id === id);
+    if (!integration) throw new Error("지원하지 않는 AI 도구입니다.");
+    return {
+      ...integration,
+      installed: true,
+      installedVersion: integration.currentVersion,
+      updateAvailable: false,
+      protection: id === "codex" ? "broker" : "guarded",
+    };
+  }
+  return call("install_agent_integration", { request: { id } });
 }
 
 export async function chooseAndRegisterProject(): Promise<ProjectSummary | null> {
@@ -157,6 +181,11 @@ export async function readValue(
 export async function copyValue(projectId: string, file: string, key: string): Promise<void> {
   if (!isTauriRuntime) return;
   return call("copy_value", { request: { projectId, file, key } });
+}
+
+export async function copyKey(projectId: string, key: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("copy_key", { request: { projectId, key } });
 }
 
 export async function planMigration(

@@ -1,7 +1,7 @@
 {
   "name": "env-manager",
-  "version": "0.1.1",
-  "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker.",
+  "version": "0.2.1",
+  "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
     "url": "https://github.com/haechan1103"
@@ -13,13 +13,16 @@
     "environment-variables",
     "env",
     "codex",
+    "claude-code",
+    "github-copilot",
+    "agent-skills",
     "tauri"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Env Manager",
-    "shortDescription": "Manage registered env files without broad file access.",
-    "longDescription": "Adds a focused Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, and N-way variable links.",
+    "shortDescription": "Manage registered env files through a redacted local broker.",
+    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, and N-way variable links.",
     "developerName": "haechan1103",
     "category": "Productivity",
     "capabilities": [
@@ -27,7 +30,8 @@
       "Request-authorized mutation plans",
       "Safe env file creation",
       "Group and variable structure",
-      "N-way variable links"
+      "N-way variable links",
+      "Multi-agent compatible workflow"
     ],
     "defaultPrompt": [
       "이 프로젝트 env 구조를 값 없이 점검해줘.",

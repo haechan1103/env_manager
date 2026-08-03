@@ -20,6 +20,8 @@ test("navigates the redacted V1 workflow", async ({ page }) => {
     page.getByText("어느 파일에서 값을 바꿔도 아래 파일에 모두 저장됩니다."),
   ).toBeVisible();
   await expect(page.getByRole("main").getByText(".env.development")).toBeVisible();
+  await page.getByTitle("값 보기 · 30초 미활동 시 숨김").first().click();
+  await expect(page.locator("textarea.revealed-value-field")).toBeVisible();
   await apiKeyInput.fill("fake_e2e_replacement");
   await expect(page.getByRole("button", { name: "2개 파일에 저장" })).toBeVisible();
   await page.screenshot({
@@ -43,6 +45,23 @@ test("shows a compact product-style empty project screen", async ({ page }) => {
 
   await page.screenshot({
     path: "test-results/env-manager-empty-project.png",
+    fullPage: true,
+  });
+});
+
+test("shows one shared integration bundle for supported AI tools", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "AI 도구 연결" }).click();
+  await expect(page.getByRole("heading", { name: "AI 도구 연결" })).toBeVisible();
+  await expect(page.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(page.getByText("Claude Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("GitHub Copilot / VS Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("ONE LOCAL BUNDLE")).toBeVisible();
+  await expect(page.getByText(/API_KEY=/)).toHaveCount(0);
+
+  await page.screenshot({
+    path: "test-results/env-manager-ai-integrations.png",
     fullPage: true,
   });
 });

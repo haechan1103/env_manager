@@ -1,5 +1,20 @@
 export type CodexAccess = "read-write" | "protected" | "unclassified";
 export type ValueState = "empty" | "present";
+export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
+export type AgentProtection = "broker" | "guarded" | "inactive";
+
+export interface AgentIntegrationStatus {
+  id: AgentIntegrationId;
+  name: string;
+  detected: boolean;
+  installed: boolean;
+  installedVersion: string | null;
+  currentVersion: string;
+  updateAvailable: boolean;
+  protection: AgentProtection;
+  detail: string;
+  canInstall: boolean;
+}
 
 export interface ProjectSummary {
   id: string;

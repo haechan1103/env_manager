@@ -1,0 +1,18 @@
+{
+  "name": "env-manager",
+  "owner": {
+    "name": "haechan1103",
+    "url": "https://github.com/haechan1103"
+  },
+  "metadata": {
+    "description": "Local-first environment-variable tools for AI coding agents"
+  },
+  "plugins": [
+    {
+      "name": "env-manager",
+      "source": "./plugins/env-manager",
+      "description": "Redacted env inspection, controlled mutations, and direct-access guardrails.",
+      "version": "0.2.1"
+    }
+  ]
+}

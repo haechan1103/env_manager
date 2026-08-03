@@ -57,7 +57,7 @@ export function Overview({ projection, onOpenFile }: Props) {
               {projection.unclassifiedCount > 0 && (
                 <div className="issue-row">
                   <span className="issue-icon violet">?</span>
-                  <span><strong>Codex 접근 미분류</strong><small>{projection.unclassifiedCount}개 변수 검토 필요</small></span>
+                  <span><strong>AI 접근 미분류</strong><small>{projection.unclassifiedCount}개 변수 검토 필요</small></span>
                 </div>
               )}
               {projection.issueCount > 0 && (
@@ -91,7 +91,7 @@ export function Overview({ projection, onOpenFile }: Props) {
         <span>⌾</span>
         <div>
           <strong>값은 프로젝트 파일에만 남습니다.</strong>
-          <p>Env Manager는 별도 vault로 가져오지 않으며, 일반 화면과 Codex inspection에는 원문 값을 전달하지 않습니다.</p>
+          <p>Env Manager는 별도 vault로 가져오지 않으며, 일반 화면과 AI 도구의 기본 점검에는 원문 값을 전달하지 않습니다.</p>
         </div>
       </div>
     </section>

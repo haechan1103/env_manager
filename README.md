@@ -4,7 +4,7 @@
 수정하는 로컬 데스크톱 앱입니다.
 
 값을 별도 vault로 옮기지 않습니다. 기존 프로젝트가 사용하던 env 파일을
-그대로 유지하면서 구조, 설명, 연결 상태와 Codex 접근 정책을 관리합니다.
+그대로 유지하면서 구조, 설명, 연결 상태와 AI 도구 접근 정책을 관리합니다.
 
 > 현재 상태: macOS용 V1 preview
 >
@@ -14,7 +14,7 @@
 
 - 사용자가 등록한 프로젝트만 탐색
 - `.env`, `.env.local`, `.env.dev`, `.env.development` 등 env 파일 자동 발견
-- 등록 프로젝트 안에 새 env 파일과 빈 변수를 Codex로 생성
+- 등록 프로젝트 안에 새 env 파일과 빈 변수를 AI 도구로 생성
 - `.env.example`을 포함한 example 변형 제외
 - 실제 값은 기본적으로 가리고 존재 여부만 표시
 - `# @group GPT` 형식의 그룹 생성·이름 변경·변수 이동과 일반 주석 기반 설명 지원
@@ -22,7 +22,8 @@
 - 같은 변수를 2개 이상의 파일에 명시적으로 연결하거나 개별 해제
 - 연결된 어느 파일에서 입력해도 모든 멤버에 함께 저장
 - 같은 이름이지만 연결되지 않은 변수는 별도 상태로 표시하고 연결을 제안
-- Codex가 원문 전체를 읽지 않고 redacted broker를 통해 작업하도록 지원
+- Codex, Claude Code, GitHub Copilot에서 같은 Skill과 redacted broker 사용
+- 앱의 `AI 도구 연결` 화면에서 감지·설치·버전 상태 확인
 
 ## 동작 방식
 
@@ -59,12 +60,20 @@ npm run tauri build
 현재 기본 번들 대상은 `.app`입니다. 공개 배포 전에 별도의 코드 서명과 공증
 설정이 필요합니다.
 
-## Codex 연동
+## AI 도구 연동
 
-Codex 플러그인은 자연어로 env 정리, 분류, 연결 작업을 요청할 때 전용
-Skill과 로컬 MCP broker를 사용합니다.
+Env Manager 0.2는 하나의 로컬 플러그인 묶음을 공유합니다.
 
-Codex는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별도의 재승인
+- 공통: Agent Skill + MCP broker
+- Codex: Codex 플러그인 manifest
+- Claude Code: Claude 플러그인 manifest + 직접 env 접근 Guard
+- GitHub Copilot / VS Code: Claude 호환 플러그인 + 같은 Guard
+
+앱 사이드바의 `AI 도구 연결`에서 설치된 도구와 연동 버전을 확인하고 한 번에
+설치할 수 있습니다. Preview 소스 빌드에서는 broker 설치를 위해 Rust가
+필요합니다.
+
+AI 도구는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별도의 재승인
 질문 없이 바로 적용합니다. 값 충돌처럼 원본 파일을 정할 정보가 부족한
 경우에만 필요한 선택을 물어봅니다.
 
@@ -74,14 +83,30 @@ Codex는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별�
 cargo install --path crates/env-broker --locked
 ```
 
-그다음 저장소를 Codex 마켓플레이스로 추가하고 플러그인을 설치합니다.
+앱 대신 CLI에서 직접 설치하려면 사용하는 도구의 명령만 실행합니다.
+
+Codex:
 
 ```bash
 codex plugin marketplace add haechan1103/env_manager
 codex plugin add env-manager@env-manager
 ```
 
-설치 후 새 Codex 대화를 시작하세요. 예를 들면 다음처럼 요청할 수 있습니다.
+Claude Code:
+
+```bash
+claude plugin marketplace add haechan1103/env_manager
+claude plugin install env-manager@env-manager
+```
+
+GitHub Copilot CLI / VS Code:
+
+```bash
+copilot plugin marketplace add haechan1103/env_manager
+copilot plugin install env-manager@env-manager
+```
+
+설치 후 새 대화나 세션을 시작하세요. 예를 들면 다음처럼 요청할 수 있습니다.
 
 ```text
 이 프로젝트 env 구조를 값 없이 점검해줘.
@@ -92,11 +117,11 @@ GPT 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
 
 플러그인이 프로젝트를 임의로 등록하지는 않습니다. Env Manager 앱에서 먼저
 등록된 프로젝트만 broker가 승인하며, 앱이 현재 등록 상태를 해제하면 더 이상
-Codex에서도 접근할 수 없습니다.
+연결된 AI 도구에서도 접근할 수 없습니다.
 
 ## 값과 접근 정책
 
-변수마다 Codex 접근 정책을 지정할 수 있습니다.
+변수마다 연결된 AI 도구의 접근 정책을 지정할 수 있습니다.
 
 | 정책 | 동작 |
 | --- | --- |
@@ -113,10 +138,11 @@ Codex에서도 접근할 수 없습니다.
 이 프로젝트는 완전한 secret vault가 아닙니다. 값은 원래 env 파일에 남고,
 앱과 broker가 필요한 순간 프로세스 메모리에서 처리합니다.
 
-broker는 등록된 프로젝트와 변수 정책을 검사하고 결과를 가리지만, 현재
-macOS Codex 파일 권한만으로 모든 우회 쓰기를 차단했다는 보장은 아직
-완료되지 않았습니다. 플러그인은 preview로 사용하고, 중요한 운영 비밀에는
-별도의 secret manager와 운영체제 수준 보호를 함께 사용하세요.
+broker는 등록된 프로젝트와 변수 정책을 검사하고 결과를 가립니다. Claude
+Code와 Copilot에는 직접 `.env*` 접근을 거부하는 PreToolUse Guard도 함께
+설치합니다. 다만 Skill과 Guard는 운영체제 수준의 완전 격리가 아니며, Codex
+역시 호스트 권한 설정에 따라 직접 파일 차단 수준이 달라집니다. Preview는
+중요한 운영 비밀에 별도의 secret manager와 OS 보호를 함께 사용하세요.
 
 ## 개발 확인
 

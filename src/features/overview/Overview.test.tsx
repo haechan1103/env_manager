@@ -15,7 +15,7 @@ describe("Overview", () => {
 
     expect(screen.getByText("Action inbox")).toBeInTheDocument();
     expect(screen.getByText("NEXT_PUBLIC_APP_URL")).toBeInTheDocument();
-    expect(screen.getByText("Codex 접근 미분류")).toBeInTheDocument();
+    expect(screen.getByText("AI 접근 미분류")).toBeInTheDocument();
     expect(screen.queryByText("fake_preview_value")).not.toBeInTheDocument();
   });
 });

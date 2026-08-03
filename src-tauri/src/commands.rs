@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::runtime::{AppRuntime, MigrationPlanProjection, ProjectSummary};
+use crate::{integrations, integrations::AgentIntegrationId};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +24,15 @@ impl From<EnvError> for CommandError {
         Self {
             code: error.code().as_str().to_owned(),
             message: error.to_string(),
+        }
+    }
+}
+
+impl From<integrations::IntegrationError> for CommandError {
+    fn from(error: integrations::IntegrationError) -> Self {
+        Self {
+            code: error.code.to_owned(),
+            message: error.message.to_owned(),
         }
     }
 }
@@ -69,6 +79,13 @@ pub struct ValueRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct KeyRequest {
+    project_id: String,
+    key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MigrationPreviewRequest {
     project_id: String,
     file: String,
@@ -85,6 +102,25 @@ pub struct ApplyMigrationRequest {
 #[tauri::command]
 pub fn list_projects(runtime: State<'_, AppRuntime>) -> Vec<ProjectSummary> {
     runtime.list()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentIntegrationRequest {
+    id: AgentIntegrationId,
+}
+
+#[tauri::command]
+pub fn list_agent_integrations(app: AppHandle) -> Vec<integrations::AgentIntegrationStatus> {
+    integrations::list(&app)
+}
+
+#[tauri::command]
+pub fn install_agent_integration(
+    request: AgentIntegrationRequest,
+    app: AppHandle,
+) -> CommandResult<integrations::AgentIntegrationStatus> {
+    integrations::install(&app, request.id).map_err(Into::into)
 }
 
 #[tauri::command]
@@ -268,6 +304,21 @@ pub fn copy_value(request: ValueRequest, runtime: State<'_, AppRuntime>) -> Comm
         }
     });
     Ok(())
+}
+
+#[tauri::command]
+pub fn copy_key(request: KeyRequest, runtime: State<'_, AppRuntime>) -> CommandResult<()> {
+    runtime
+        .service(&request.project_id)?
+        .codex_access(&request.key)?;
+    let mut clipboard = arboard::Clipboard::new().map_err(|_| CommandError {
+        code: "CLIPBOARD_UNAVAILABLE".to_owned(),
+        message: "클립보드를 사용할 수 없습니다.".to_owned(),
+    })?;
+    clipboard.set_text(request.key).map_err(|_| CommandError {
+        code: "CLIPBOARD_WRITE_FAILED".to_owned(),
+        message: "환경변수명을 클립보드에 복사하지 못했습니다.".to_owned(),
+    })
 }
 
 #[tauri::command]
