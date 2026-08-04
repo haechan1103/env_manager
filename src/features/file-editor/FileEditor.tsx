@@ -29,17 +29,31 @@ export function FileEditor({
 }: Props) {
   const file = projection.files.find((item) => item.path === filePath);
   const [adding, setAdding] = useState(false);
+  const [addingGroup, setAddingGroup] = useState(false);
   const [linking, setLinking] = useState<OccurrenceProjection | null>(null);
   const [migration, setMigration] = useState<MigrationPlanProjection | null>(null);
 
+  const occurrenceFilesByKey = useMemo(() => {
+    const filesByKey = new Map<string, Set<string>>();
+    for (const candidate of projection.files) {
+      for (const group of candidate.groups) {
+        for (const variable of group.variables) {
+          const files = filesByKey.get(variable.key) ?? new Set<string>();
+          files.add(candidate.path);
+          filesByKey.set(variable.key, files);
+        }
+      }
+    }
+    return filesByKey;
+  }, [projection.files]);
+
   const sameKeyFiles = useMemo(() => {
     if (!linking) return [];
+    const candidatePaths = new Set(occurrenceFilesByKey.get(linking.key) ?? []);
     return projection.files.filter((candidate) =>
-      candidate.groups.some((group) =>
-        group.variables.some((variable) => variable.key === linking.key),
-      ),
+      candidatePaths.has(candidate.path),
     );
-  }, [linking, projection.files]);
+  }, [linking, occurrenceFilesByKey, projection.files]);
 
   if (!file) {
     return (
@@ -85,6 +99,7 @@ export function FileEditor({
           >
             기존 주석 정리
           </button>
+          <button className="quiet-button" onClick={() => setAddingGroup(true)}>+ 새 그룹</button>
           <button className="primary-button" onClick={() => setAdding(true)}>+ 새 변수</button>
         </div>
       </div>
@@ -113,7 +128,7 @@ export function FileEditor({
                     if (!name || name === group.name) return;
                     void mutate(
                       () =>
-                        api.saveGroup(projectId, {
+                        api.renameGroup(projectId, {
                           file: file.path,
                           currentName: group.name,
                           newName: name,
@@ -127,6 +142,9 @@ export function FileEditor({
               )}
             </header>
             <div className="variables-table">
+              {group.variables.length === 0 && (
+                <div className="empty-group-row">아직 변수가 없습니다. 새 변수를 이 그룹에 추가해보세요.</div>
+              )}
               {group.variables.map((variable) => (
                 <VariableRow
                   key={variable.key}
@@ -135,6 +153,7 @@ export function FileEditor({
                   variable={variable}
                   currentGroup={group.name}
                   groups={file.groups.map((item) => item.name)}
+                  sameKeyFiles={[...(occurrenceFilesByKey.get(variable.key) ?? [file.path])]}
                   onMutate={mutate}
                   onLink={() => setLinking(variable)}
                 />
@@ -153,6 +172,19 @@ export function FileEditor({
               () => api.addVariable(projectId, { file: file.path, ...request }),
               `${request.key} 변수를 추가했습니다.`,
             ).then(() => setAdding(false));
+          }}
+        />
+      )}
+
+      {addingGroup && (
+        <CreateGroupModal
+          file={file.path}
+          onClose={() => setAddingGroup(false)}
+          onSubmit={(name) => {
+            void mutate(
+              () => api.createGroup(projectId, { file: file.path, name }),
+              `${name} 그룹을 만들었습니다.`,
+            ).then(() => setAddingGroup(false));
           }}
         />
       )}
@@ -236,6 +268,53 @@ function countVariables(file: FileProjection) {
   return file.groups.reduce((total, group) => total + group.variables.length, 0);
 }
 
+function CreateGroupModal({
+  file,
+  onClose,
+  onSubmit,
+}: {
+  file: string;
+  onClose: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+  return (
+    <Modal
+      title="새 그룹"
+      description={`${file}에 # @group 표식을 추가합니다.`}
+      onClose={onClose}
+    >
+      <form
+        className="modal-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          onSubmit(trimmed);
+        }}
+      >
+        <label>
+          그룹 이름
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="GPT"
+            autoFocus
+          />
+        </label>
+        <div className="impact-note">
+          <strong>기존 변수와 값은 바꾸지 않습니다.</strong>
+          <span>그룹을 만든 뒤 변수를 추가하거나 이동할 수 있습니다.</span>
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="quiet-button" onClick={onClose}>취소</button>
+          <button className="primary-button" disabled={!name.trim()}>그룹 만들기</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function AddVariableModal({
   file,
   onClose,
@@ -252,6 +331,7 @@ function AddVariableModal({
 }) {
   const [key, setKey] = useState("");
   const [group, setGroup] = useState(file.groups[0]?.name ?? "기타");
+  const [newGroup, setNewGroup] = useState("");
   const [description, setDescription] = useState("");
   const [value, setValue] = useState("");
   return (
@@ -265,9 +345,11 @@ function AddVariableModal({
         onSubmit={(event) => {
           event.preventDefault();
           if (!key.trim()) return;
+          const targetGroup = group === "__new_group__" ? newGroup.trim() : group;
+          if (!targetGroup) return;
           onSubmit({
             key: key.trim().toUpperCase(),
-            group,
+            group: targetGroup,
             description: description.trim() ? description.split("\n") : [],
             value,
           });
@@ -277,9 +359,13 @@ function AddVariableModal({
         <label>그룹
           <select value={group} onChange={(event) => setGroup(event.target.value)}>
             {file.groups.map((item) => <option key={item.name}>{item.name}</option>)}
-            <option value="">그룹 없음</option>
+            {!file.groups.some((item) => item.name === "기타") && <option value="기타">기타 (그룹 없음)</option>}
+            <option value="__new_group__">+ 새 그룹 만들기</option>
           </select>
         </label>
+        {group === "__new_group__" && (
+          <label>새 그룹 이름<input value={newGroup} onChange={(event) => setNewGroup(event.target.value)} placeholder="GPT" /></label>
+        )}
         <label>설명<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="한 줄에 하나씩 설명을 입력하세요." /></label>
         <label>값 <span className="label-hint">선택</span><input type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="비워두고 나중에 입력 가능" /></label>
         <div className="modal-actions"><button type="button" className="quiet-button" onClick={onClose}>취소</button><button className="primary-button">변수 추가</button></div>
@@ -305,7 +391,7 @@ function LinkModal({
   return (
     <Modal
       title={`${variable.key} 연결`}
-      description="현재 파일의 값을 기준으로 선택한 occurrence를 같은 값으로 맞춥니다."
+      description="처음 연결할 때만 현재 파일 값을 기준으로 맞춥니다. 연결 후에는 어느 파일에서 수정해도 모두 함께 저장됩니다."
       onClose={onClose}
     >
       <div className="link-list">
@@ -330,7 +416,7 @@ function LinkModal({
       </div>
       <div className="impact-note">
         <strong>{selected.size}개 파일의 {variable.key}</strong>
-        <span>서로 다른 값이 있다면 현재 파일 값을 선택했다는 의미로 덮어씁니다.</span>
+        <span>연결은 자동으로 만들지 않습니다. 확인하면 선택한 파일들이 하나의 값으로 함께 관리됩니다.</span>
       </div>
       <div className="modal-actions"><button className="quiet-button" onClick={onClose}>취소</button><button className="primary-button" disabled={selected.size < 2} onClick={() => onSubmit([...selected])}>{selected.size}개 occurrence 연결</button></div>
     </Modal>

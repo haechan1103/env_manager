@@ -1,4 +1,47 @@
-import type { ProjectProjection, ProjectSummary } from "./types";
+import type {
+  AgentIntegrationStatus,
+  ProjectProjection,
+  ProjectSummary,
+} from "./types";
+
+export const demoAgentIntegrations: AgentIntegrationStatus[] = [
+  {
+    id: "codex",
+    name: "Codex",
+    detected: true,
+    installed: true,
+    installedVersion: "0.2.1",
+    currentVersion: "0.2.1",
+    updateAvailable: false,
+    protection: "broker",
+    detail: "Redacted broker가 연결되어 있습니다. 직접 파일 차단 수준은 Codex 권한 프로필에 따라 달라집니다.",
+    canInstall: true,
+  },
+  {
+    id: "claude-code",
+    name: "Claude Code",
+    detected: true,
+    installed: false,
+    installedVersion: null,
+    currentVersion: "0.2.1",
+    updateAvailable: false,
+    protection: "inactive",
+    detail: "도구를 감지했습니다. Env Manager 연동을 설치할 수 있습니다.",
+    canInstall: true,
+  },
+  {
+    id: "github-copilot",
+    name: "GitHub Copilot / VS Code",
+    detected: true,
+    installed: false,
+    installedVersion: null,
+    currentVersion: "0.2.1",
+    updateAvailable: false,
+    protection: "inactive",
+    detail: "VS Code는 감지했지만 Copilot CLI가 필요합니다. CLI 설치 후 여기서 연결할 수 있습니다.",
+    canInstall: false,
+  },
+];
 
 export const demoProjects: ProjectSummary[] = [
   {

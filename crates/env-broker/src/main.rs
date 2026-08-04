@@ -1,6 +1,6 @@
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
-use env_broker::{Broker, tool_definitions};
+use env_broker::{Broker, guard_hook_decision, tool_definitions};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -13,6 +13,18 @@ struct RpcRequest {
 }
 
 fn main() {
+    match std::env::args().nth(1).as_deref() {
+        Some("guard-hook") => {
+            run_guard_hook();
+            return;
+        }
+        Some("--version" | "-V") => {
+            println!("env-manager-broker {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        _ => {}
+    }
+
     let broker = Broker::default();
     let stdin = io::stdin();
     let mut stdout = io::stdout().lock();
@@ -30,6 +42,20 @@ fn main() {
         {
             break;
         }
+    }
+}
+
+fn run_guard_hook() {
+    let mut input = String::new();
+    if io::stdin().read_to_string(&mut input).is_err() {
+        return;
+    }
+    let event = serde_json::from_str::<Value>(&input).unwrap_or(Value::Null);
+    let decision = guard_hook_decision(&event);
+    let mut stdout = io::stdout().lock();
+    if serde_json::to_writer(&mut stdout, &decision).is_ok() {
+        let _ = writeln!(&mut stdout);
+        let _ = stdout.flush();
     }
 }
 

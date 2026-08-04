@@ -1,0 +1,18 @@
+{
+  "description": "Redirect direct env-file access to the Env Manager MCP broker.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Glob|Grep|Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env-manager-broker guard-hook",
+            "timeout": 5,
+            "statusMessage": "Checking Env Manager file boundary"
+          }
+        ]
+      }
+    ]
+  }
+}

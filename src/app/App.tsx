@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 
-import { EffectiveValues } from "../features/effective-values/EffectiveValues";
 import { FileEditor } from "../features/file-editor/FileEditor";
+import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
 import { ProjectSidebar } from "../features/projects/ProjectSidebar";
 import { useEnvManager } from "../hooks/useEnvManager";
 
-type View = { kind: "overview" } | { kind: "effective" } | { kind: "file"; path: string };
+type View =
+  | { kind: "overview" }
+  | { kind: "file"; path: string }
+  | { kind: "integrations" };
 
 export function App() {
   const manager = useEnvManager();
@@ -43,7 +46,22 @@ export function App() {
       />
 
       <main className="main-panel">
-        {manager.loading ? (
+        {view.kind === "integrations" ? (
+          <>
+            <header className="project-header integration-header">
+              <div>
+                <p className="eyebrow">ENV MANAGER · LOCAL INTEGRATIONS</p>
+                <h1>AI 도구 연결</h1>
+              </div>
+            </header>
+            <div className="content-scroll">
+              <AgentIntegrations
+                onError={manager.showError}
+                onNotice={manager.showNotice}
+              />
+            </div>
+          </>
+        ) : manager.loading ? (
           <div className="center-state" aria-live="polite">
             <span className="spinner" />
             <p>등록된 프로젝트를 확인하고 있어요.</p>
@@ -159,14 +177,6 @@ export function App() {
                 <Overview
                   projection={manager.projection}
                   onOpenFile={(path) => setView({ kind: "file", path })}
-                  onOpenEffective={() => setView({ kind: "effective" })}
-                />
-              )}
-              {view.kind === "effective" && (
-                <EffectiveValues
-                  projectId={manager.selectedProject.id}
-                  projection={manager.projection}
-                  onError={manager.showError}
                 />
               )}
               {view.kind === "file" && (

@@ -1,5 +1,20 @@
 export type CodexAccess = "read-write" | "protected" | "unclassified";
 export type ValueState = "empty" | "present";
+export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
+export type AgentProtection = "broker" | "guarded" | "inactive";
+
+export interface AgentIntegrationStatus {
+  id: AgentIntegrationId;
+  name: string;
+  detected: boolean;
+  installed: boolean;
+  installedVersion: string | null;
+  currentVersion: string;
+  updateAvailable: boolean;
+  protection: AgentProtection;
+  detail: string;
+  canInstall: boolean;
+}
 
 export interface ProjectSummary {
   id: string;
@@ -54,24 +69,6 @@ export interface MigrationPlanProjection {
       groupName: string;
     }>;
   };
-}
-
-export type FrameworkKind = "next-js" | "vite" | "custom";
-
-export interface EffectiveContext {
-  framework: FrameworkKind;
-  mode: string;
-  workingDirectory: string;
-  processKeys: string[];
-  customPrecedence: string[];
-}
-
-export interface EffectiveProjection {
-  key: string;
-  winner: string | null;
-  shadowed: string[];
-  reason: string;
-  confidence: string;
 }
 
 export interface CommandError {

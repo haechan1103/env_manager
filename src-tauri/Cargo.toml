@@ -15,6 +15,7 @@ tauri-build = { version = "2.6.3", features = [] }
 [dependencies]
 arboard.workspace = true
 blake3.workspace = true
+directories.workspace = true
 env-core = { path = "../crates/env-core" }
 notify.workspace = true
 serde.workspace = true

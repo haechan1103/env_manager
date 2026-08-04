@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
-import { demoProjection, demoProjects } from "./demo";
+import { demoAgentIntegrations, demoProjection, demoProjects } from "./demo";
 import type {
+  AgentIntegrationId,
+  AgentIntegrationStatus,
   CodexAccess,
-  EffectiveContext,
-  EffectiveProjection,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -28,6 +28,28 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export async function listProjects(): Promise<ProjectSummary[]> {
   if (isTauriRuntime) return call("list_projects");
   return new URLSearchParams(window.location.search).has("empty") ? [] : demoProjects;
+}
+
+export async function listAgentIntegrations(): Promise<AgentIntegrationStatus[]> {
+  if (!isTauriRuntime) return demoAgentIntegrations;
+  return call("list_agent_integrations");
+}
+
+export async function installAgentIntegration(
+  id: AgentIntegrationId,
+): Promise<AgentIntegrationStatus> {
+  if (!isTauriRuntime) {
+    const integration = demoAgentIntegrations.find((item) => item.id === id);
+    if (!integration) throw new Error("지원하지 않는 AI 도구입니다.");
+    return {
+      ...integration,
+      installed: true,
+      installedVersion: integration.currentVersion,
+      updateAvailable: false,
+      protection: id === "codex" ? "broker" : "guarded",
+    };
+  }
+  return call("install_agent_integration", { request: { id } });
 }
 
 export async function chooseAndRegisterProject(): Promise<ProjectSummary | null> {
@@ -71,12 +93,20 @@ export async function saveDescription(
   return call("save_description", { payload: { projectId, request } });
 }
 
-export async function saveGroup(
+export async function createGroup(
+  projectId: string,
+  request: { file: string; name: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
+  return call("create_group", { payload: { projectId, request } });
+}
+
+export async function renameGroup(
   projectId: string,
   request: { file: string; currentName: string; newName: string },
 ): Promise<MutationSummary> {
   if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
-  return call("save_group", { payload: { projectId, request } });
+  return call("rename_group", { payload: { projectId, request } });
 }
 
 export async function addVariable(
@@ -153,23 +183,9 @@ export async function copyValue(projectId: string, file: string, key: string): P
   return call("copy_value", { request: { projectId, file, key } });
 }
 
-export async function getEffectiveValue(
-  projectId: string,
-  key: string,
-  context: EffectiveContext,
-): Promise<EffectiveProjection> {
-  if (!isTauriRuntime) {
-    const directory =
-      context.workingDirectory === "." ? "" : context.workingDirectory.replace(/\/$/, "");
-    return {
-      key,
-      winner: directory ? `${directory}/.env.local` : ".env.local",
-      shadowed: [".env.development", ".env"],
-      reason: "데모 모드의 예측 결과입니다.",
-      confidence: "demo",
-    };
-  }
-  return call("get_effective_value", { request: { projectId, key, context } });
+export async function copyKey(projectId: string, key: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("copy_key", { request: { projectId, key } });
 }
 
 export async function planMigration(

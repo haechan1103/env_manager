@@ -3,10 +3,9 @@ import type { ProjectProjection } from "../../lib/types";
 interface Props {
   projection: ProjectProjection;
   onOpenFile: (path: string) => void;
-  onOpenEffective: () => void;
 }
 
-export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
+export function Overview({ projection, onOpenFile }: Props) {
   const variables = projection.files.flatMap((file) =>
     file.groups.flatMap((group) => group.variables.map((variable) => ({ ...variable, file: file.path }))),
   );
@@ -21,7 +20,6 @@ export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
           <p className="eyebrow">PROJECT HEALTH</p>
           <h2>지금 확인할 항목</h2>
         </div>
-        <button className="secondary-button" onClick={onOpenEffective}>실제 적용값 확인</button>
       </div>
 
       <div className="stats-grid">
@@ -59,7 +57,7 @@ export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
               {projection.unclassifiedCount > 0 && (
                 <div className="issue-row">
                   <span className="issue-icon violet">?</span>
-                  <span><strong>Codex 접근 미분류</strong><small>{projection.unclassifiedCount}개 변수 검토 필요</small></span>
+                  <span><strong>AI 접근 미분류</strong><small>{projection.unclassifiedCount}개 변수 검토 필요</small></span>
                 </div>
               )}
               {projection.issueCount > 0 && (
@@ -93,7 +91,7 @@ export function Overview({ projection, onOpenFile, onOpenEffective }: Props) {
         <span>⌾</span>
         <div>
           <strong>값은 프로젝트 파일에만 남습니다.</strong>
-          <p>Env Manager는 별도 vault로 가져오지 않으며, 일반 화면과 Codex inspection에는 원문 값을 전달하지 않습니다.</p>
+          <p>Env Manager는 별도 vault로 가져오지 않으며, 일반 화면과 AI 도구의 기본 점검에는 원문 값을 전달하지 않습니다.</p>
         </div>
       </div>
     </section>

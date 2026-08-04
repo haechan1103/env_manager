@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
 use crate::manifest::MANIFEST_FILE_NAME;
 use crate::{
@@ -31,7 +33,20 @@ pub struct SaveDescriptionRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SaveGroupRequest {
+pub struct CreateEnvFileRequest {
+    pub file: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGroupRequest {
+    pub file: String,
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameGroupRequest {
     pub file: String,
     pub current_name: String,
     pub new_name: String,
@@ -141,6 +156,33 @@ impl ProjectService {
         self.initialize()
     }
 
+    pub fn create_env_file(&self, request: CreateEnvFileRequest) -> EnvResult<MutationSummary> {
+        let relative = PathBuf::from(&request.file);
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let mut options = DiscoveryOptions::default();
+        options
+            .ignored_files
+            .extend(manifest.scan.ignored_files.iter().cloned());
+        options
+            .ignored_directories
+            .extend(manifest.scan.ignored_directories.iter().cloned());
+        let target = safe_new_env_target(&self.root, &relative, &options)?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .map_err(|error| EnvError::io(&relative, error))?;
+        if let Err(error) = file.sync_all() {
+            drop(file);
+            let _ = fs::remove_file(&target);
+            return Err(EnvError::io(&relative, error));
+        }
+        Ok(MutationSummary {
+            affected_files: vec![request.file],
+            keys: Vec::new(),
+        })
+    }
+
     pub fn save_value(&self, request: SaveValueRequest) -> EnvResult<MutationSummary> {
         validate_key(&request.key)?;
         let manifest = ManifestStore::for_root(&self.root).load()?;
@@ -207,23 +249,59 @@ impl ProjectService {
         })
     }
 
-    pub fn save_group(&self, request: SaveGroupRequest) -> EnvResult<MutationSummary> {
+    pub fn create_group(&self, request: CreateGroupRequest) -> EnvResult<MutationSummary> {
         let relative = PathBuf::from(&request.file);
         let loaded = self.load_document(&relative)?;
-        let name_span = loaded
+        let name = sanitize_group(&request.name)?;
+        if find_unique_group_index(&loaded.document, &name)?.is_some() {
+            return Err(EnvError::invalid("같은 이름의 그룹이 이미 있습니다."));
+        }
+
+        let newline = newline(&loaded.document);
+        let insert_at = loaded.document.source().len();
+        let mut block = String::new();
+        if insert_at > content_start(&loaded.document) {
+            if loaded.document.source()[insert_at - 1] != b'\n' {
+                block.push_str(newline);
+            }
+            if !loaded.document.source()[..insert_at]
+                .ends_with(format!("{newline}{newline}").as_bytes())
+            {
+                block.push_str(newline);
+            }
+        }
+        block.push_str("# @group ");
+        block.push_str(&name);
+        block.push_str(newline);
+
+        let proposed = loaded
             .document
-            .nodes()
-            .iter()
-            .find_map(|node| match node {
-                Node::GroupDirective { name, .. }
-                    if loaded.document.text(*name) == request.current_name =>
-                {
-                    Some(*name)
-                }
-                _ => None,
-            })
+            .replace_span(crate::Span::new(insert_at, insert_at), block.as_bytes());
+        self.commit_one(relative, loaded.revision, proposed)?;
+        Ok(MutationSummary {
+            affected_files: vec![request.file],
+            keys: Vec::new(),
+        })
+    }
+
+    pub fn rename_group(&self, request: RenameGroupRequest) -> EnvResult<MutationSummary> {
+        let relative = PathBuf::from(&request.file);
+        let loaded = self.load_document(&relative)?;
+        let current_index = find_unique_group_index(&loaded.document, &request.current_name)?
             .ok_or_else(|| EnvError::invalid("변경할 그룹을 찾지 못했습니다."))?;
         let new_name = sanitize_group(&request.new_name)?;
+        if new_name == request.current_name {
+            return Err(EnvError::invalid("현재 그룹 이름과 같습니다."));
+        }
+        if find_unique_group_index(&loaded.document, &new_name)?.is_some() {
+            return Err(EnvError::invalid("같은 이름의 그룹이 이미 있습니다."));
+        }
+        let Node::GroupDirective {
+            name: name_span, ..
+        } = loaded.document.nodes()[current_index]
+        else {
+            unreachable!("group lookup only returns group directives")
+        };
         let proposed = loaded.document.replace_span(name_span, new_name.as_bytes());
         self.commit_one(relative, loaded.revision, proposed)?;
         Ok(MutationSummary {
@@ -247,42 +325,41 @@ impl ProjectService {
 
         let newline = newline(&loaded.document);
         let requested_group = request.group.trim();
-        let existing_group =
-            loaded
-                .document
-                .nodes()
-                .iter()
-                .enumerate()
-                .find_map(|(index, node)| match node {
-                    Node::GroupDirective { name, .. }
-                        if loaded.document.text(*name) == requested_group =>
-                    {
-                        Some(index)
-                    }
-                    _ => None,
-                });
-        let insert_at = existing_group.map_or(loaded.document.source().len(), |group_index| {
-            loaded.document.nodes()[group_index + 1..]
-                .iter()
-                .find_map(|node| match node {
-                    Node::GroupDirective { span, .. } => Some(span.start),
-                    _ => None,
-                })
-                .unwrap_or(loaded.document.source().len())
-        });
+        let is_ungrouped = requested_group.is_empty() || requested_group == "기타";
+        let normalized_group = if is_ungrouped {
+            None
+        } else {
+            Some(sanitize_group(requested_group)?)
+        };
+        let existing_group = normalized_group
+            .as_deref()
+            .map(|name| find_unique_group_index(&loaded.document, name))
+            .transpose()?
+            .flatten();
+        let insert_at = if is_ungrouped {
+            first_group_start(&loaded.document).unwrap_or(loaded.document.source().len())
+        } else {
+            existing_group.map_or(loaded.document.source().len(), |group_index| {
+                next_group_start(&loaded.document, group_index)
+                    .unwrap_or(loaded.document.source().len())
+            })
+        };
 
         let mut block = String::new();
-        if insert_at > 0 && loaded.document.source()[insert_at - 1] != b'\n' {
+        let has_content_before = insert_at > content_start(&loaded.document);
+        if has_content_before && loaded.document.source()[insert_at - 1] != b'\n' {
             block.push_str(newline);
         }
         let previous_has_blank = loaded.document.source()[..insert_at]
             .ends_with(format!("{newline}{newline}").as_bytes());
-        if !previous_has_blank {
+        if has_content_before && !previous_has_blank {
             block.push_str(newline);
         }
-        if existing_group.is_none() && !requested_group.is_empty() && requested_group != "기타" {
+        if existing_group.is_none()
+            && let Some(group) = normalized_group
+        {
             block.push_str("# @group ");
-            block.push_str(&sanitize_group(requested_group)?);
+            block.push_str(&group);
             block.push_str(newline);
             block.push_str(newline);
         }
@@ -353,26 +430,9 @@ impl ProjectService {
                 })
                 .unwrap_or(loaded.document.source().len())
         } else {
-            let group_index = loaded
-                .document
-                .nodes()
-                .iter()
-                .enumerate()
-                .find_map(|(index, node)| match node {
-                    Node::GroupDirective { name, .. }
-                        if loaded.document.text(*name) == target_group =>
-                    {
-                        Some(index)
-                    }
-                    _ => None,
-                })
+            let group_index = find_unique_group_index(&loaded.document, target_group)?
                 .ok_or_else(|| EnvError::invalid("이동할 그룹을 찾지 못했습니다."))?;
-            loaded.document.nodes()[group_index + 1..]
-                .iter()
-                .find_map(|node| match node {
-                    Node::GroupDirective { span, .. } => Some(span.start),
-                    _ => None,
-                })
+            next_group_start(&loaded.document, group_index)
                 .unwrap_or(loaded.document.source().len())
         };
 
@@ -782,11 +842,49 @@ fn group_at(document: &Document, node_index: usize) -> &str {
         .unwrap_or("기타")
 }
 
+fn find_unique_group_index(document: &Document, group: &str) -> EnvResult<Option<usize>> {
+    let mut matches = document
+        .nodes()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            Node::GroupDirective { name, .. } if document.text(*name) == group => Some(index),
+            _ => None,
+        });
+    let found = matches.next();
+    if matches.next().is_some() {
+        return Err(EnvError::invalid(format!(
+            "{group} 그룹이 파일에 여러 번 있어 대상을 정할 수 없습니다."
+        )));
+    }
+    Ok(found)
+}
+
+fn first_group_start(document: &Document) -> Option<usize> {
+    document.nodes().iter().find_map(|node| match node {
+        Node::GroupDirective { span, .. } => Some(span.start),
+        _ => None,
+    })
+}
+
+fn next_group_start(document: &Document, group_index: usize) -> Option<usize> {
+    document.nodes()[group_index + 1..]
+        .iter()
+        .find_map(|node| match node {
+            Node::GroupDirective { span, .. } => Some(span.start),
+            _ => None,
+        })
+}
+
 fn newline(document: &Document) -> &'static str {
     match document.newline_style() {
         crate::NewlineStyle::Lf => "\n",
         crate::NewlineStyle::CrLf => "\r\n",
     }
+}
+
+fn content_start(document: &Document) -> usize {
+    usize::from(document.has_bom()) * 3
 }
 
 fn sanitize_comment(line: &str) -> String {
@@ -795,7 +893,7 @@ fn sanitize_comment(line: &str) -> String {
 
 fn sanitize_group(group: &str) -> EnvResult<String> {
     let sanitized = group.replace(['\r', '\n'], " ").trim().to_owned();
-    if sanitized.is_empty() || sanitized.starts_with('@') {
+    if sanitized.is_empty() || sanitized.starts_with('@') || sanitized == "기타" {
         return Err(EnvError::invalid("그룹 이름이 올바르지 않습니다."));
     }
     Ok(sanitized)
@@ -852,6 +950,57 @@ fn safe_existing_target(root: &Path, relative: &Path) -> EnvResult<PathBuf> {
     Ok(target)
 }
 
+fn safe_new_env_target(
+    root: &Path,
+    relative: &Path,
+    options: &DiscoveryOptions,
+) -> EnvResult<PathBuf> {
+    if relative.as_os_str().is_empty()
+        || relative.is_absolute()
+        || !relative
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(EnvError::path_outside(relative));
+    }
+    let name = relative
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| EnvError::invalid("생성할 env 파일 이름이 올바르지 않습니다."))?;
+    if !is_env_candidate(name) {
+        return Err(EnvError::invalid(
+            "새 파일은 .env 또는 .env.* 형식이어야 하며 example 파일은 만들 수 없습니다.",
+        ));
+    }
+    let manifest_path = to_manifest_path(relative);
+    if options.ignored_files.contains(&manifest_path) {
+        return Err(EnvError::invalid("manifest에서 제외한 env 파일입니다."));
+    }
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    if parent.components().any(|component| {
+        options
+            .ignored_directories
+            .contains(&component.as_os_str().to_string_lossy().into_owned())
+    }) {
+        return Err(EnvError::invalid(
+            "관리 제외 디렉터리에는 env 파일을 만들 수 없습니다.",
+        ));
+    }
+    let parent_target = root
+        .join(parent)
+        .canonicalize()
+        .map_err(|error| EnvError::io(parent, error))?;
+    if !parent_target.starts_with(root) || !parent_target.is_dir() {
+        return Err(EnvError::path_outside(relative));
+    }
+    let target = parent_target.join(name);
+    match fs::symlink_metadata(&target) {
+        Ok(_) => Err(EnvError::invalid("같은 경로의 파일이 이미 있습니다.")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(target),
+        Err(error) => Err(EnvError::io(relative, error)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use env_test_support::SyntheticProject;
@@ -874,6 +1023,46 @@ mod tests {
         assert_eq!(variables[1].codex_access, CodexAccess::ReadWrite);
         assert_eq!(variables[2].codex_access, CodexAccess::Unclassified);
         assert!(variables.iter().all(|item| item.display_value.is_none()));
+    }
+
+    #[test]
+    fn creates_empty_env_file_only_inside_an_existing_project_directory() {
+        let project = SyntheticProject::new();
+        fs::create_dir_all(project.root().join("apps/mobile")).expect("fixture directory");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        service
+            .create_env_file(CreateEnvFileRequest {
+                file: "apps/mobile/.env".to_owned(),
+            })
+            .expect("create env file");
+
+        assert_eq!(project.read("apps/mobile/.env"), b"");
+        let projection = service.scan().expect("scan");
+        assert_eq!(projection.files[0].path, "apps/mobile/.env");
+    }
+
+    #[test]
+    fn refuses_example_overwrite_and_path_escape_for_new_env_files() {
+        let project = SyntheticProject::new();
+        project.write(".env", "PORT=fake_3000\n");
+        fs::create_dir_all(project.root().join("node_modules/pkg"))
+            .expect("excluded fixture directory");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        for file in [".env.example", ".env", "../.env", "node_modules/pkg/.env"] {
+            assert!(
+                service
+                    .create_env_file(CreateEnvFileRequest {
+                        file: file.to_owned(),
+                    })
+                    .is_err(),
+                "must reject {file}"
+            );
+        }
+        assert_eq!(project.read(".env"), b"PORT=fake_3000\n");
     }
 
     #[test]
@@ -961,6 +1150,94 @@ mod tests {
         assert!(
             output.find("GPT_TIMEOUT").expect("new key")
                 < output.find("# @group App").expect("next group")
+        );
+    }
+
+    #[test]
+    fn creates_and_renames_an_explicit_empty_group() {
+        let project = SyntheticProject::new();
+        project.write(".env", "PORT=fake_3000\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        service
+            .create_group(CreateGroupRequest {
+                file: ".env".to_owned(),
+                name: "GPT".to_owned(),
+            })
+            .expect("create group");
+        assert_eq!(project.read(".env"), b"PORT=fake_3000\n\n# @group GPT\n");
+
+        service
+            .rename_group(RenameGroupRequest {
+                file: ".env".to_owned(),
+                current_name: "GPT".to_owned(),
+                new_name: "OpenAI".to_owned(),
+            })
+            .expect("rename group");
+        assert_eq!(project.read(".env"), b"PORT=fake_3000\n\n# @group OpenAI\n");
+    }
+
+    #[test]
+    fn creates_group_in_bom_only_file_without_leading_blank_lines() {
+        let project = SyntheticProject::new();
+        project.write(".env", "\u{feff}");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        service
+            .create_group(CreateGroupRequest {
+                file: ".env".to_owned(),
+                name: "GPT".to_owned(),
+            })
+            .expect("create group");
+
+        assert_eq!(project.read(".env"), b"\xEF\xBB\xBF# @group GPT\n");
+    }
+
+    #[test]
+    fn refuses_ambiguous_or_reserved_group_names() {
+        let project = SyntheticProject::new();
+        project.write(".env", "# @group GPT\nA=fake_a\n# @group GPT\nB=fake_b\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        let duplicate = service
+            .rename_group(RenameGroupRequest {
+                file: ".env".to_owned(),
+                current_name: "GPT".to_owned(),
+                new_name: "OpenAI".to_owned(),
+            })
+            .expect_err("duplicate group must be ambiguous");
+        assert!(duplicate.to_string().contains("여러 번"));
+
+        let reserved = service
+            .create_group(CreateGroupRequest {
+                file: ".env".to_owned(),
+                name: "기타".to_owned(),
+            })
+            .expect_err("virtual group name is reserved");
+        assert!(reserved.to_string().contains("올바르지"));
+    }
+
+    #[test]
+    fn adds_ungrouped_variable_before_the_first_group_marker() {
+        let project = SyntheticProject::new();
+        project.write(".env", "# @group GPT\nGPT_MODEL=fake_model\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        service
+            .add_variable(AddVariableRequest {
+                file: ".env".to_owned(),
+                key: "PORT".to_owned(),
+                group: "기타".to_owned(),
+                description: Vec::new(),
+                value: "fake_3000".to_owned(),
+            })
+            .expect("add ungrouped");
+
+        assert_eq!(
+            project.read(".env"),
+            b"PORT=fake_3000\n# @group GPT\nGPT_MODEL=fake_model\n"
         );
     }
 

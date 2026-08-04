@@ -1,11 +1,12 @@
 mod commands;
+mod integrations;
 mod runtime;
 
 use commands::{
-    add_variable, apply_migration, copy_value, create_link, delete_variable, detach_link_member,
-    get_effective_value, list_projects, move_variable, plan_migration, read_value,
-    register_project, remove_project, save_description, save_group, save_value, scan_project,
-    set_codex_access,
+    add_variable, apply_migration, copy_key, copy_value, create_group, create_link,
+    delete_variable, detach_link_member, install_agent_integration, list_agent_integrations,
+    list_projects, move_variable, plan_migration, read_value, register_project, remove_project,
+    rename_group, save_description, save_value, scan_project, set_codex_access,
 };
 use runtime::AppRuntime;
 use tauri::Manager;
@@ -21,12 +22,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_projects,
+            list_agent_integrations,
+            install_agent_integration,
             register_project,
             remove_project,
             scan_project,
             save_value,
             save_description,
-            save_group,
+            create_group,
+            rename_group,
             add_variable,
             delete_variable,
             move_variable,
@@ -34,8 +38,8 @@ pub fn run() {
             detach_link_member,
             set_codex_access,
             read_value,
+            copy_key,
             copy_value,
-            get_effective_value,
             plan_migration,
             apply_migration,
         ])

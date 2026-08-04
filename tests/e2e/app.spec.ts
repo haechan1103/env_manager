@@ -15,6 +15,13 @@ test("navigates the redacted V1 workflow", async ({ page }) => {
   await expect(page.getByText("값은 계획과 화면에 포함되지 않습니다.")).toBeVisible();
   await page.getByRole("button", { name: "취소" }).click();
   const apiKeyInput = page.getByLabel("GPT_API_KEY 값");
+  await expect(page.getByText("2개 파일에서 함께 관리")).toBeVisible();
+  await expect(
+    page.getByText("어느 파일에서 값을 바꿔도 아래 파일에 모두 저장됩니다."),
+  ).toBeVisible();
+  await expect(page.getByRole("main").getByText(".env.development")).toBeVisible();
+  await page.getByTitle("값 보기 · 30초 미활동 시 숨김").first().click();
+  await expect(page.locator("textarea.revealed-value-field")).toBeVisible();
   await apiKeyInput.fill("fake_e2e_replacement");
   await expect(page.getByRole("button", { name: "2개 파일에 저장" })).toBeVisible();
   await page.screenshot({
@@ -22,14 +29,7 @@ test("navigates the redacted V1 workflow", async ({ page }) => {
     fullPage: true,
   });
 
-  await page.getByRole("button", { name: "실제 적용값" }).click();
-  await page.getByRole("button", { name: "적용 순서 확인" }).click();
-  await expect(page.getByText("실제 적용 예상")).toBeVisible();
-
-  await page.screenshot({
-    path: "test-results/env-manager-effective.png",
-    fullPage: true,
-  });
+  await expect(page.getByRole("button", { name: "실제 적용값" })).toHaveCount(0);
 });
 
 test("shows a compact product-style empty project screen", async ({ page }) => {
@@ -45,6 +45,23 @@ test("shows a compact product-style empty project screen", async ({ page }) => {
 
   await page.screenshot({
     path: "test-results/env-manager-empty-project.png",
+    fullPage: true,
+  });
+});
+
+test("shows one shared integration bundle for supported AI tools", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "AI 도구 연결" }).click();
+  await expect(page.getByRole("heading", { name: "AI 도구 연결" })).toBeVisible();
+  await expect(page.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(page.getByText("Claude Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("GitHub Copilot / VS Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("ONE LOCAL BUNDLE")).toBeVisible();
+  await expect(page.getByText(/API_KEY=/)).toHaveCount(0);
+
+  await page.screenshot({
+    path: "test-results/env-manager-ai-integrations.png",
     fullPage: true,
   });
 });
