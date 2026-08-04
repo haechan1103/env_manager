@@ -27,6 +27,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
+      - run: npm run prepare:sidecar
       - run: npm run check
       - run: npm run validate:agent-bundle
       - run: npm run validate:release-version
