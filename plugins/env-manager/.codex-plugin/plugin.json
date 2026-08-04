@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",

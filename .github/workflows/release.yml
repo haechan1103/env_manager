@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    runs-on: macos-14
+    env:
+      ENV_MANAGER_TARGET: ${{ matrix.target }}
+      OPTIONAL_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: npm ci
+      - run: npm run validate:release-version
+
+      - name: Import Apple signing certificate
+        if: ${{ env.OPTIONAL_APPLE_SIGNING_IDENTITY != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm certificate.p12
+          echo "APPLE_SIGNING_IDENTITY=$OPTIONAL_APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Configure Apple notarization
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [[ -n "$NOTARY_APPLE_ID" && -n "$NOTARY_APPLE_PASSWORD" && -n "$NOTARY_APPLE_TEAM_ID" ]]; then
+            echo "APPLE_ID=$NOTARY_APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$NOTARY_APPLE_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$NOTARY_APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          fi
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Env Manager v__VERSION__
+          releaseBody: |
+            Env Manager v__VERSION__ macOS 설치 파일입니다.
+
+            Apple Silicon은 aarch64 DMG, Intel Mac은 x86_64 DMG를 받아주세요.
+          generateReleaseNotes: true
+          prerelease: false
+          releaseDraft: false
+          retryAttempts: 2
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json

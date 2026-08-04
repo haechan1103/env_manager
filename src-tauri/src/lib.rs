@@ -15,7 +15,10 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             let runtime = AppRuntime::load(app.handle())?;
             app.manage(runtime);
             Ok(())

@@ -1,4 +1,5 @@
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
+import { AppUpdater } from "../updater/AppUpdater";
 
 interface View {
   kind: "overview" | "file" | "integrations";
@@ -31,7 +32,7 @@ export function ProjectSidebar({
       <div className="brand">
         <span className="brand-mark">E</span>
         <span>Env Manager</span>
-        <span className="version">v0.2.1</span>
+        <AppUpdater />
       </div>
 
       <div className="sidebar-section-title">
