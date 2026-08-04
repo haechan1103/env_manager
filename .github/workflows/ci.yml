@@ -14,10 +14,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -27,13 +23,12 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
-      - run: npm run prepare:sidecar
       - run: npm run check
       - run: npm run validate:agent-bundle
       - run: npm run validate:release-version
       - run: cargo fmt --all -- --check
-      - run: cargo test --workspace --locked
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test -p env-core -p env-broker -p env-test-support --locked
+      - run: cargo clippy -p env-core -p env-broker -p env-test-support --all-targets --locked -- -D warnings
 
   macos-bundle:
     runs-on: macos-14
@@ -49,3 +44,5 @@ jobs:
       - run: npm run tauri build
       - name: Verify bundled broker
         run: test -x "target/release/bundle/macos/Env Manager.app/Contents/MacOS/env-manager-broker"
+      - run: cargo test -p env-manager-app --locked
+      - run: cargo clippy -p env-manager-app --all-targets --locked -- -D warnings
