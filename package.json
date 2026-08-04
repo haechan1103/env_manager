@@ -1,28 +1,34 @@
 {
   "name": "env-manager",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:bundle": "npm run prepare:sidecar && npm run build",
+    "prepare:sidecar": "node scripts/prepare-sidecar.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test && npm run build",
     "typecheck": "tsc -b --pretty false",
+    "validate:release-version": "node scripts/check-release-version.mjs",
+    "validate:agent-bundle": "node scripts/validate-agent-bundle.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.2",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.10.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.4",
     "@playwright/test": "1.62.0",
+    "@tauri-apps/cli": "2.11.4",
     "@testing-library/jest-dom": "^6.9.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.0",
@@ -30,9 +36,9 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
+    "jsdom": "^27.0.0",
     "typescript": "^5.9.0",
     "vite": "8.1.5",
-    "vitest": "^4.0.0",
-    "jsdom": "^27.0.0"
+    "vitest": "^4.0.0"
   }
 }

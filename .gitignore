@@ -1,6 +1,7 @@
 node_modules/
 dist/
 target/
+src-tauri/binaries/env-manager-broker-*
 src-tauri/target/
 .DS_Store
 *.log

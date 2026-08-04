@@ -6,9 +6,9 @@
 값을 별도 vault로 옮기지 않습니다. 기존 프로젝트가 사용하던 env 파일을
 그대로 유지하면서 구조, 설명, 연결 상태와 AI 도구 접근 정책을 관리합니다.
 
-> 현재 상태: macOS용 V1 preview
+> 현재 상태: macOS용 v0.3
 >
-> Windows 지원, 서명, 공증, 자동 업데이트는 아직 제공하지 않습니다.
+> Windows 지원과 Apple Developer ID 공증은 다음 단계입니다.
 
 ## 주요 기능
 
@@ -24,6 +24,8 @@
 - 같은 이름이지만 연결되지 않은 변수는 별도 상태로 표시하고 연결을 제안
 - Codex, Claude Code, GitHub Copilot에서 같은 Skill과 redacted broker 사용
 - 앱의 `AI 도구 연결` 화면에서 감지·설치·버전 상태 확인
+- 앱에 broker가 함께 포함되어 AI 도구 연동에 Rust 설치가 필요 없음
+- 실행 후 새 버전을 조용히 확인하고, 사용자 선택 시 서명 검증 후 업데이트
 
 ## 동작 방식
 
@@ -35,7 +37,23 @@
 앱을 켜 둔 동안에는 이미 발견한 파일만 가볍게 감시합니다. 프로젝트 전체를
 항상 재귀 탐색하거나 백그라운드 데몬으로 동작하지 않습니다.
 
-## 시작하기
+## 설치하기
+
+[GitHub Releases](https://github.com/haechan1103/env_manager/releases)에서 Mac에 맞는
+DMG를 내려받아 설치합니다.
+
+- Apple Silicon(M1 이상): `aarch64` DMG
+- Intel Mac: `x86_64` DMG
+
+현재 공개 DMG는 ad-hoc 코드 서명 단계입니다. 첫 실행이 차단되면 Finder에서 앱을
+Control-클릭한 뒤 `열기`를 선택하세요. Apple Developer ID 서명과 공증은 배포
+자격 증명을 연결하면 같은 릴리스 파이프라인에서 활성화됩니다.
+
+앱은 실행 후 GitHub Release의 업데이트 정보만 확인합니다. 새 버전이 있으면
+알려주며, `지금 업데이트`를 눌렀을 때만 서명된 파일을 설치하고 재시작합니다.
+프로젝트나 환경변수 정보는 전송하지 않습니다.
+
+## 소스에서 개발하기
 
 ### 요구 사항
 
@@ -57,12 +75,12 @@ npm run tauri dev
 npm run tauri build
 ```
 
-현재 기본 번들 대상은 `.app`입니다. 공개 배포 전에 별도의 코드 서명과 공증
-설정이 필요합니다.
+`v*` 태그를 푸시하면 GitHub Actions가 Apple Silicon과 Intel용 DMG, 서명된
+업데이트 번들, `latest.json`을 GitHub Release에 자동 게시합니다.
 
 ## AI 도구 연동
 
-Env Manager 0.2는 하나의 로컬 플러그인 묶음을 공유합니다.
+Env Manager 0.3은 하나의 로컬 플러그인 묶음을 공유합니다.
 
 - 공통: Agent Skill + MCP broker
 - Codex: Codex 플러그인 manifest
@@ -70,14 +88,15 @@ Env Manager 0.2는 하나의 로컬 플러그인 묶음을 공유합니다.
 - GitHub Copilot / VS Code: Claude 호환 플러그인 + 같은 Guard
 
 앱 사이드바의 `AI 도구 연결`에서 설치된 도구와 연동 버전을 확인하고 한 번에
-설치할 수 있습니다. Preview 소스 빌드에서는 broker 설치를 위해 Rust가
-필요합니다.
+설치할 수 있습니다. 설치 앱에는 버전이 맞는 broker가 함께 들어 있으므로,
+AI 도구 연동을 위해 Rust나 별도 broker 설치가 필요하지 않습니다.
 
 AI 도구는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별도의 재승인
 질문 없이 바로 적용합니다. 값 충돌처럼 원본 파일을 정할 정보가 부족한
 경우에만 필요한 선택을 물어봅니다.
 
-먼저 이 저장소에서 broker 실행 파일을 설치합니다.
+소스에서 앱을 실행하지 않고 CLI로 플러그인만 설치할 때는 먼저 broker를
+설치합니다.
 
 ```bash
 cargo install --path crates/env-broker --locked
