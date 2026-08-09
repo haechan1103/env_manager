@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { Modal } from "../../components/Modal";
+import { displayGroupName, localizeError, useI18n } from "../../i18n";
 import * as api from "../../lib/api";
 import type {
   FileProjection,
@@ -27,6 +28,7 @@ export function FileEditor({
   onError,
   onNotice,
 }: Props) {
+  const { locale, t } = useI18n();
   const file = projection.files.find((item) => item.path === filePath);
   const [adding, setAdding] = useState(false);
   const [addingGroup, setAddingGroup] = useState(false);
@@ -58,7 +60,7 @@ export function FileEditor({
   if (!file) {
     return (
       <section className="center-state">
-        <p>파일이 제거되었거나 아직 새로고침되지 않았습니다.</p>
+        <p>{t("file.missing")}</p>
       </section>
     );
   }
@@ -69,7 +71,7 @@ export function FileEditor({
       await onRefresh();
       onNotice(success);
     } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "변경을 적용하지 못했습니다.");
+      onError(localizeError(cause, locale, "error.mutation"));
     }
   };
 
@@ -79,7 +81,7 @@ export function FileEditor({
         <div>
           <p className="eyebrow">ENV FILE</p>
           <h2>{file.path}</h2>
-          <p>{countVariables(file)}개 변수 · {file.groups.length}개 그룹</p>
+          <p>{t("file.summary", { variables: countVariables(file), groups: file.groups.length })}</p>
         </div>
         <div className="header-actions">
           <button
@@ -90,24 +92,22 @@ export function FileEditor({
                 .then(setMigration)
                 .catch((cause: unknown) =>
                   onError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "정리할 그룹 표식을 찾지 못했습니다.",
+                    localizeError(cause, locale, "error.migration"),
                   ),
                 );
             }}
           >
-            기존 주석 정리
+            {t("file.organizeComments")}
           </button>
-          <button className="quiet-button" onClick={() => setAddingGroup(true)}>+ 새 그룹</button>
-          <button className="primary-button" onClick={() => setAdding(true)}>+ 새 변수</button>
+          <button className="quiet-button" onClick={() => setAddingGroup(true)}>{t("file.newGroup")}</button>
+          <button className="primary-button" onClick={() => setAdding(true)}>{t("file.newVariable")}</button>
         </div>
       </div>
 
       {file.warnings.length > 0 && (
         <div className="warning-banner">
-          <strong>파일 내용을 모두 보존했지만 확인이 필요한 줄이 있습니다.</strong>
-          <span>{file.warnings.join(" ")}</span>
+          <strong>{t("file.warningTitle")}</strong>
+          <span>{localizedWarnings(file.warnings, locale, t)}</span>
         </div>
       )}
 
@@ -117,14 +117,14 @@ export function FileEditor({
             <header className="group-header">
               <div>
                 <span className="group-fold">⌄</span>
-                <h3>{group.name}</h3>
+                <h3>{displayGroupName(group.name, t)}</h3>
                 <span>{group.variables.length}</span>
               </div>
               {group.name !== "기타" && (
                 <button
                   className="quiet-button compact"
                   onClick={() => {
-                    const name = window.prompt("새 그룹 이름", group.name)?.trim();
+                    const name = window.prompt(t("file.renameGroupPrompt"), group.name)?.trim();
                     if (!name || name === group.name) return;
                     void mutate(
                       () =>
@@ -133,17 +133,17 @@ export function FileEditor({
                           currentName: group.name,
                           newName: name,
                         }),
-                      "그룹 이름을 변경했습니다.",
+                      t("file.groupRenamed"),
                     );
                   }}
                 >
-                  이름 변경
+                  {t("file.renameGroup")}
                 </button>
               )}
             </header>
             <div className="variables-table">
               {group.variables.length === 0 && (
-                <div className="empty-group-row">아직 변수가 없습니다. 새 변수를 이 그룹에 추가해보세요.</div>
+                <div className="empty-group-row">{t("file.emptyGroup")}</div>
               )}
               {group.variables.map((variable) => (
                 <VariableRow
@@ -170,7 +170,7 @@ export function FileEditor({
           onSubmit={(request) => {
             void mutate(
               () => api.addVariable(projectId, { file: file.path, ...request }),
-              `${request.key} 변수를 추가했습니다.`,
+              t("file.variableAdded", { key: request.key }),
             ).then(() => setAdding(false));
           }}
         />
@@ -183,7 +183,7 @@ export function FileEditor({
           onSubmit={(name) => {
             void mutate(
               () => api.createGroup(projectId, { file: file.path, name }),
-              `${name} 그룹을 만들었습니다.`,
+              t("file.groupCreated", { name }),
             ).then(() => setAddingGroup(false));
           }}
         />
@@ -203,7 +203,7 @@ export function FileEditor({
                   files,
                   sourceFile: file.path,
                 }),
-              `${linking.key}를 ${files.length}개 파일에서 연결했습니다.`,
+              t("file.variablesLinked", { key: linking.key, count: files.length }),
             ).then(() => setLinking(null));
           }}
         />
@@ -216,7 +216,7 @@ export function FileEditor({
           onApply={() => {
             void mutate(
               () => api.applyMigration(projectId, migration.planId),
-              `${migration.preview.file}의 그룹 표식을 정리했습니다.`,
+              t("file.migrationApplied", { file: migration.preview.file }),
             ).then(() => setMigration(null));
           }}
         />
@@ -234,14 +234,15 @@ function MigrationModal({
   onClose: () => void;
   onApply: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
-      title="기존 env 주석 정리 계획"
-      description={`${plan.preview.file} · ${plan.expiresInSeconds / 60}분 동안 유효`}
+      title={t("migration.title")}
+      description={t("migration.validFor", { file: plan.preview.file, minutes: plan.expiresInSeconds / 60 })}
       onClose={onClose}
     >
       <div className="migration-summary">
-        <p>{plan.preview.summary}</p>
+        <p>{t("migration.summary", { count: plan.preview.suggestions.length })}</p>
         <div className="migration-list">
           {plan.preview.suggestions.map((suggestion) => (
             <div key={`${suggestion.currentMarker}:${suggestion.groupName}`}>
@@ -252,13 +253,13 @@ function MigrationModal({
           ))}
         </div>
         <div className="impact-note">
-          <strong>값은 계획과 화면에 포함되지 않습니다.</strong>
-          <span>파일이 미리보기 이후 바뀌었다면 적용을 중단하고 새 계획을 요청합니다.</span>
+          <strong>{t("migration.noValues")}</strong>
+          <span>{t("migration.changedGuard")}</span>
         </div>
       </div>
       <div className="modal-actions">
-        <button className="quiet-button" onClick={onClose}>취소</button>
-        <button className="primary-button" onClick={onApply}>계획 적용</button>
+        <button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button>
+        <button className="primary-button" onClick={onApply}>{t("migration.apply")}</button>
       </div>
     </Modal>
   );
@@ -277,11 +278,12 @@ function CreateGroupModal({
   onClose: () => void;
   onSubmit: (name: string) => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   return (
     <Modal
-      title="새 그룹"
-      description={`${file}에 # @group 표식을 추가합니다.`}
+      title={t("group.newTitle")}
+      description={t("group.newDescription", { file })}
       onClose={onClose}
     >
       <form
@@ -294,7 +296,7 @@ function CreateGroupModal({
         }}
       >
         <label>
-          그룹 이름
+          {t("group.name")}
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -303,12 +305,12 @@ function CreateGroupModal({
           />
         </label>
         <div className="impact-note">
-          <strong>기존 변수와 값은 바꾸지 않습니다.</strong>
-          <span>그룹을 만든 뒤 변수를 추가하거나 이동할 수 있습니다.</span>
+          <strong>{t("group.preserveTitle")}</strong>
+          <span>{t("group.preserveBody")}</span>
         </div>
         <div className="modal-actions">
-          <button type="button" className="quiet-button" onClick={onClose}>취소</button>
-          <button className="primary-button" disabled={!name.trim()}>그룹 만들기</button>
+          <button type="button" className="quiet-button" onClick={onClose}>{t("common.cancel")}</button>
+          <button className="primary-button" disabled={!name.trim()}>{t("group.create")}</button>
         </div>
       </form>
     </Modal>
@@ -329,6 +331,7 @@ function AddVariableModal({
     value: string;
   }) => void;
 }) {
+  const { t } = useI18n();
   const [key, setKey] = useState("");
   const [group, setGroup] = useState(file.groups[0]?.name ?? "기타");
   const [newGroup, setNewGroup] = useState("");
@@ -336,8 +339,8 @@ function AddVariableModal({
   const [value, setValue] = useState("");
   return (
     <Modal
-      title="새 환경변수"
-      description={`${file.path}에 빈 값 또는 입력한 값을 추가합니다.`}
+      title={t("variable.newTitle")}
+      description={t("variable.newDescription", { file: file.path })}
       onClose={onClose}
     >
       <form
@@ -355,20 +358,20 @@ function AddVariableModal({
           });
         }}
       >
-        <label>변수 이름<input value={key} onChange={(event) => setKey(event.target.value)} placeholder="NEW_VARIABLE" autoFocus /></label>
-        <label>그룹
+        <label>{t("variable.name")}<input value={key} onChange={(event) => setKey(event.target.value)} placeholder="NEW_VARIABLE" autoFocus /></label>
+        <label>{t("variable.group")}
           <select value={group} onChange={(event) => setGroup(event.target.value)}>
-            {file.groups.map((item) => <option key={item.name}>{item.name}</option>)}
-            {!file.groups.some((item) => item.name === "기타") && <option value="기타">기타 (그룹 없음)</option>}
-            <option value="__new_group__">+ 새 그룹 만들기</option>
+            {file.groups.map((item) => <option key={item.name} value={item.name}>{displayGroupName(item.name, t)}</option>)}
+            {!file.groups.some((item) => item.name === "기타") && <option value="기타">{t("group.ungroupedOption")}</option>}
+            <option value="__new_group__">{t("variable.createGroup")}</option>
           </select>
         </label>
         {group === "__new_group__" && (
-          <label>새 그룹 이름<input value={newGroup} onChange={(event) => setNewGroup(event.target.value)} placeholder="GPT" /></label>
+          <label>{t("variable.newGroupName")}<input value={newGroup} onChange={(event) => setNewGroup(event.target.value)} placeholder="GPT" /></label>
         )}
-        <label>설명<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="한 줄에 하나씩 설명을 입력하세요." /></label>
-        <label>값 <span className="label-hint">선택</span><input type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="비워두고 나중에 입력 가능" /></label>
-        <div className="modal-actions"><button type="button" className="quiet-button" onClick={onClose}>취소</button><button className="primary-button">변수 추가</button></div>
+        <label>{t("variable.description")}<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t("variable.descriptionPlaceholder")} /></label>
+        <label>{t("variable.value")} <span className="label-hint">{t("common.optional")}</span><input type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("variable.valueLater")} /></label>
+        <div className="modal-actions"><button type="button" className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button">{t("variable.add")}</button></div>
       </form>
     </Modal>
   );
@@ -387,11 +390,12 @@ function LinkModal({
   onClose: () => void;
   onSubmit: (files: string[]) => void;
 }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<Set<string>>(new Set([currentFile]));
   return (
     <Modal
-      title={`${variable.key} 연결`}
-      description="처음 연결할 때만 현재 파일 값을 기준으로 맞춥니다. 연결 후에는 어느 파일에서 수정해도 모두 함께 저장됩니다."
+      title={t("link.title", { key: variable.key })}
+      description={t("link.description")}
       onClose={onClose}
     >
       <div className="link-list">
@@ -410,15 +414,33 @@ function LinkModal({
                 });
               }}
             />
-            <span><strong>{candidate.path}</strong><small>{candidate.path === currentFile ? "현재 값 · 기준" : "값은 화면에 노출하지 않고 내부에서 비교"}</small></span>
+            <span><strong>{candidate.path}</strong><small>{candidate.path === currentFile ? t("link.source") : t("link.compare")}</small></span>
           </label>
         ))}
       </div>
       <div className="impact-note">
-        <strong>{selected.size}개 파일의 {variable.key}</strong>
-        <span>연결은 자동으로 만들지 않습니다. 확인하면 선택한 파일들이 하나의 값으로 함께 관리됩니다.</span>
+        <strong>{t("link.selection", { key: variable.key, count: selected.size })}</strong>
+        <span>{t("link.confirmation")}</span>
       </div>
-      <div className="modal-actions"><button className="quiet-button" onClick={onClose}>취소</button><button className="primary-button" disabled={selected.size < 2} onClick={() => onSubmit([...selected])}>{selected.size}개 occurrence 연결</button></div>
+      <div className="modal-actions"><button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={selected.size < 2} onClick={() => onSubmit([...selected])}>{t("link.submit", { count: selected.size })}</button></div>
     </Modal>
   );
+}
+
+function localizedWarnings(
+  warnings: string[],
+  locale: "en" | "ko",
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (locale === "ko") return warnings.join(" ");
+  const translated = warnings.map((warning) => {
+    if (warning.includes("알 수 없는 Env Manager 지시문")) {
+      return t("file.warningUnknownDirective");
+    }
+    if (warning.includes("해석하지 못한 줄")) return t("file.warningUnknownLine");
+    return null;
+  });
+  return translated.every(Boolean)
+    ? translated.join(" ")
+    : t("file.warningCount", { count: warnings.length });
 }

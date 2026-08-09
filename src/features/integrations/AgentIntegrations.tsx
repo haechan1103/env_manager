@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { localizeError, useI18n } from "../../i18n";
 import * as api from "../../lib/api";
 import type {
   AgentIntegrationId,
@@ -18,6 +19,7 @@ const marks: Record<AgentIntegrationId, string> = {
 };
 
 export function AgentIntegrations({ onError, onNotice }: Props) {
+  const { locale, t } = useI18n();
   const [items, setItems] = useState<AgentIntegrationStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState<AgentIntegrationId | null>(null);
@@ -27,11 +29,11 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
     try {
       setItems(await api.listAgentIntegrations());
     } catch (error) {
-      onError(error instanceof Error ? error.message : "AI 도구 연결 상태를 확인하지 못했습니다.");
+      onError(localizeError(error, locale, "error.integrationStatus"));
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, [locale, onError]);
 
   useEffect(() => {
     void load();
@@ -42,9 +44,9 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
     try {
       const result = await api.installAgentIntegration(item.id);
       setItems((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
-      onNotice(`${item.name}에 Env Manager ${result.currentVersion} 연동을 설치했습니다.`);
+      onNotice(t("integration.installSuccess", { name: item.name, version: result.currentVersion }));
     } catch (error) {
-      onError(error instanceof Error ? error.message : `${item.name} 연동에 실패했습니다.`);
+      onError(localizeError(error, locale, "error.integrationInstall", { name: item.name }));
     } finally {
       setInstalling(null);
     }
@@ -55,14 +57,11 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
       <div className="integration-intro">
         <div>
           <p className="eyebrow">ONE LOCAL BUNDLE</p>
-          <h2>쓰는 도구에 같은 규칙을 연결하세요</h2>
-          <p>
-            하나의 Skill과 로컬 broker를 Codex, Claude Code, GitHub Copilot에서
-            함께 사용합니다. 환경변수 원문은 일반 대화 대신 Env Manager 도구를 통해 다룹니다.
-          </p>
+          <h2>{t("integration.heading")}</h2>
+          <p>{t("integration.body")}</p>
         </div>
         <button className="quiet-button" onClick={() => void load()} disabled={loading}>
-          {loading ? "확인 중…" : "상태 새로고침"}
+          {loading ? t("common.checking") : t("integration.refresh")}
         </button>
       </div>
 
@@ -70,10 +69,10 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
         {items.map((item) => {
           const busy = installing === item.id;
           const actionLabel = item.updateAvailable
-            ? "업데이트"
+            ? t("integration.update")
             : item.installed
-              ? "설치됨"
-              : "연결 설치";
+              ? t("integration.installed")
+              : t("integration.install");
           return (
             <article className={`integration-card ${item.installed ? "connected" : ""}`} key={item.id}>
               <header>
@@ -81,21 +80,21 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
                 <div>
                   <h3>{item.name}</h3>
                   <span className={`integration-state ${item.installed ? "installed" : item.detected ? "detected" : "missing"}`}>
-                    {item.installed ? "연결됨" : item.detected ? "도구 감지됨" : "도구 미설치"}
+                    {item.installed ? t("integration.connected") : item.detected ? t("integration.detected") : t("integration.missing")}
                   </span>
                 </div>
               </header>
 
-              <p className="integration-detail">{item.detail}</p>
+              <p className="integration-detail">{integrationDetail(item, t)}</p>
 
               <dl className="integration-meta">
                 <div>
-                  <dt>연동 버전</dt>
+                  <dt>{t("integration.version")}</dt>
                   <dd>{item.installedVersion ?? "—"}{item.updateAvailable ? ` → ${item.currentVersion}` : ""}</dd>
                 </div>
                 <div>
-                  <dt>보호 방식</dt>
-                  <dd>{protectionLabel(item.protection)}</dd>
+                  <dt>{t("integration.protection")}</dt>
+                  <dd>{protectionLabel(item.protection, t)}</dd>
                 </div>
               </dl>
 
@@ -104,27 +103,40 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
                 disabled={!item.canInstall || busy || (item.installed && !item.updateAvailable)}
                 onClick={() => void install(item)}
               >
-                {busy ? "설치 중…" : actionLabel}
+                {busy ? t("common.installing") : actionLabel}
               </button>
             </article>
           );
         })}
-        {loading && items.length === 0 && <div className="integration-loading">연결 가능한 도구를 확인하고 있어요.</div>}
+        {loading && items.length === 0 && <div className="integration-loading">{t("integration.loading")}</div>}
       </div>
 
       <div className="integration-footnote">
         <span>i</span>
-        <p>
-          Claude Code와 Copilot의 Guard는 직접 <code>.env</code> 접근을 막는 방어 계층입니다.
-          운영체제 수준의 완전 격리는 아니므로 실제 값은 계속 보호 상태로 두는 것을 권장합니다.
-        </p>
+        <p>{t("integration.footnote")}</p>
       </div>
     </section>
   );
 }
 
-function protectionLabel(protection: AgentIntegrationStatus["protection"]) {
-  if (protection === "broker") return "로컬 broker";
-  if (protection === "guarded") return "broker + 접근 Guard";
-  return "연결 전";
+function protectionLabel(
+  protection: AgentIntegrationStatus["protection"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (protection === "broker") return t("integration.protectionBroker");
+  if (protection === "guarded") return t("integration.protectionGuarded");
+  return t("integration.protectionInactive");
+}
+
+function integrationDetail(
+  item: AgentIntegrationStatus,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (item.installed && item.id === "codex") return t("integration.detailCodex");
+  if (item.installed) return t("integration.detailGuarded");
+  if (item.id === "github-copilot" && item.detected && !item.canInstall) {
+    return t("integration.detailCopilotCli");
+  }
+  if (item.detected) return t("integration.detailDetected");
+  return t("integration.detailMissing");
 }

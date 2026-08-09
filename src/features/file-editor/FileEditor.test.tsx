@@ -39,10 +39,10 @@ describe("FileEditor", () => {
       />,
     );
 
-    expect(screen.getByText("아직 변수가 없습니다. 새 변수를 이 그룹에 추가해보세요.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "+ 새 그룹" }));
-    await user.type(screen.getByLabelText("그룹 이름"), "Database");
-    await user.click(screen.getByRole("button", { name: "그룹 만들기" }));
+    expect(screen.getByText("No variables yet. Add a new variable to this group.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "+ New group" }));
+    await user.type(screen.getByLabelText("Group name"), "Database");
+    await user.click(screen.getByRole("button", { name: "Create group" }));
 
     expect(api.createGroup).toHaveBeenCalledWith("demo", {
       file: ".env.local",

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { displayGroupName, useI18n } from "../../i18n";
 import * as api from "../../lib/api";
 import type { CodexAccess, OccurrenceProjection } from "../../lib/types";
 
@@ -24,6 +25,7 @@ export function VariableRow({
   onMutate,
   onLink,
 }: Props) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const [dirty, setDirty] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function VariableRow({
 
   const value = dirty ? draft : revealed ?? "";
   const placeholder =
-    variable.valueState === "present" ? "값 있음  ••••••••••••" : "값을 입력하세요";
+    variable.valueState === "present" ? t("row.valuePresent") : t("row.valueEmpty");
   const hasIndependentPeers = variable.linkId === null && sameKeyFiles.length > 1;
   const unlinkedPeerFiles =
     variable.linkId === null
@@ -74,14 +76,14 @@ export function VariableRow({
     if (
       downgrade &&
       !window.confirm(
-        `${variable.key}의 실제 값을 연결된 AI 도구가 명시적 Env Manager 도구로 읽고 수정할 수 있게 합니다. 계속할까요?`,
+        t("row.accessConfirm", { key: variable.key }),
       )
     ) {
       return;
     }
     await onMutate(
       () => api.setCodexAccess(projectId, variable.key, access, downgrade),
-      `${variable.key}의 AI 접근 정책을 변경했습니다.`,
+      t("row.accessChanged", { key: variable.key }),
     );
   };
 
@@ -93,8 +95,8 @@ export function VariableRow({
             <strong>{variable.key}</strong>
             <button
               className={keyCopied ? "key-copy-button copied" : "key-copy-button"}
-              aria-label={`${variable.key} 환경변수명 복사`}
-              title={keyCopied ? "복사됨" : "환경변수명 복사"}
+              aria-label={t("row.copyKeyLabel", { key: variable.key })}
+              title={keyCopied ? t("common.copied") : t("row.copyKey")}
               onClick={() => {
                 void api
                   .copyKey(projectId, variable.key)
@@ -104,19 +106,19 @@ export function VariableRow({
               {keyCopied ? "✓" : "⧉"}
             </button>
             {variable.linkedCount > 1 && (
-              <span className="badge linked">{variable.linkedCount}개 파일 연결됨</span>
+              <span className="badge linked">{t("row.filesLinked", { count: variable.linkedCount })}</span>
             )}
             {hasIndependentPeers && (
-              <span className="badge available">같은 변수 {sameKeyFiles.length}곳</span>
+              <span className="badge available">{t("row.sameVariable", { count: sameKeyFiles.length })}</span>
             )}
-            {variable.duplicate && <span className="badge error">중복 키</span>}
+            {variable.duplicate && <span className="badge error">{t("row.duplicate")}</span>}
           </div>
           {variable.description.length > 0 ? (
             <button className="description-button" onClick={() => setEditingDescription((open) => !open)}>
               {variable.description.join(" ")}
             </button>
           ) : (
-            <button className="description-button muted" onClick={() => setEditingDescription(true)}>설명 추가</button>
+            <button className="description-button muted" onClick={() => setEditingDescription(true)}>{t("row.addDescription")}</button>
           )}
         </div>
 
@@ -132,7 +134,7 @@ export function VariableRow({
               ref={revealedValueRef}
               className="revealed-value-field"
               value={value}
-              aria-label={`${variable.key} 값`}
+              aria-label={t("row.valueLabel", { key: variable.key })}
               rows={1}
               onChange={(event) => {
                 setDraft(event.target.value);
@@ -145,7 +147,7 @@ export function VariableRow({
               type="password"
               value={value}
               placeholder={placeholder}
-              aria-label={`${variable.key} 값`}
+              aria-label={t("row.valueLabel", { key: variable.key })}
               onChange={(event) => {
                 setDraft(event.target.value);
                 setDirty(true);
@@ -154,7 +156,7 @@ export function VariableRow({
           )}
           <button
             className="icon-button"
-            title={revealed === null ? "값 보기 · 30초 미활동 시 숨김" : "값 숨기기"}
+            title={revealed === null ? t("row.reveal") : t("row.hide")}
             onClick={() => {
               if (revealed !== null) {
                 setRevealed(null);
@@ -178,7 +180,7 @@ export function VariableRow({
           </button>
           <button
             className="icon-button"
-            title="값 복사"
+            title={t("row.copyValue")}
             onClick={() => void api.copyValue(projectId, file, variable.key)}
           >
             ⧉
@@ -189,12 +191,12 @@ export function VariableRow({
           <select
             className={`access-select ${variable.codexAccess}`}
             value={variable.codexAccess}
-            aria-label={`${variable.key} AI 접근`}
+            aria-label={t("row.aiAccess", { key: variable.key })}
             onChange={(event) => void changeAccess(event.target.value as CodexAccess)}
           >
-            <option value="protected">보호됨</option>
-            <option value="unclassified">미분류</option>
-            <option value="read-write">AI 허용</option>
+            <option value="protected">{t("row.protected")}</option>
+            <option value="unclassified">{t("row.unclassified")}</option>
+            <option value="read-write">{t("row.readWrite")}</option>
           </select>
           {dirty ? (
             <button
@@ -204,27 +206,34 @@ export function VariableRow({
                 void onMutate(
                   () => api.saveValue(projectId, { file, key: variable.key, newValue: draft }),
                   variable.linkedCount > 1
-                    ? `${variable.linkedCount}개 파일에 저장했습니다.`
-                    : `${variable.key} 값을 저장했습니다.`,
+                    ? t("row.savedLinked", { count: variable.linkedCount })
+                    : t("row.saved", { key: variable.key }),
                 ).then(() => {
                   setDirty(false);
                   setDraft("");
                 })
               }
             >
-              {variable.linkedCount > 1 ? `${variable.linkedCount}개 파일에 저장` : "저장"}
+              {variable.linkedCount > 1 ? t("row.saveLinked", { count: variable.linkedCount }) : t("common.save")}
             </button>
           ) : null}
           <button
             className="quiet-button compact"
-            title="다른 그룹으로 이동"
+            title={t("row.moveTitle")}
             onClick={() => {
               const choices = groups.filter((group) => group !== currentGroup);
               if (choices.length === 0) return;
-              const target = window
-                .prompt(`이동할 그룹 이름\n${choices.join(" · ")}`, choices[0])
+              const displayedChoices = choices.map((group) => displayGroupName(group, t));
+              const selected = window
+                .prompt(
+                  t("row.movePrompt", { groups: displayedChoices.join(" · ") }),
+                  displayedChoices[0],
+                )
                 ?.trim();
-              if (!target || !choices.includes(target)) return;
+              const target = choices.find(
+                (group) => group === selected || displayGroupName(group, t) === selected,
+              );
+              if (!target) return;
               void onMutate(
                 () =>
                   api.moveVariable(projectId, {
@@ -232,29 +241,29 @@ export function VariableRow({
                     key: variable.key,
                     targetGroup: target,
                   }),
-                `${variable.key}를 ${target} 그룹으로 이동했습니다.`,
+                t("row.moved", { key: variable.key, group: displayGroupName(target, t) }),
               );
             }}
           >
-            이동
+            {t("common.move")}
           </button>
           <button
             className="danger-quiet-button compact"
-            title="변수와 바로 위 설명 삭제"
+            title={t("row.deleteTitle")}
             onClick={() => {
               if (
                 window.confirm(
-                  `${file}에서 ${variable.key}와 바로 위 설명을 삭제합니다. 이 작업은 되돌릴 수 없습니다.`,
+                  t("row.deleteConfirm", { file, key: variable.key }),
                 )
               ) {
                 void onMutate(
                   () => api.deleteVariable(projectId, { file, key: variable.key }),
-                  `${variable.key}를 삭제했습니다.`,
+                  t("row.deleted", { key: variable.key }),
                 );
               }
             }}
           >
-            삭제
+            {t("common.delete")}
           </button>
         </div>
       </div>
@@ -263,34 +272,34 @@ export function VariableRow({
         <div className="relationship-panel linked-relationship">
           <span className="relationship-icon" aria-hidden="true">↔</span>
           <div className="relationship-copy">
-            <strong>{variable.linkedFiles.length}개 파일에서 함께 관리</strong>
-            <span>어느 파일에서 값을 바꿔도 아래 파일에 모두 저장됩니다.</span>
+            <strong>{t("row.linkedTitle", { count: variable.linkedFiles.length })}</strong>
+            <span>{t("row.linkedBody")}</span>
             <div className="relationship-paths">
               {variable.linkedFiles.map((path) => (
                 <code className={path === file ? "current" : ""} key={path}>
                   {path}
-                  {path === file && <small>현재</small>}
+                  {path === file && <small>{t("common.current")}</small>}
                 </code>
               ))}
             </div>
             {unlinkedPeerFiles.length > 0 && (
               <span className="unlinked-peer-note">
-                별도 관리 중: {unlinkedPeerFiles.join(" · ")}
+                {t("row.separate", { files: unlinkedPeerFiles.join(" · ") })}
               </span>
             )}
           </div>
           <button
             className="quiet-button compact relationship-action"
             onClick={() => {
-              if (window.confirm("현재 파일만 연결에서 분리하고 값은 그대로 유지합니다.")) {
+              if (window.confirm(t("row.detachConfirm"))) {
                 void onMutate(
                   () => api.detachLink(projectId, variable.linkId!, file),
-                  `${file}을 연결에서 분리했습니다.`,
+                  t("row.detached", { file }),
                 );
               }
             }}
           >
-            이 파일 연결 해제
+            {t("row.detach")}
           </button>
         </div>
       )}
@@ -299,19 +308,19 @@ export function VariableRow({
         <div className="relationship-panel available-relationship">
           <span className="relationship-icon" aria-hidden="true">＋</span>
           <div className="relationship-copy">
-            <strong>같은 변수가 {sameKeyFiles.length}개 파일에 있습니다</strong>
-            <span>현재는 각각 따로 관리됩니다. 연결하면 한 번의 입력으로 함께 저장할 수 있어요.</span>
+            <strong>{t("row.peersTitle", { count: sameKeyFiles.length })}</strong>
+            <span>{t("row.peersBody")}</span>
             <div className="relationship-paths">
               {sameKeyFiles.map((path) => (
                 <code className={path === file ? "current" : ""} key={path}>
                   {path}
-                  {path === file && <small>현재</small>}
+                  {path === file && <small>{t("common.current")}</small>}
                 </code>
               ))}
             </div>
           </div>
           <button className="secondary-button compact relationship-action" onClick={onLink}>
-            함께 관리
+            {t("row.manageTogether")}
           </button>
         </div>
       )}
@@ -320,7 +329,7 @@ export function VariableRow({
         <div className="description-editor">
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
           <div>
-            <button className="quiet-button compact" onClick={() => setEditingDescription(false)}>취소</button>
+            <button className="quiet-button compact" onClick={() => setEditingDescription(false)}>{t("common.cancel")}</button>
             <button
               className="secondary-button compact"
               onClick={() =>
@@ -331,11 +340,11 @@ export function VariableRow({
                       key: variable.key,
                       lines: description.trim() ? description.split("\n") : [],
                     }),
-                  `${variable.key} 설명을 저장했습니다.`,
+                  t("row.descriptionSaved", { key: variable.key }),
                 ).then(() => setEditingDescription(false))
               }
             >
-              설명 저장
+              {t("row.saveDescription")}
             </button>
           </div>
         </div>

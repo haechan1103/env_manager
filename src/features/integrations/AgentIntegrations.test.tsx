@@ -12,11 +12,11 @@ const integrations: AgentIntegrationStatus[] = [
     name: "Codex",
     detected: true,
     installed: true,
-    installedVersion: "0.3.0",
-    currentVersion: "0.3.0",
+    installedVersion: "0.4.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "broker",
-    detail: "Redacted broker가 연결되어 있습니다.",
+    detail: "The redacted broker is connected.",
     canInstall: true,
   },
   {
@@ -25,10 +25,10 @@ const integrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.3.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "inactive",
-    detail: "연동을 설치할 수 있습니다.",
+    detail: "The integration can be installed.",
     canInstall: true,
   },
   {
@@ -37,10 +37,10 @@ const integrations: AgentIntegrationStatus[] = [
     detected: false,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.3.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "inactive",
-    detail: "도구가 설치되면 연동할 수 있습니다.",
+    detail: "Install the tool to connect it.",
     canInstall: false,
   },
 ];
@@ -50,7 +50,7 @@ vi.mock("../../lib/api", () => ({
   installAgentIntegration: vi.fn(async (id: string) => ({
     ...integrations.find((item) => item.id === id)!,
     installed: true,
-    installedVersion: "0.3.0",
+    installedVersion: "0.4.0",
     protection: "guarded",
   })),
 }));
@@ -72,7 +72,7 @@ describe("AgentIntegrations", () => {
 
     const claudeCard = (await screen.findByText("Claude Code")).closest("article");
     expect(claudeCard).not.toBeNull();
-    await user.click(within(claudeCard!).getByRole("button", { name: "연결 설치" }));
+    await user.click(within(claudeCard!).getByRole("button", { name: "Install connection" }));
 
     expect(api.installAgentIntegration).toHaveBeenCalledWith("claude-code");
     expect(onNotice).toHaveBeenCalledWith(expect.stringContaining("Claude Code"));

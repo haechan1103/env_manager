@@ -31,8 +31,8 @@ async function captureScreenshots() {
   await page.getByRole("heading", { name: ".env.local" }).waitFor();
   await page.screenshot({ path: heroPath, fullPage: true });
 
-  await page.getByRole("button", { name: "AI 도구 연결" }).click();
-  await page.getByRole("heading", { name: "AI 도구 연결" }).waitFor();
+  await page.getByRole("button", { name: "AI tool connections" }).click();
+  await page.getByRole("heading", { name: "AI tool connections" }).waitFor();
   await page.screenshot({ path: integrationsPath, fullPage: true });
   await context.close();
 }
@@ -58,12 +58,12 @@ async function captureDemoFrames() {
   await page.getByRole("button", { name: ".env.local", exact: true }).click();
   await page.getByRole("heading", { name: ".env.local" }).waitFor();
   await capture(6);
-  await page.getByRole("button", { name: "AI 도구 연결" }).hover();
+  await page.getByRole("button", { name: "AI tool connections" }).hover();
   await capture(2);
-  await page.getByRole("button", { name: "AI 도구 연결" }).click();
-  await page.getByRole("heading", { name: "AI 도구 연결" }).waitFor();
+  await page.getByRole("button", { name: "AI tool connections" }).click();
+  await page.getByRole("heading", { name: "AI tool connections" }).waitFor();
   await capture(6);
-  const overviewButton = page.locator('nav[aria-label="프로젝트 보기"] button').first();
+  const overviewButton = page.locator('nav[aria-label="Project views"] button').first();
   await overviewButton.hover();
   await capture(2);
   await overviewButton.click();

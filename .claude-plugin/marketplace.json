@@ -12,7 +12,7 @@
       "name": "env-manager",
       "source": "./plugins/env-manager",
       "description": "Redacted env inspection, controlled mutations, and direct-access guardrails.",
-      "version": "0.3.0"
+      "version": "0.4.0"
     }
   ]
 }

@@ -2,9 +2,11 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import * as api from "../lib/api";
+import { localizeError, useI18n } from "../i18n";
 import type { ProjectProjection, ProjectSummary } from "../lib/types";
 
 export function useEnvManager() {
+  const { locale, t } = useI18n();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projections, setProjections] = useState<Record<string, ProjectProjection>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -30,11 +32,11 @@ export function useEnvManager() {
       );
       setProjections(Object.fromEntries(scans));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "프로젝트를 불러오지 못했습니다.");
+      setError(localizeError(cause, locale, "error.loadProjects"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     void load();
@@ -47,7 +49,7 @@ export function useEnvManager() {
     void listen<{ projectId: string }>("managed-files-changed", (event) => {
       if (!cancelled) {
         void refreshProject(event.payload.projectId).catch((cause: unknown) => {
-          setError(cause instanceof Error ? cause.message : "변경 파일을 다시 읽지 못했습니다.");
+          setError(localizeError(cause, locale, "error.rescan"));
         });
       }
     }).then((cleanup) => {
@@ -58,12 +60,12 @@ export function useEnvManager() {
       cancelled = true;
       unlisten?.();
     };
-  }, [refreshProject]);
+  }, [locale, refreshProject]);
 
   const register = useCallback(async () => {
     setError(null);
     try {
-      const project = await api.chooseAndRegisterProject();
+      const project = await api.chooseAndRegisterProject(t("app.chooseFolderTitle"));
       if (!project) return;
       setProjects((current) => {
         const remaining = current.filter((item) => item.id !== project.id);
@@ -71,11 +73,11 @@ export function useEnvManager() {
       });
       setSelectedProjectId(project.id);
       await refreshProject(project.id);
-      setNotice(`${project.name} 프로젝트를 등록했습니다.`);
+      setNotice(t("notice.projectRegistered", { name: project.name }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "프로젝트를 등록하지 못했습니다.");
+      setError(localizeError(cause, locale, "error.register"));
     }
-  }, [refreshProject]);
+  }, [locale, refreshProject, t]);
 
   const remove = useCallback(
     async (projectId: string) => {
@@ -91,12 +93,12 @@ export function useEnvManager() {
           if (current !== projectId) return current;
           return projects.find((project) => project.id !== projectId)?.id ?? null;
         });
-        setNotice("프로젝트 등록만 제거했습니다. 프로젝트 파일은 변경하지 않았습니다.");
+        setNotice(t("notice.projectRemoved"));
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "프로젝트 등록을 제거하지 못했습니다.");
+        setError(localizeError(cause, locale, "error.remove"));
       }
     },
-    [projects],
+    [locale, projects, t],
   );
 
   const selectedProject = useMemo(

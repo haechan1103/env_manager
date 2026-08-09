@@ -1,4 +1,5 @@
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
+import { supportedLocales, useI18n, type Locale } from "../../i18n";
 import { AppUpdater } from "../updater/AppUpdater";
 
 interface View {
@@ -27,6 +28,7 @@ export function ProjectSidebar({
   onSelectView,
   onRegister,
 }: Props) {
+  const { locale, setLocale, t } = useI18n();
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -37,10 +39,10 @@ export function ProjectSidebar({
 
       <div className="sidebar-section-title">
         <span>PROJECTS</span>
-        <button aria-label="프로젝트 등록" onClick={onRegister}>+</button>
+        <button aria-label={t("sidebar.registerProject")} onClick={onRegister}>+</button>
       </div>
 
-      <nav className="project-list" aria-label="등록 프로젝트">
+      <nav className="project-list" aria-label={t("sidebar.registeredProjects")}>
         {projects.map((project) => (
           <button
             key={project.id}
@@ -54,23 +56,23 @@ export function ProjectSidebar({
         {projects.length === 0 && (
           <div className="sidebar-empty">
             <span>—</span>
-            등록된 프로젝트 없음
+            {t("sidebar.noProjects")}
           </div>
         )}
       </nav>
 
-      <nav className="agent-navigation" aria-label="AI 도구">
+      <nav className="agent-navigation" aria-label={t("sidebar.aiTools")}>
         <button
           className={view.kind === "integrations" ? "nav-item active" : "nav-item"}
           onClick={() => onSelectView({ kind: "integrations" })}
         >
           <span>◇</span>
-          <span className="agent-nav-label">AI 도구 연결</span>
+          <span className="agent-nav-label">{t("sidebar.aiConnections")}</span>
         </button>
       </nav>
 
       {projection && (
-        <nav className="file-navigation" aria-label="프로젝트 보기">
+        <nav className="file-navigation" aria-label={t("sidebar.projectViews")}>
           <button
             className={view.kind === "overview" ? "nav-item active" : "nav-item"}
             onClick={() => onSelectView({ kind: "overview" })}
@@ -97,8 +99,22 @@ export function ProjectSidebar({
       )}
 
       <div className="sidebar-footer">
-        <span className="status-dot" />
-        <span>Local only</span>
+        <label className="language-control">
+          <span>{t("language.label")}</span>
+          <select
+            value={locale}
+            aria-label={t("language.label")}
+            onChange={(event) => setLocale(event.target.value as Locale)}
+          >
+            {supportedLocales.map((option) => (
+              <option value={option.code} key={option.code}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <div className="local-status">
+          <span className="status-dot" />
+          <span>{t("sidebar.localOnly")}</span>
+        </div>
       </div>
     </aside>
   );

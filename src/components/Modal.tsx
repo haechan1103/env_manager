@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n";
 
 interface Props {
   title: string;
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function Modal({ title, description, children, onClose }: Props) {
+  const { t } = useI18n();
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
@@ -22,7 +24,7 @@ export function Modal({ title, description, children, onClose }: Props) {
             <h2 id="modal-title">{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <button className="icon-button" aria-label="닫기" onClick={onClose}>×</button>
+          <button className="icon-button" aria-label={t("modal.close")} onClick={onClose}>×</button>
         </header>
         {children}
       </section>
