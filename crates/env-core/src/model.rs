@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::CodexAccess;
+use crate::{GitSafetyProjection, manifest::CodexAccess};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -46,4 +46,5 @@ pub struct ProjectProjection {
     pub files: Vec<FileProjection>,
     pub unclassified_count: usize,
     pub issue_count: usize,
+    pub git_safety: GitSafetyProjection,
 }

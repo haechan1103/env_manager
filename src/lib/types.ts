@@ -2,6 +2,19 @@ export type CodexAccess = "read-write" | "protected" | "unclassified";
 export type ValueState = "empty" | "present";
 export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
 export type AgentProtection = "broker" | "guarded" | "inactive";
+export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
+
+export interface GitSafetyProjection {
+  state: GitSafetyState;
+  ignoredFiles: string[];
+  missingIgnoreFiles: string[];
+  trackedFiles: string[];
+}
+
+export interface GitignoreUpdateSummary {
+  addedPatterns: string[];
+  trackedFiles: string[];
+}
 
 export interface AgentIntegrationStatus {
   id: AgentIntegrationId;
@@ -51,6 +64,7 @@ export interface ProjectProjection {
   files: FileProjection[];
   unclassifiedCount: number;
   issueCount: number;
+  gitSafety: GitSafetyProjection;
 }
 
 export interface MutationSummary {

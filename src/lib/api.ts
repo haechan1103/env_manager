@@ -6,6 +6,7 @@ import type {
   AgentIntegrationId,
   AgentIntegrationStatus,
   CodexAccess,
+  GitignoreUpdateSummary,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -87,6 +88,16 @@ export async function removeProject(projectId: string): Promise<void> {
 export async function scanProject(projectId: string): Promise<ProjectProjection> {
   if (!isTauriRuntime) return demoProjection;
   return call("scan_project", { request: { projectId } });
+}
+
+export async function applyGitignoreGuard(projectId: string): Promise<GitignoreUpdateSummary> {
+  if (!isTauriRuntime) {
+    return {
+      addedPatterns: demoProjection.gitSafety.missingIgnoreFiles.map((path) => `/${path}`),
+      trackedFiles: demoProjection.gitSafety.trackedFiles,
+    };
+  }
+  return call("apply_gitignore_guard", { request: { projectId } });
 }
 
 export async function saveValue(

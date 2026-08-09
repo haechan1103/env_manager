@@ -56,6 +56,12 @@ export const demoProjection: ProjectProjection = {
   name: "sample-saas",
   unclassifiedCount: 1,
   issueCount: 0,
+  gitSafety: {
+    state: "protected",
+    ignoredFiles: [".env.local", ".env.development", "apps/web/.env.local"],
+    missingIgnoreFiles: [],
+    trackedFiles: [],
+  },
   files: [
     {
       path: ".env.local",

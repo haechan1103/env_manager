@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use env_core::{
     AddVariableRequest, CodexAccess, CreateGroupRequest, DeleteVariableRequest, EnvError,
-    LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection, RenameGroupRequest,
-    SaveDescriptionRequest, SaveValueRequest,
+    GitignoreUpdateSummary, LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection,
+    RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -153,6 +153,17 @@ pub fn scan_project(
         .collect::<Vec<_>>();
     runtime.start_watching(&app, &request.project_id, &paths)?;
     Ok(projection)
+}
+
+#[tauri::command]
+pub fn apply_gitignore_guard(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<GitignoreUpdateSummary> {
+    runtime
+        .service(&request.project_id)?
+        .apply_gitignore_guard()
+        .map_err(Into::into)
 }
 
 #[tauri::command]

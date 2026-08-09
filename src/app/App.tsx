@@ -176,6 +176,7 @@ export function App() {
                 <Overview
                   projection={manager.projection}
                   onOpenFile={(path) => setView({ kind: "file", path })}
+                  onApplyGitignoreGuard={manager.applyGitignoreGuard}
                 />
               )}
               {view.kind === "file" && (

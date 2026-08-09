@@ -623,6 +623,7 @@ impl ProjectService {
             projections.push(projection);
         }
 
+        let git_safety = crate::inspect_git_safety(&self.root, &files_for_git_safety(&projections));
         Ok(ProjectProjection {
             project_id: self.project_id.clone(),
             name: self.root.file_name().map_or_else(
@@ -632,7 +633,14 @@ impl ProjectService {
             files: projections,
             unclassified_count: unclassified.len(),
             issue_count,
+            git_safety,
         })
+    }
+
+    pub fn apply_gitignore_guard(&self) -> EnvResult<crate::GitignoreUpdateSummary> {
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let files = self.discover(&manifest)?;
+        crate::apply_gitignore_guard(&self.root, &files)
     }
 
     fn discover(&self, manifest: &Manifest) -> EnvResult<Vec<PathBuf>> {
@@ -727,6 +735,13 @@ impl ProjectService {
         }
         Ok(())
     }
+}
+
+fn files_for_git_safety(projections: &[FileProjection]) -> Vec<PathBuf> {
+    projections
+        .iter()
+        .map(|projection| PathBuf::from(&projection.path))
+        .collect()
 }
 
 struct LoadedDocument {

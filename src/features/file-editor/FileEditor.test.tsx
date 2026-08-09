@@ -15,6 +15,12 @@ const projection: ProjectProjection = {
   name: "demo",
   unclassifiedCount: 0,
   issueCount: 0,
+  gitSafety: {
+    state: "protected",
+    ignoredFiles: [".env.local"],
+    missingIgnoreFiles: [],
+    trackedFiles: [],
+  },
   files: [
     {
       path: ".env.local",

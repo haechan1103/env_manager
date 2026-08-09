@@ -3,10 +3,11 @@ mod integrations;
 mod runtime;
 
 use commands::{
-    add_variable, apply_migration, copy_key, copy_value, create_group, create_link,
-    delete_variable, detach_link_member, install_agent_integration, list_agent_integrations,
-    list_projects, move_variable, plan_migration, read_value, register_project, remove_project,
-    rename_group, save_description, save_value, scan_project, set_codex_access,
+    add_variable, apply_gitignore_guard, apply_migration, copy_key, copy_value, create_group,
+    create_link, delete_variable, detach_link_member, install_agent_integration,
+    list_agent_integrations, list_projects, move_variable, plan_migration, read_value,
+    register_project, remove_project, rename_group, save_description, save_value, scan_project,
+    set_codex_access,
 };
 use runtime::AppRuntime;
 use tauri::Manager;
@@ -30,6 +31,7 @@ pub fn run() {
             register_project,
             remove_project,
             scan_project,
+            apply_gitignore_guard,
             save_value,
             save_description,
             create_group,

@@ -101,6 +101,26 @@ export function useEnvManager() {
     [locale, projects, t],
   );
 
+  const applyGitignoreGuard = useCallback(async () => {
+    if (!selectedProjectId) return;
+    setError(null);
+    try {
+      const summary = await api.applyGitignoreGuard(selectedProjectId);
+      await refreshProject(selectedProjectId);
+      setNotice(
+        summary.trackedFiles.length > 0
+          ? t("notice.gitignoreAddedTracked", {
+              patterns: summary.addedPatterns.length,
+              tracked: summary.trackedFiles.length,
+            })
+          : t("notice.gitignoreAdded", { count: summary.addedPatterns.length }),
+      );
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.gitSafety"));
+      throw cause;
+    }
+  }, [locale, refreshProject, selectedProjectId, t]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
@@ -120,6 +140,7 @@ export function useEnvManager() {
     selectProject: setSelectedProjectId,
     register,
     remove,
+    applyGitignoreGuard,
     refreshProject,
     clearError,
     clearNotice,
