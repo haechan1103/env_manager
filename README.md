@@ -1,66 +1,125 @@
-# Env Manager
+<div align="center">
+  <img src="assets/brand/env-manager-logo-concept-v1.png" width="104" alt="Env Manager logo" />
+  <h1>Env Manager</h1>
+  <p><strong>Manage every <code>.env</code> file locally, while keeping protected values out of supported AI-agent workflows.</strong></p>
+  <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
+  <p>
+    <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
+    <a href="https://github.com/haechan1103/env_manager/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/env_manager/ci.yml?branch=main&style=flat-square&label=CI" /></a>
+    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/haechan1103/env_manager?style=flat-square" /></a>
+    <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple" />
+  </p>
+</div>
 
-프로젝트에 흩어진 `.env` 파일을 한곳에서 발견하고, 정리하고, 안전하게
-수정하는 로컬 데스크톱 앱입니다.
+![Env Manager demo showing project overview, env editing, and AI tool connections](assets/screenshots/env-manager-demo.gif)
 
-값을 별도 vault로 옮기지 않습니다. 기존 프로젝트가 사용하던 env 파일을
-그대로 유지하면서 구조, 설명, 연결 상태와 AI 도구 접근 정책을 관리합니다.
+Env Manager is a local-first desktop app for the `.env` files already inside your projects. Register a project, discover its env files, edit variables in one clear UI, and explicitly link matching values across two or more files.
 
-> 현재 상태: macOS용 v0.3
->
-> Windows 지원과 Apple Developer ID 공증은 다음 단계입니다.
+It is especially useful with AI coding agents: supported integrations can inspect and edit env structure through a redacted local broker without receiving values marked as protected.
 
-## 주요 기능
+<div align="center">
+  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS</strong></a>
+  ·
+  <a href="#connect-your-ai-coding-agent">Connect an AI agent</a>
+  ·
+  <a href="SECURITY.md">Security model</a>
+</div>
 
-- 사용자가 등록한 프로젝트만 탐색
-- `.env`, `.env.local`, `.env.dev`, `.env.development` 등 env 파일 자동 발견
-- 등록 프로젝트 안에 새 env 파일과 빈 변수를 AI 도구로 생성
-- `.env.example`을 포함한 example 변형 제외
-- 실제 값은 기본적으로 가리고 존재 여부만 표시
-- `# @group GPT` 형식의 그룹 생성·이름 변경·변수 이동과 일반 주석 기반 설명 지원
-- 기존 파일의 순서, 주석, 줄바꿈과 알 수 없는 구문을 최대한 보존
-- 같은 변수를 2개 이상의 파일에 명시적으로 연결하거나 개별 해제
-- 연결된 어느 파일에서 입력해도 모든 멤버에 함께 저장
-- 같은 이름이지만 연결되지 않은 변수는 별도 상태로 표시하고 연결을 제안
-- Codex, Claude Code, GitHub Copilot에서 같은 Skill과 redacted broker 사용
-- 앱의 `AI 도구 연결` 화면에서 감지·설치·버전 상태 확인
-- 앱에 broker가 함께 포함되어 AI 도구 연동에 Rust 설치가 필요 없음
-- 실행 후 새 버전을 조용히 확인하고, 사용자 선택 시 서명 검증 후 업데이트
+## Why Env Manager?
 
-## 동작 방식
+- **One view for scattered files.** Discover `.env`, `.env.local`, `.env.development`, and nested app env files after you register a project.
+- **Values stay where your app expects them.** Env Manager edits the original files; it does not migrate them into a proprietary vault.
+- **Linked values update together.** Connect the same key across any number of files and edit it once.
+- **Readable structure.** Manage groups, descriptions, variables, and comments without flattening the file.
+- **Protected by default.** Values are masked in the UI and redacted from normal AI-tool responses.
+- **Local and lightweight.** Only registered projects are scanned, and only discovered env files are watched while the app is open.
 
-1. Env Manager에서 프로젝트 폴더를 등록합니다.
-2. 앱을 열거나 새로고침할 때 지원하는 env 파일을 발견합니다.
-3. 파일별 변수, 그룹, 설명과 보호 상태를 확인합니다.
-4. 앱에서 저장하면 실제 env 파일에 반영됩니다.
+## Install
 
-앱을 켜 둔 동안에는 이미 발견한 파일만 가볍게 감시합니다. 프로젝트 전체를
-항상 재귀 탐색하거나 백그라운드 데몬으로 동작하지 않습니다.
+Download the latest DMG from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
 
-## 설치하기
-
-[GitHub Releases](https://github.com/haechan1103/env_manager/releases)에서 Mac에 맞는
-DMG를 내려받아 설치합니다.
-
-- Apple Silicon(M1 이상): `aarch64` DMG
+- Apple Silicon (M1 or newer): `aarch64` DMG
 - Intel Mac: `x86_64` DMG
 
-현재 공개 DMG는 ad-hoc 코드 서명 단계입니다. 첫 실행이 차단되면 Finder에서 앱을
-Control-클릭한 뒤 `열기`를 선택하세요. Apple Developer ID 서명과 공증은 배포
-자격 증명을 연결하면 같은 릴리스 파이프라인에서 활성화됩니다.
+The current public build uses ad-hoc signing. If macOS blocks the first launch, Control-click Env Manager in Finder and choose **Open**. Apple Developer ID notarization and Windows support are planned.
 
-앱은 실행 후 GitHub Release의 업데이트 정보만 확인합니다. 새 버전이 있으면
-알려주며, `지금 업데이트`를 눌렀을 때만 서명된 파일을 설치하고 재시작합니다.
-프로젝트나 환경변수 정보는 전송하지 않습니다.
+Env Manager checks GitHub Releases for updates. It does not send project paths or environment-variable data.
 
-## 소스에서 개발하기
+## The workflow
 
-### 요구 사항
+1. Register a project folder in Env Manager.
+2. Review the env files and unresolved items it discovers.
+3. Add groups and descriptions, classify AI access, or link matching variables.
+4. Edit once; Env Manager writes back to the original file or every explicitly linked file.
 
-- macOS
-- Node.js와 npm
-- Rust 1.85 이상
-- [Tauri 2 시스템 요구 사항](https://v2.tauri.app/start/prerequisites/)
+`.env.example` variants are intentionally excluded from discovery in the current release.
+
+<details>
+  <summary><strong>See the file editor and AI integration screens</strong></summary>
+  <br />
+  <img src="assets/screenshots/env-manager-editor.png" alt="Env Manager file editor with masked synthetic values" />
+  <br /><br />
+  <img src="assets/screenshots/env-manager-ai-integrations.png" alt="Env Manager AI tool integration screen" />
+</details>
+
+## Connect your AI coding agent
+
+The same local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app can detect and install supported integrations from **AI 도구 연결** (AI tool connections).
+
+You can also install from a terminal:
+
+<details>
+  <summary><strong>Codex</strong></summary>
+
+```bash
+codex plugin marketplace add haechan1103/env_manager
+codex plugin add env-manager@env-manager
+```
+</details>
+
+<details>
+  <summary><strong>Claude Code</strong></summary>
+
+```bash
+claude plugin marketplace add haechan1103/env_manager
+claude plugin install env-manager@env-manager
+```
+</details>
+
+<details>
+  <summary><strong>GitHub Copilot CLI / VS Code</strong></summary>
+
+```bash
+copilot plugin marketplace add haechan1103/env_manager
+copilot plugin install env-manager@env-manager
+```
+</details>
+
+Register the project in Env Manager first, then start a new agent session and ask naturally:
+
+```text
+Inspect this project's env structure without reading values.
+Link GPT_API_KEY across local and development.
+Create a GPT group and add an empty DATABASE_URL variable.
+```
+
+The integration does not register arbitrary projects on its own. Only projects already registered in the desktop app are accepted by the broker.
+
+## AI access policies
+
+| Policy | Agent access |
+| --- | --- |
+| `protected` | Key name and value presence only; the value is blocked |
+| `unclassified` | Blocked like `protected` until you choose a policy |
+| `read-write` | Explicit broker value tools may read or update the value |
+
+Normal structure inspection never returns values, including `read-write` values. A value is returned only when a dedicated value tool is called for a key already marked `read-write`.
+
+> Env Manager is not an operating-system sandbox or a replacement for a production secret manager. Values remain in the original env files and are processed in memory when needed. See [SECURITY.md](SECURITY.md) for the complete boundary and reporting process.
+
+## Develop locally
+
+Requirements: Node.js, npm, Rust 1.85+, and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 git clone https://github.com/haechan1103/env_manager.git
@@ -69,101 +128,7 @@ npm install
 npm run tauri dev
 ```
 
-배포용 macOS 앱을 만들려면 다음 명령을 실행합니다.
-
-```bash
-npm run tauri build
-```
-
-`v*` 태그를 푸시하면 GitHub Actions가 Apple Silicon과 Intel용 DMG, 서명된
-업데이트 번들, `latest.json`을 GitHub Release에 자동 게시합니다.
-
-## AI 도구 연동
-
-Env Manager 0.3은 하나의 로컬 플러그인 묶음을 공유합니다.
-
-- 공통: Agent Skill + MCP broker
-- Codex: Codex 플러그인 manifest
-- Claude Code: Claude 플러그인 manifest + 직접 env 접근 Guard
-- GitHub Copilot / VS Code: Claude 호환 플러그인 + 같은 Guard
-
-앱 사이드바의 `AI 도구 연결`에서 설치된 도구와 연동 버전을 확인하고 한 번에
-설치할 수 있습니다. 설치 앱에는 버전이 맞는 broker가 함께 들어 있으므로,
-AI 도구 연동을 위해 Rust나 별도 broker 설치가 필요하지 않습니다.
-
-AI 도구는 요청 범위에 맞는 redacted 계획을 내부에서 만든 뒤 별도의 재승인
-질문 없이 바로 적용합니다. 값 충돌처럼 원본 파일을 정할 정보가 부족한
-경우에만 필요한 선택을 물어봅니다.
-
-소스에서 앱을 실행하지 않고 CLI로 플러그인만 설치할 때는 먼저 broker를
-설치합니다.
-
-```bash
-cargo install --path crates/env-broker --locked
-```
-
-앱 대신 CLI에서 직접 설치하려면 사용하는 도구의 명령만 실행합니다.
-
-Codex:
-
-```bash
-codex plugin marketplace add haechan1103/env_manager
-codex plugin add env-manager@env-manager
-```
-
-Claude Code:
-
-```bash
-claude plugin marketplace add haechan1103/env_manager
-claude plugin install env-manager@env-manager
-```
-
-GitHub Copilot CLI / VS Code:
-
-```bash
-copilot plugin marketplace add haechan1103/env_manager
-copilot plugin install env-manager@env-manager
-```
-
-설치 후 새 대화나 세션을 시작하세요. 예를 들면 다음처럼 요청할 수 있습니다.
-
-```text
-이 프로젝트 env 구조를 값 없이 점검해줘.
-GPT_API_KEY를 local과 development에서 연결해줘.
-기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘.
-GPT 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
-```
-
-플러그인이 프로젝트를 임의로 등록하지는 않습니다. Env Manager 앱에서 먼저
-등록된 프로젝트만 broker가 승인하며, 앱이 현재 등록 상태를 해제하면 더 이상
-연결된 AI 도구에서도 접근할 수 없습니다.
-
-## 값과 접근 정책
-
-변수마다 연결된 AI 도구의 접근 정책을 지정할 수 있습니다.
-
-| 정책 | 동작 |
-| --- | --- |
-| `protected` | 이름과 값 존재 여부만 확인하고 실제 값 접근은 차단 |
-| `unclassified` | 분류 전까지 `protected`와 동일하게 차단 |
-| `read-write` | 명시적인 broker 도구를 통한 값 읽기·수정 허용 |
-
-일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 실제 값 읽기는 해당
-변수가 이미 허용되어 있고, 명시적인 도구가 호출된 경우에만 가능합니다.
-보호된 값의 직접 입력과 자유로운 교체는 데스크톱 앱에서 수행합니다.
-
-### 현재 보안 한계
-
-이 프로젝트는 완전한 secret vault가 아닙니다. 값은 원래 env 파일에 남고,
-앱과 broker가 필요한 순간 프로세스 메모리에서 처리합니다.
-
-broker는 등록된 프로젝트와 변수 정책을 검사하고 결과를 가립니다. Claude
-Code와 Copilot에는 직접 `.env*` 접근을 거부하는 PreToolUse Guard도 함께
-설치합니다. 다만 Skill과 Guard는 운영체제 수준의 완전 격리가 아니며, Codex
-역시 호스트 권한 설정에 따라 직접 파일 차단 수준이 달라집니다. Preview는
-중요한 운영 비밀에 별도의 secret manager와 OS 보호를 함께 사용하세요.
-
-## 개발 확인
+Before opening a pull request:
 
 ```bash
 npm run check
@@ -171,16 +136,18 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-데스크톱 흐름과 번들까지 확인하려면 다음 명령도 실행할 수 있습니다.
+Use synthetic env fixtures only. Never commit or attach real `.env*` values. Read [CONTRIBUTING.md](CONTRIBUTING.md) before making a change.
 
-```bash
-npm run test:e2e
-npm run tauri build
-```
+## Project status
 
-테스트용 env fixture에는 합성 값만 사용합니다. 실제 프로젝트의 `.env*`는
-기본적으로 Git에서 제외됩니다.
+Env Manager is an early-stage macOS project. The current release is focused on reliable local file editing and guarded AI-agent integrations. Windows support, notarized macOS builds, and broader localization are next-stage work.
 
-## 라이선스
+## Community
+
+Questions and ideas belong in [GitHub Discussions](https://github.com/haechan1103/env_manager/discussions). Bugs and scoped feature requests belong in [Issues](https://github.com/haechan1103/env_manager/issues).
+
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security reports must use the private process in [SECURITY.md](SECURITY.md).
+
+## License
 
 [MIT](LICENSE)

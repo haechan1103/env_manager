@@ -16,6 +16,7 @@
     "typecheck": "tsc -b --pretty false",
     "validate:release-version": "node scripts/check-release-version.mjs",
     "validate:agent-bundle": "node scripts/validate-agent-bundle.mjs",
+    "media:readme": "node scripts/capture-readme-media.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
