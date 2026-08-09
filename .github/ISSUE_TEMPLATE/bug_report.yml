@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem without sharing real environment values
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not paste or attach real `.env` files, credentials, private URLs, or tokens.** Use synthetic values and redact identifying paths and key names.
+  - type: input
+    id: version
+    attributes:
+      label: Env Manager version
+      placeholder: v0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS Apple Silicon
+        - macOS Intel
+        - Source build
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the visible behavior. Replace all secrets and private project details with synthetic examples.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide numbered steps and a synthetic env structure if needed.
+      placeholder: |
+        1. Register a synthetic project
+        2. Open .env.local
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Optional screenshots or logs. Remove values, private paths, URLs, and identifying key names first.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checklist
+      options:
+        - label: I used only synthetic values and removed private project information.
+          required: true
+        - label: This is not a vulnerability report. Security issues must use the private advisory link.
+          required: true

@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a focused improvement to the Env Manager workflow
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the user problem, not a proposed implementation. Open-ended ideas can begin in [Discussions](https://github.com/haechan1103/env_manager/discussions).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is difficult today?
+      description: Describe the workflow, who encounters it, and how often.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would a good outcome look like?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Project and file discovery
+        - Variable editing and linking
+        - AI tool integration
+        - Security and permissions
+        - Installation and updates
+        - User interface and accessibility
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing Issues and Discussions first.
+          required: true
+        - label: This request does not contain real credentials or private env data.
+          required: true
