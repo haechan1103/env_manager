@@ -390,13 +390,43 @@ select:focus-visible {
 
 .sidebar-footer {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: auto;
   padding: 12px 8px 2px;
   color: #78827e;
   border-top: 1px solid #29312e;
   font-size: 10px;
+}
+
+.language-control,
+.local-status {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.language-control > span {
+  color: #929d98;
+  font-weight: 650;
+}
+
+.language-control select {
+  min-width: 92px;
+  padding: 5px 22px 5px 8px;
+  color: #dce5e1;
+  background: #1b2421;
+  border: 1px solid #303b37;
+  border-radius: 7px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.local-status {
+  justify-content: flex-start;
+  gap: 7px;
 }
 
 .status-dot {
@@ -1873,7 +1903,8 @@ select:focus-visible {
   .sidebar-section-title > span,
   .project-name,
   .file-navigation,
-  .sidebar-footer > span:last-child,
+  .language-control > span,
+  .local-status > span:last-child,
   .agent-nav-label {
     display: none;
   }
@@ -1894,6 +1925,20 @@ select:focus-visible {
   .agent-navigation .nav-item {
     justify-content: center;
     padding-inline: 0;
+  }
+
+  .sidebar-footer {
+    padding-inline: 0;
+  }
+
+  .language-control select {
+    width: 48px;
+    min-width: 48px;
+    padding-inline: 5px;
+  }
+
+  .local-status {
+    justify-content: center;
   }
 
   .integration-page {

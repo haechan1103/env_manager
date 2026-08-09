@@ -72,9 +72,19 @@ jobs:
           tagName: v__VERSION__
           releaseName: Env Manager v__VERSION__
           releaseBody: |
+            Env Manager v__VERSION__ for macOS.
+
+            - Apple Silicon: download the aarch64 DMG
+            - Intel Mac: download the x86_64 DMG
+            - The app opens in English by default and also supports Korean.
+
+            ---
+
             Env Manager v__VERSION__ macOS 설치 파일입니다.
 
-            Apple Silicon은 aarch64 DMG, Intel Mac은 x86_64 DMG를 받아주세요.
+            - Apple Silicon: aarch64 DMG
+            - Intel Mac: x86_64 DMG
+            - 앱은 영어를 기본으로 열리며 한국어도 지원합니다.
           generateReleaseNotes: true
           prerelease: false
           releaseDraft: false

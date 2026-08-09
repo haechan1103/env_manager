@@ -10,11 +10,11 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     name: "Codex",
     detected: true,
     installed: true,
-    installedVersion: "0.3.0",
-    currentVersion: "0.3.0",
+    installedVersion: "0.4.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "broker",
-    detail: "Redacted broker가 연결되어 있습니다. 직접 파일 차단 수준은 Codex 권한 프로필에 따라 달라집니다.",
+    detail: "The redacted broker is connected. Direct-file blocking depends on the Codex permission profile.",
     canInstall: true,
   },
   {
@@ -23,10 +23,10 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.3.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "inactive",
-    detail: "도구를 감지했습니다. Env Manager 연동을 설치할 수 있습니다.",
+    detail: "The tool was detected and can be connected to Env Manager.",
     canInstall: true,
   },
   {
@@ -35,10 +35,10 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.3.0",
+    currentVersion: "0.4.0",
     updateAvailable: false,
     protection: "inactive",
-    detail: "VS Code는 감지했지만 Copilot CLI가 필요합니다. CLI 설치 후 여기서 연결할 수 있습니다.",
+    detail: "VS Code was detected, but the Copilot CLI is required before connecting it.",
     canInstall: false,
   },
 ];
@@ -66,7 +66,7 @@ export const demoProjection: ProjectProjection = {
           variables: [
             {
               key: "GPT_API_KEY",
-              description: ["서버에서만 사용하는 API 키입니다."],
+              description: ["Server-only API key"],
               valueState: "present",
               displayValue: null,
               codexAccess: "protected",
@@ -77,7 +77,7 @@ export const demoProjection: ProjectProjection = {
             },
             {
               key: "GPT_MODEL",
-              description: ["기본 응답 모델"],
+              description: ["Default response model"],
               valueState: "present",
               displayValue: null,
               codexAccess: "unclassified",
@@ -93,7 +93,7 @@ export const demoProjection: ProjectProjection = {
           variables: [
             {
               key: "PORT",
-              description: ["로컬 개발 서버 포트"],
+              description: ["Local development server port"],
               valueState: "present",
               displayValue: null,
               codexAccess: "read-write",
@@ -115,7 +115,7 @@ export const demoProjection: ProjectProjection = {
           variables: [
             {
               key: "GPT_API_KEY",
-              description: ["개발 환경에서 공유하는 API 키"],
+              description: ["API key shared in development"],
               valueState: "present",
               displayValue: null,
               codexAccess: "protected",
@@ -137,7 +137,7 @@ export const demoProjection: ProjectProjection = {
           variables: [
             {
               key: "NEXT_PUBLIC_APP_URL",
-              description: ["브라우저에 노출되는 앱 주소"],
+              description: ["Public application URL"],
               valueState: "empty",
               displayValue: null,
               codexAccess: "read-write",

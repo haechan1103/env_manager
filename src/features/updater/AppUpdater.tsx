@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { localizeError, useI18n } from "../../i18n";
 import {
   checkForAppUpdate,
   currentAppVersion,
@@ -10,7 +11,8 @@ import {
 type UpdateState = "idle" | "checking" | "available" | "installing" | "current" | "error";
 
 export function AppUpdater() {
-  const [version, setVersion] = useState("0.3.0");
+  const { locale, t } = useI18n();
+  const [version, setVersion] = useState("0.4.0");
   const [state, setState] = useState<UpdateState>("idle");
   const [update, setUpdate] = useState<AppUpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +27,10 @@ export function AppUpdater() {
     } catch (reason) {
       setState(manual ? "error" : "idle");
       if (manual) {
-        setError(reason instanceof Error ? reason.message : "업데이트를 확인하지 못했습니다.");
+        setError(localizeError(reason, locale, "error.updateCheck"));
       }
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     void currentAppVersion().then(setVersion).catch(() => undefined);
@@ -43,7 +45,7 @@ export function AppUpdater() {
       await installAppUpdate();
     } catch (reason) {
       setState("error");
-      setError(reason instanceof Error ? reason.message : "업데이트를 설치하지 못했습니다.");
+      setError(localizeError(reason, locale, "error.updateInstall"));
     }
   };
 
@@ -54,11 +56,11 @@ export function AppUpdater() {
         type="button"
         onClick={() => void runCheck(true)}
         disabled={state === "checking" || state === "installing"}
-        title="업데이트 확인"
-        aria-label={`Env Manager v${version}, 업데이트 확인`}
+        title={t("updater.check")}
+        aria-label={t("updater.label", { version })}
       >
-        {state === "checking" ? "확인 중…" : `v${version}`}
-        {state === "available" && <span className="update-dot" aria-label="업데이트 있음" />}
+        {state === "checking" ? t("common.checking") : `v${version}`}
+        {state === "available" && <span className="update-dot" aria-label={t("updater.available")} />}
       </button>
 
       {(state === "available" || state === "installing" || state === "error" || state === "current") && (
@@ -71,21 +73,21 @@ export function AppUpdater() {
                 {update?.notes && <p>{update.notes}</p>}
               </div>
               <button type="button" onClick={() => void install()} disabled={state === "installing"}>
-                {state === "installing" ? "설치 중…" : "지금 업데이트"}
+                {state === "installing" ? t("common.installing") : t("updater.install")}
               </button>
             </>
           ) : state === "current" ? (
             <>
-              <strong>최신 버전입니다.</strong>
-              <button type="button" className="update-close" onClick={() => setState("idle")}>닫기</button>
+              <strong>{t("updater.current")}</strong>
+              <button type="button" className="update-close" onClick={() => setState("idle")}>{t("common.close")}</button>
             </>
           ) : (
             <>
               <div>
-                <strong>업데이트 확인 실패</strong>
+                <strong>{t("updater.failed")}</strong>
                 <p>{error}</p>
               </div>
-              <button type="button" onClick={() => void runCheck(true)}>다시 확인</button>
+              <button type="button" onClick={() => void runCheck(true)}>{t("updater.retry")}</button>
             </>
           )}
         </aside>

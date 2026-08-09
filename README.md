@@ -33,6 +33,7 @@ It is especially useful with AI coding agents: supported integrations can inspec
 - **Readable structure.** Manage groups, descriptions, variables, and comments without flattening the file.
 - **Protected by default.** Values are masked in the UI and redacted from normal AI-tool responses.
 - **Local and lightweight.** Only registered projects are scanned, and only discovered env files are watched while the app is open.
+- **English by default, Korean when you want it.** Switch languages in the sidebar; the choice is saved on this device.
 
 ## Install
 
@@ -64,7 +65,7 @@ Env Manager checks GitHub Releases for updates. It does not send project paths o
 
 ## Connect your AI coding agent
 
-The same local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app can detect and install supported integrations from **AI 도구 연결** (AI tool connections).
+The same local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app can detect and install supported integrations from **AI tool connections**.
 
 You can also install from a terminal:
 
@@ -140,7 +141,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS project. The current release is focused on reliable local file editing and guarded AI-agent integrations. Windows support, notarized macOS builds, and broader localization are next-stage work.
+Env Manager is an early-stage macOS project. The current release is focused on reliable local file editing, guarded AI-agent integrations, and English/Korean UI support. Windows support, notarized macOS builds, and additional languages are next-stage work.
 
 ## Community
 

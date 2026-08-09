@@ -18,7 +18,7 @@ vi.mock("../../lib/api", () => ({
 
 const variable: OccurrenceProjection = {
   key: "GPT_API_KEY",
-  description: ["서버 전용 키"],
+  description: ["Server-only key"],
   valueState: "present",
   displayValue: null,
   codexAccess: "protected",
@@ -46,10 +46,10 @@ describe("VariableRow", () => {
       />,
     );
 
-    const input = screen.getByLabelText("GPT_API_KEY 값");
-    expect(input).toHaveAttribute("placeholder", expect.stringContaining("값 있음"));
+    const input = screen.getByLabelText("GPT_API_KEY value");
+    expect(input).toHaveAttribute("placeholder", expect.stringContaining("Value set"));
     await user.type(input, "fake_replacement");
-    expect(screen.getByRole("button", { name: "3개 파일에 저장" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save to 3 files" })).toBeInTheDocument();
   });
 
   it("reveals a value only after an explicit action", async () => {
@@ -70,7 +70,7 @@ describe("VariableRow", () => {
     );
 
     expect(screen.queryByDisplayValue("fake_preview_value")).not.toBeInTheDocument();
-    await user.click(screen.getByTitle("값 보기 · 30초 미활동 시 숨김"));
+    await user.click(screen.getByTitle("Show value · hides after 30 seconds of inactivity"));
     const revealed = await screen.findByDisplayValue("fake_preview_value");
     expect(revealed).toBeInTheDocument();
     expect(revealed.tagName).toBe("TEXTAREA");
@@ -96,7 +96,7 @@ describe("VariableRow", () => {
       );
 
       await act(async () => {
-        fireEvent.click(screen.getByTitle("값 보기 · 30초 미활동 시 숨김"));
+        fireEvent.click(screen.getByTitle("Show value · hides after 30 seconds of inactivity"));
       });
       const revealed = screen.getByDisplayValue("fake_preview_value");
 
@@ -128,7 +128,7 @@ describe("VariableRow", () => {
       />,
     );
 
-    expect(screen.getByText("3개 파일에서 함께 관리")).toBeInTheDocument();
+    expect(screen.getByText("Managed together in 3 files")).toBeInTheDocument();
     expect(screen.getByText(".env.development")).toBeInTheDocument();
     expect(screen.getByText("apps/api/.env")).toBeInTheDocument();
   });
@@ -150,10 +150,10 @@ describe("VariableRow", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "GPT_API_KEY 환경변수명 복사" }));
+    await user.click(screen.getByRole("button", { name: "Copy GPT_API_KEY environment variable name" }));
 
     expect(api.copyKey).toHaveBeenCalledWith("demo", "GPT_API_KEY");
-    expect(screen.getByTitle("복사됨")).toBeInTheDocument();
+    expect(screen.getByTitle("Copied")).toBeInTheDocument();
   });
 
   it("suggests an explicit link for unlinked same-name occurrences", () => {
@@ -179,7 +179,7 @@ describe("VariableRow", () => {
       />,
     );
 
-    expect(screen.getByText("같은 변수가 2개 파일에 있습니다")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "함께 관리" })).toBeInTheDocument();
+    expect(screen.getByText("The same key exists in 2 files")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Manage together" })).toBeInTheDocument();
   });
 });

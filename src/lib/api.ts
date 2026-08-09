@@ -14,14 +14,30 @@ import type {
 
 export const isTauriRuntime = "__TAURI_INTERNALS__" in window;
 
+export class ApiError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (error) {
-    if (typeof error === "object" && error !== null && "message" in error) {
-      throw new Error(String(error.message));
+    if (typeof error === "object" && error !== null) {
+      const commandError = error as { code?: unknown; message?: unknown };
+      if (typeof commandError.message === "string") {
+        throw new ApiError(
+          typeof commandError.code === "string" ? commandError.code : "UNKNOWN",
+          commandError.message,
+        );
+      }
     }
-    throw new Error(typeof error === "string" ? error : "알 수 없는 오류가 발생했습니다.");
+    throw new ApiError("UNKNOWN", typeof error === "string" ? error : "Unknown error");
   }
 }
 
@@ -40,7 +56,7 @@ export async function installAgentIntegration(
 ): Promise<AgentIntegrationStatus> {
   if (!isTauriRuntime) {
     const integration = demoAgentIntegrations.find((item) => item.id === id);
-    if (!integration) throw new Error("지원하지 않는 AI 도구입니다.");
+    if (!integration) throw new ApiError("UNSUPPORTED_AGENT", "Unsupported AI tool");
     return {
       ...integration,
       installed: true,
@@ -52,11 +68,11 @@ export async function installAgentIntegration(
   return call("install_agent_integration", { request: { id } });
 }
 
-export async function chooseAndRegisterProject(): Promise<ProjectSummary | null> {
+export async function chooseAndRegisterProject(dialogTitle: string): Promise<ProjectSummary | null> {
   if (!isTauriRuntime) {
     return demoProjects[0] ?? null;
   }
-  const root = await open({ directory: true, multiple: false, title: "프로젝트 폴더 선택" });
+  const root = await open({ directory: true, multiple: false, title: dialogTitle });
   if (typeof root !== "string") {
     return null;
   }
@@ -199,7 +215,7 @@ export async function planMigration(
       preview: {
         file,
         summary:
-          "2개 그룹 표식을 `# @group` 형식으로 바꿉니다. 변수 값과 순서는 바꾸지 않습니다.",
+          "Convert 2 group markers to the `# @group` format without changing values or variable order.",
         suggestions: [
           { currentMarker: "# === GPT ===", groupName: "GPT" },
           { currentMarker: "# [Database]", groupName: "Database" },
