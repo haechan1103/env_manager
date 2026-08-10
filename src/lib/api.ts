@@ -5,6 +5,7 @@ import { demoAgentIntegrations, demoProjection, demoProjects } from "./demo";
 import type {
   AgentIntegrationId,
   AgentIntegrationStatus,
+  AgentActivityEvent,
   CodexAccess,
   GitignoreUpdateSummary,
   MutationSummary,
@@ -194,6 +195,43 @@ export async function setCodexAccess(
 ): Promise<void> {
   if (!isTauriRuntime) return;
   return call("set_codex_access", { request: { projectId, key, access, confirmed } });
+}
+
+export async function protectVariables(projectId: string, keys: string[]): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("protect_variables", { request: { projectId, keys } });
+}
+
+export async function listAgentActivity(projectId: string): Promise<AgentActivityEvent[]> {
+  if (!isTauriRuntime) {
+    return [
+      {
+        timestampMs: Date.now() - 45_000,
+        projectId,
+        actor: "codex",
+        category: "structure-inspection",
+        operation: "inspect_project",
+        relativePaths: [],
+        variableNames: [],
+        policyDecision: "redacted",
+        outcome: "allowed",
+        resultCode: "OK",
+      },
+      {
+        timestampMs: Date.now() - 180_000,
+        projectId,
+        actor: "claude-code",
+        category: "value-read",
+        operation: "read_allowed_value",
+        relativePaths: [".env.local"],
+        variableNames: ["GPT_API_KEY"],
+        policyDecision: "policy-checked",
+        outcome: "blocked",
+        resultCode: "CODEX_ACCESS_BLOCKED",
+      },
+    ];
+  }
+  return call("list_agent_activity", { request: { projectId } });
 }
 
 export async function readValue(

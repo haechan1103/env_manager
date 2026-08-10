@@ -9,10 +9,11 @@ use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
 use crate::manifest::MANIFEST_FILE_NAME;
 use crate::{
-    ClassificationSource, CodexAccess, DiscoveryOptions, Document, EnvError, EnvResult,
-    FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember, Manifest, ManifestStore,
-    Node, OccurrenceProjection, PlannedFileChange, ProjectProjection, RedactedValueState,
-    TransactionPlan, VariablePolicy, discover_env_files, suggest_access,
+    ClassificationReviewProjection, ClassificationSource, CodexAccess, DiscoveryOptions, Document,
+    EnvError, EnvResult, FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember,
+    Manifest, ManifestStore, Node, OccurrenceProjection, PlannedFileChange, ProjectProjection,
+    RedactedValueState, TransactionPlan, VariablePolicy, detect_client_exposure,
+    discover_env_files, suggest_access,
 };
 
 #[derive(Deserialize)]
@@ -576,6 +577,25 @@ impl ProjectService {
         store.save(&manifest)
     }
 
+    pub fn set_codex_access_batch(&self, keys: &[String], access: CodexAccess) -> EnvResult<()> {
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let store = ManifestStore::for_root(&self.root);
+        let mut manifest = store.load()?;
+        for key in keys {
+            validate_key(key)?;
+            manifest.variables.insert(
+                key.clone(),
+                VariablePolicy {
+                    codex_access: access,
+                    classified_by: ClassificationSource::User,
+                },
+            );
+        }
+        store.save(&manifest)
+    }
+
     pub fn codex_access(&self, key: &str) -> EnvResult<CodexAccess> {
         validate_key(key)?;
         Ok(ManifestStore::for_root(&self.root).load()?.access_for(key))
@@ -624,6 +644,37 @@ impl ProjectService {
         }
 
         let git_safety = crate::inspect_git_safety(&self.root, &files_for_git_safety(&projections));
+        let mut review_by_key = BTreeMap::<String, (BTreeSet<String>, bool)>::new();
+        for file in &projections {
+            for variable in file.groups.iter().flat_map(|group| &group.variables) {
+                let entry = review_by_key
+                    .entry(variable.key.clone())
+                    .or_insert_with(|| (BTreeSet::new(), false));
+                entry.0.insert(file.path.clone());
+                entry.1 |= variable.client_exposure.is_some();
+            }
+        }
+        let classification_review = review_by_key
+            .into_iter()
+            .map(|(key, (files, client_exposed))| {
+                let policy = manifest.variables.get(&key);
+                ClassificationReviewProjection {
+                    suggestion: suggest_access(&key),
+                    access: policy.map_or(CodexAccess::Unclassified, |item| item.codex_access),
+                    classified_by: policy
+                        .map_or(ClassificationSource::Heuristic, |item| item.classified_by),
+                    key,
+                    files: files.into_iter().collect(),
+                    client_exposed,
+                }
+            })
+            .collect::<Vec<_>>();
+        let client_exposure_count = projections
+            .iter()
+            .flat_map(|file| file.groups.iter())
+            .flat_map(|group| group.variables.iter())
+            .filter(|variable| variable.client_exposure.is_some())
+            .count();
         Ok(ProjectProjection {
             project_id: self.project_id.clone(),
             name: self.root.file_name().map_or_else(
@@ -634,6 +685,8 @@ impl ProjectService {
             unclassified_count: unclassified.len(),
             issue_count,
             git_safety,
+            classification_review,
+            client_exposure_count,
         })
     }
 
@@ -808,6 +861,7 @@ fn project_file(
                             .collect()
                     }),
                     duplicate: duplicates.contains_key(&key),
+                    client_exposure: detect_client_exposure(&key),
                     key,
                 });
             }

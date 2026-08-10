@@ -1309,6 +1309,83 @@ select:focus-visible {
   background: var(--red-pale);
 }
 
+.badge.exposure,
+.client-warning-chip {
+  color: #a33b32;
+  background: #fff0ed;
+  border: 1px solid #f3cbc5;
+}
+
+.activity-heading > div > p:last-child,
+.review-heading > div > p:last-child {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.activity-list {
+  overflow: hidden;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.activity-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 13px;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.activity-item:last-child { border-bottom: 0; }
+.activity-outcome { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: #9aa39f; }
+.activity-outcome.allowed { background: var(--green); }
+.activity-outcome.blocked { background: #d18432; }
+.activity-outcome.failed { background: var(--red); }
+.activity-copy { min-width: 0; }
+.activity-primary { display: flex; align-items: center; gap: 8px; }
+.activity-primary strong { font-size: 11px; }
+.activity-primary span { padding: 3px 6px; color: #55635d; background: #f0f3f1; border-radius: 5px; font-size: 8px; font-weight: 700; }
+.activity-primary time { margin-left: auto; color: var(--faint); font-size: 8px; }
+.activity-copy > p { margin: 5px 0 0; color: var(--muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.activity-targets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.activity-targets code { padding: 4px 6px; color: #46564f; background: #f7f8f7; border: 1px solid var(--line-soft); border-radius: 5px; font-size: 8px; }
+.activity-result { padding: 4px 7px; border-radius: 999px; font-size: 8px; font-weight: 800; }
+.activity-result.allowed { color: var(--green); background: var(--green-pale); }
+.activity-result.blocked { color: #88551d; background: var(--amber-pale); }
+.activity-result.failed { color: var(--red); background: var(--red-pale); }
+.audit-footnote { margin: 0; color: var(--faint); font-size: 9px; line-height: 1.6; }
+
+.review-panel { overflow: hidden; padding: 0; }
+.review-panel .panel-title { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+.review-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 15px 17px; border-bottom: 1px solid var(--line-soft); }
+.review-item:last-child { border-bottom: 0; }
+.review-item strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
+.review-item p { margin: 5px 0 0; color: var(--muted); font-size: 9px; }
+.review-paths { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.review-paths button { padding: 3px 6px; color: #50615a; background: #f7f8f7; border: 1px solid var(--line-soft); border-radius: 5px; cursor: pointer; font-family: monospace; font-size: 8px; }
+.review-actions { display: flex; align-items: center; gap: 6px; }
+.review-actions button { height: 29px; padding: 0 10px; color: #665546; background: #f7f2ec; border: 1px solid #e7dacb; border-radius: 7px; cursor: pointer; font-size: 9px; font-weight: 700; }
+.review-actions button.allow { color: var(--green); background: var(--green-pale); border-color: #c9e9dc; }
+.review-actions button:disabled { cursor: wait; opacity: .5; }
+.client-warning-chip { padding: 4px 7px; border-radius: 999px; font-size: 8px; font-weight: 700; }
+.panel-intro { margin: 0; padding: 12px 16px; color: var(--muted); border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+.automatic-policies { display: flex; flex-wrap: wrap; gap: 7px; padding: 14px 16px; }
+.automatic-policies > span { display: inline-flex; align-items: center; gap: 7px; padding: 6px 8px; background: #f8f9f8; border: 1px solid var(--line-soft); border-radius: 7px; }
+.automatic-policies strong { font-family: monospace; font-size: 8px; }
+.automatic-policies small { color: var(--muted); font-size: 8px; }
+.git-risk-list .critical { border-left-color: var(--red); }
+
+@media (max-width: 900px) {
+  .review-item { grid-template-columns: 1fr; }
+  .review-actions { flex-wrap: wrap; }
+  .activity-primary { flex-wrap: wrap; }
+  .activity-primary time { width: 100%; margin-left: 0; }
+}
+
 .description-button {
   display: block;
   overflow: hidden;

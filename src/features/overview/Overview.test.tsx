@@ -12,6 +12,7 @@ describe("Overview", () => {
         projection={demoProjection}
         onOpenFile={vi.fn()}
         onApplyGitignoreGuard={vi.fn()}
+        onOpenReview={vi.fn()}
       />,
     );
 
@@ -35,10 +36,13 @@ describe("Overview", () => {
             ignoredFiles: [".env.local"],
             missingIgnoreFiles: ["apps/web/.env.local"],
             trackedFiles: ["apps/api/.env.development"],
+            historyFiles: [],
+            remoteHistoryFiles: [],
           },
         }}
         onOpenFile={vi.fn()}
         onApplyGitignoreGuard={apply}
+        onOpenReview={vi.fn()}
       />,
     );
 

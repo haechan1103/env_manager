@@ -112,6 +112,17 @@ export function VariableRow({
               <span className="badge available">{t("row.sameVariable", { count: sameKeyFiles.length })}</span>
             )}
             {variable.duplicate && <span className="badge error">{t("row.duplicate")}</span>}
+            {variable.clientExposure && (
+              <span
+                className="badge exposure"
+                title={t("row.clientExposureHelp", {
+                  prefix: variable.clientExposure.publicPrefix,
+                  indicator: variable.clientExposure.secretIndicator,
+                })}
+              >
+                {t("row.clientExposure")}
+              </span>
+            )}
           </div>
           {variable.description.length > 0 ? (
             <button className="description-button" onClick={() => setEditingDescription((open) => !open)}>

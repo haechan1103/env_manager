@@ -3,7 +3,7 @@ import { supportedLocales, useI18n, type Locale } from "../../i18n";
 import { AppUpdater } from "../updater/AppUpdater";
 
 interface View {
-  kind: "overview" | "file" | "integrations";
+  kind: "overview" | "file" | "integrations" | "activity" | "review";
   path?: string;
 }
 
@@ -14,7 +14,7 @@ interface Props {
   view: View;
   onSelectProject: (projectId: string) => void;
   onSelectView: (
-    view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" },
+    view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" } | { kind: "activity" } | { kind: "review" },
   ) => void;
   onRegister: () => void;
 }
@@ -81,6 +81,19 @@ export function ProjectSidebar({
             {(projection.issueCount > 0 || projection.unclassifiedCount > 0) && (
               <b>{projection.issueCount + projection.unclassifiedCount}</b>
             )}
+          </button>
+          <button
+            className={view.kind === "review" ? "nav-item active" : "nav-item"}
+            onClick={() => onSelectView({ kind: "review" })}
+          >
+            <span>◇</span> {t("sidebar.review")}
+            {projection.unclassifiedCount > 0 && <b>{projection.unclassifiedCount}</b>}
+          </button>
+          <button
+            className={view.kind === "activity" ? "nav-item active" : "nav-item"}
+            onClick={() => onSelectView({ kind: "activity" })}
+          >
+            <span>◷</span> {t("sidebar.activity")}
           </button>
           <p className="file-label">ENV FILES</p>
           {projection.files.map((file) => (

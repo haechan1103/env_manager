@@ -9,7 +9,7 @@ use env_core::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
-use crate::runtime::{AppRuntime, MigrationPlanProjection, ProjectSummary};
+use crate::runtime::{AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary};
 use crate::{integrations, integrations::AgentIntegrationId};
 
 #[derive(Debug, Serialize)]
@@ -67,6 +67,13 @@ pub struct ClassificationRequest {
     key: String,
     access: CodexAccess,
     confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchProtectionRequest {
+    project_id: String,
+    keys: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -280,6 +287,27 @@ pub fn set_codex_access(
     runtime
         .service(&request.project_id)?
         .set_codex_access(&request.key, request.access)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn protect_variables(
+    request: BatchProtectionRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<()> {
+    runtime
+        .service(&request.project_id)?
+        .set_codex_access_batch(&request.keys, CodexAccess::Protected)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn list_agent_activity(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<AgentActivityEvent>> {
+    runtime
+        .agent_activity(&request.project_id)
         .map_err(Into::into)
 }
 

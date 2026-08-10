@@ -28,6 +28,8 @@ pub struct GitSafetyProjection {
     pub ignored_files: Vec<String>,
     pub missing_ignore_files: Vec<String>,
     pub tracked_files: Vec<String>,
+    pub history_files: Vec<String>,
+    pub remote_history_files: Vec<String>,
 }
 
 impl GitSafetyProjection {
@@ -37,6 +39,8 @@ impl GitSafetyProjection {
             ignored_files: Vec::new(),
             missing_ignore_files: Vec::new(),
             tracked_files: Vec::new(),
+            history_files: Vec::new(),
+            remote_history_files: Vec::new(),
         }
     }
 
@@ -46,6 +50,8 @@ impl GitSafetyProjection {
             ignored_files: Vec::new(),
             missing_ignore_files: Vec::new(),
             tracked_files: Vec::new(),
+            history_files: Vec::new(),
+            remote_history_files: Vec::new(),
         }
     }
 }
@@ -160,19 +166,39 @@ impl GitInspector {
         let Some(ignored) = self.ignored_paths(&managed_paths) else {
             return GitSafetyProjection::unavailable();
         };
+        let Some(history) = self.history_paths(&managed_paths, false) else {
+            return GitSafetyProjection::unavailable();
+        };
+        let Some(remote_history) = self.history_paths(&managed_paths, true) else {
+            return GitSafetyProjection::unavailable();
+        };
 
-        for path in managed_paths {
-            if self.tracked_files.contains(&path) {
+        for path in &managed_paths {
+            if self.tracked_files.contains(path) {
                 tracked_files.push(path.clone());
             }
-            if ignored.contains(&path) {
-                ignored_files.push(path);
+            if ignored.contains(path) {
+                ignored_files.push(path.clone());
             } else {
-                missing_ignore_files.push(path);
+                missing_ignore_files.push(path.clone());
             }
         }
 
-        let state = if missing_ignore_files.is_empty() && tracked_files.is_empty() {
+        let history_files = managed_paths
+            .iter()
+            .filter(|path| history.contains(*path))
+            .cloned()
+            .collect::<Vec<_>>();
+        let remote_history_files = managed_paths
+            .iter()
+            .filter(|path| remote_history.contains(*path))
+            .cloned()
+            .collect::<Vec<_>>();
+        let state = if missing_ignore_files.is_empty()
+            && tracked_files.is_empty()
+            && history_files.is_empty()
+            && remote_history_files.is_empty()
+        {
             GitSafetyState::Protected
         } else {
             GitSafetyState::NeedsAttention
@@ -182,7 +208,54 @@ impl GitInspector {
             ignored_files,
             missing_ignore_files,
             tracked_files,
+            history_files,
+            remote_history_files,
         }
+    }
+
+    fn history_paths(&self, paths: &[String], remotes_only: bool) -> Option<BTreeSet<String>> {
+        if paths.is_empty() {
+            return Some(BTreeSet::new());
+        }
+        let mut command = Command::new("git");
+        command.args(["log", "--format=", "--name-only", "-z"]);
+        if remotes_only {
+            command.arg("--remotes");
+        } else {
+            command.args(["--branches", "--tags"]);
+            let has_head = Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&self.root)
+                .env("GIT_OPTIONAL_LOCKS", "0")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .ok()
+                .is_some_and(|status| status.success());
+            if has_head {
+                command.arg("HEAD");
+            }
+        }
+        command.arg("--").args(paths);
+        let output = command
+            .current_dir(&self.root)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        Some(
+            output
+                .stdout
+                .split(|byte| *byte == 0 || *byte == b'\n')
+                .filter(|path| !path.is_empty())
+                .map(|path| String::from_utf8_lossy(path).into_owned())
+                .collect(),
+        )
     }
 
     fn ignored_paths(&self, paths: &[String]) -> Option<BTreeSet<String>> {
@@ -411,5 +484,48 @@ mod tests {
             exact_gitignore_pattern("apps/my app/[local]/.env.dev"),
             "/apps/my\\ app/\\[local\\]/.env.dev"
         );
+    }
+
+    #[test]
+    fn reports_local_and_remote_history_without_inspecting_contents() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", "TOKEN=fake_history_canary\n");
+        init_git(&project);
+        for args in [
+            vec!["add", "-f", "--", ".env.local"],
+            vec![
+                "-c",
+                "user.name=Env Manager Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "synthetic env",
+            ],
+        ] {
+            assert!(
+                Command::new("git")
+                    .args(args)
+                    .current_dir(project.root())
+                    .status()
+                    .expect("git")
+                    .success()
+            );
+        }
+        assert!(
+            Command::new("git")
+                .args(["update-ref", "refs/remotes/origin/main", "HEAD"])
+                .current_dir(project.root())
+                .status()
+                .expect("remote ref")
+                .success()
+        );
+        project.write(".gitignore", "/.env.local\n");
+
+        let projection = inspect_git_safety(project.root(), &[PathBuf::from(".env.local")]);
+        assert_eq!(projection.history_files, vec![".env.local"]);
+        assert_eq!(projection.remote_history_files, vec![".env.local"]);
+        assert_eq!(projection.state, GitSafetyState::NeedsAttention);
     }
 }

@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 
 import { FileEditor } from "../features/file-editor/FileEditor";
+import { AgentActivity } from "../features/activity/AgentActivity";
 import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
 import { ProjectSidebar } from "../features/projects/ProjectSidebar";
+import { ClassificationReview } from "../features/review/ClassificationReview";
 import { useEnvManager } from "../hooks/useEnvManager";
 import { useI18n } from "../i18n";
 
 type View =
   | { kind: "overview" }
   | { kind: "file"; path: string }
-  | { kind: "integrations" };
+  | { kind: "integrations" }
+  | { kind: "activity" }
+  | { kind: "review" };
 
 export function App() {
   const { t } = useI18n();
@@ -177,6 +181,7 @@ export function App() {
                   projection={manager.projection}
                   onOpenFile={(path) => setView({ kind: "file", path })}
                   onApplyGitignoreGuard={manager.applyGitignoreGuard}
+                  onOpenReview={() => setView({ kind: "review" })}
                 />
               )}
               {view.kind === "file" && (
@@ -188,6 +193,19 @@ export function App() {
                   onError={manager.showError}
                   onNotice={manager.showNotice}
                 />
+              )}
+              {view.kind === "review" && (
+                <ClassificationReview
+                  projectId={manager.selectedProject.id}
+                  projection={manager.projection}
+                  onRefresh={refresh}
+                  onOpenFile={(path) => setView({ kind: "file", path })}
+                  onError={manager.showError}
+                  onNotice={manager.showNotice}
+                />
+              )}
+              {view.kind === "activity" && (
+                <AgentActivity projectId={manager.selectedProject.id} onError={manager.showError} />
               )}
             </div>
           </>

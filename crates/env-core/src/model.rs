@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{GitSafetyProjection, manifest::CodexAccess};
+use crate::{
+    ClassificationSource, ClassificationSuggestion, ClientExposureWarning, GitSafetyProjection,
+    manifest::CodexAccess,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -21,6 +24,18 @@ pub struct OccurrenceProjection {
     pub link_id: Option<String>,
     pub linked_files: Vec<String>,
     pub duplicate: bool,
+    pub client_exposure: Option<ClientExposureWarning>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassificationReviewProjection {
+    pub key: String,
+    pub files: Vec<String>,
+    pub access: CodexAccess,
+    pub classified_by: ClassificationSource,
+    pub suggestion: ClassificationSuggestion,
+    pub client_exposed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,4 +62,6 @@ pub struct ProjectProjection {
     pub unclassified_count: usize,
     pub issue_count: usize,
     pub git_safety: GitSafetyProjection,
+    pub classification_review: Vec<ClassificationReviewProjection>,
+    pub client_exposure_count: usize,
 }

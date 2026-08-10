@@ -7,9 +7,10 @@ interface Props {
   projection: ProjectProjection;
   onOpenFile: (path: string) => void;
   onApplyGitignoreGuard: () => Promise<void>;
+  onOpenReview: () => void;
 }
 
-export function Overview({ projection, onOpenFile, onApplyGitignoreGuard }: Props) {
+export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpenReview }: Props) {
   const { t } = useI18n();
   const variables = projection.files.flatMap((file) =>
     file.groups.flatMap((group) => group.variables.map((variable) => ({ ...variable, file: file.path }))),
@@ -22,7 +23,7 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard }: Prop
   const blockedPolicyCount = accessPolicies.filter((access) => access !== "read-write").length;
   const allowedPolicyCount = accessPolicies.filter((access) => access === "read-write").length;
   const gitAttentionCount = projection.gitSafety.state === "needs-attention" ? 1 : 0;
-  const actionCount = empty.length + projection.unclassifiedCount + projection.issueCount + gitAttentionCount;
+  const actionCount = empty.length + projection.unclassifiedCount + projection.issueCount + gitAttentionCount + projection.clientExposureCount;
 
   return (
     <section className="page-stack">
@@ -66,11 +67,19 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard }: Prop
                 </button>
               ))}
               {projection.unclassifiedCount > 0 && (
-                <div className="issue-row">
+                <button onClick={onOpenReview}>
                   <span className="issue-icon violet">?</span>
                   <span><strong>{t("overview.unclassified")}</strong><small>{t("overview.variablesToReview", { count: projection.unclassifiedCount })}</small></span>
-                </div>
+                  <span>→</span>
+                </button>
               )}
+              {variables.filter((variable) => variable.clientExposure).map((variable) => (
+                <button key={`exposure:${variable.file}:${variable.key}`} onClick={() => onOpenFile(variable.file)}>
+                  <span className="issue-icon red">!</span>
+                  <span><strong>{variable.key}</strong><small>{variable.file} · {t("overview.clientExposure")}</small></span>
+                  <span>→</span>
+                </button>
+              ))}
               {projection.issueCount > 0 && (
                 <div className="issue-row">
                   <span className="issue-icon red">!</span>
@@ -209,6 +218,20 @@ function GitSafetyCard({
               <strong>{t("overview.alreadyTracked", { count: safety.trackedFiles.length })}</strong>
               <div>{safety.trackedFiles.map((path) => <code key={path}>{path}</code>)}</div>
               <small>{t("overview.trackedHelp")}</small>
+            </div>
+          )}
+          {safety.historyFiles.length > 0 && (
+            <div className="tracked-risk">
+              <strong>{t("overview.inLocalHistory", { count: safety.historyFiles.length })}</strong>
+              <div>{safety.historyFiles.map((path) => <code key={path}>{path}</code>)}</div>
+              <small>{t("overview.historyHelp")}</small>
+            </div>
+          )}
+          {safety.remoteHistoryFiles.length > 0 && (
+            <div className="tracked-risk critical">
+              <strong>{t("overview.inRemoteHistory", { count: safety.remoteHistoryFiles.length })}</strong>
+              <div>{safety.remoteHistoryFiles.map((path) => <code key={path}>{path}</code>)}</div>
+              <small>{t("overview.remoteHistoryHelp")}</small>
             </div>
           )}
         </div>

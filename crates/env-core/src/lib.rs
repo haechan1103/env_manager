@@ -25,10 +25,13 @@ pub use manifest::{
 };
 pub use migration::{MigrationPlan, MigrationPreview, MigrationSuggestion};
 pub use model::{
-    FileProjection, GroupProjection, OccurrenceProjection, ProjectProjection, RedactedValueState,
+    ClassificationReviewProjection, FileProjection, GroupProjection, OccurrenceProjection,
+    ProjectProjection, RedactedValueState,
 };
 pub use parser::{AssignmentRef, Document, NewlineStyle, Node, Span};
-pub use policy::{ClassificationSuggestion, suggest_access};
+pub use policy::{
+    ClassificationSuggestion, ClientExposureWarning, detect_client_exposure, suggest_access,
+};
 pub use service::{
     AddVariableRequest, CreateEnvFileRequest, CreateGroupRequest, DeleteVariableRequest,
     LinkRequest, MoveVariableRequest, MutationSummary, ProjectService, RenameGroupRequest,
