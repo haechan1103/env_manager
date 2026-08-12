@@ -38,7 +38,6 @@ export function ProjectSidebar({
       <div className="brand">
         <span className="brand-mark">E</span>
         <span>Env Manager</span>
-        <AppUpdater />
       </div>
 
       <div className="sidebar-section-title">
@@ -139,10 +138,7 @@ export function ProjectSidebar({
             ))}
           </select>
         </label>
-        <div className="local-status">
-          <span className="status-dot" />
-          <span>{t("sidebar.localOnly")}</span>
-        </div>
+        <AppUpdater />
       </div>
     </aside>
   );
