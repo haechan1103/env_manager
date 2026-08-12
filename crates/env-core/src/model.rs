@@ -49,6 +49,7 @@ pub struct GroupProjection {
 #[serde(rename_all = "camelCase")]
 pub struct FileProjection {
     pub path: String,
+    pub display_name: String,
     pub groups: Vec<GroupProjection>,
     pub warnings: Vec<String>,
 }

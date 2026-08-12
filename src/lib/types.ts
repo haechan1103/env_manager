@@ -73,8 +73,15 @@ export interface GroupProjection {
 
 export interface FileProjection {
   path: string;
+  displayName: string;
   groups: GroupProjection[];
   warnings: string[];
+}
+
+export interface ExportResult {
+  fileCount: number;
+  encrypted: boolean;
+  cancelled: boolean;
 }
 
 export interface ProjectProjection {

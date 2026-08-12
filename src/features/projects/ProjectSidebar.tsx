@@ -17,6 +17,8 @@ interface Props {
     view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" } | { kind: "activity" } | { kind: "review" },
   ) => void;
   onRegister: () => void;
+  onRenameProject: (projectId: string, name: string) => void;
+  onRenameFile: (projectId: string, path: string, name: string) => void;
 }
 
 export function ProjectSidebar({
@@ -27,6 +29,8 @@ export function ProjectSidebar({
   onSelectProject,
   onSelectView,
   onRegister,
+  onRenameProject,
+  onRenameFile,
 }: Props) {
   const { locale, setLocale, t } = useI18n();
   return (
@@ -48,6 +52,11 @@ export function ProjectSidebar({
             key={project.id}
             className={project.id === selectedProjectId ? "project-item selected" : "project-item"}
             onClick={() => onSelectProject(project.id)}
+            onDoubleClick={() => {
+              const name = window.prompt(t("sidebar.projectNamePrompt"), project.name)?.trim();
+              if (name && name !== project.name) onRenameProject(project.id, name);
+            }}
+            title={t("sidebar.renameHint")}
           >
             <span className="project-glyph">{project.name.slice(0, 1).toUpperCase()}</span>
             <span className="project-name">{project.name}</span>
@@ -59,16 +68,6 @@ export function ProjectSidebar({
             {t("sidebar.noProjects")}
           </div>
         )}
-      </nav>
-
-      <nav className="agent-navigation" aria-label={t("sidebar.aiTools")}>
-        <button
-          className={view.kind === "integrations" ? "nav-item active" : "nav-item"}
-          onClick={() => onSelectView({ kind: "integrations" })}
-        >
-          <span>◇</span>
-          <span className="agent-nav-label">{t("sidebar.aiConnections")}</span>
-        </button>
       </nav>
 
       {projection && (
@@ -101,10 +100,17 @@ export function ProjectSidebar({
               key={file.path}
               className={view.kind === "file" && view.path === file.path ? "nav-item active" : "nav-item"}
               onClick={() => onSelectView({ kind: "file", path: file.path })}
-              title={file.path}
+              onDoubleClick={() => {
+                const name = window.prompt(t("sidebar.fileNamePrompt"), file.displayName)?.trim();
+                if (name && name !== file.displayName && selectedProjectId) onRenameFile(selectedProjectId, file.path, name);
+              }}
+              title={`${file.displayName}\n${file.path}\n${t("sidebar.renameHint")}`}
             >
               <span className="file-dot" />
-              <span className="truncate">{file.path}</span>
+              <span className="sidebar-file-copy">
+                <span className="truncate">{file.displayName}</span>
+                {file.displayName !== file.path && <small className="truncate">{file.path}</small>}
+              </span>
               {file.warnings.length > 0 && <b>!</b>}
             </button>
           ))}
@@ -112,6 +118,15 @@ export function ProjectSidebar({
       )}
 
       <div className="sidebar-footer">
+        <nav className="agent-navigation footer-agent-navigation" aria-label={t("sidebar.aiTools")}>
+          <button
+            className={view.kind === "integrations" ? "nav-item active" : "nav-item"}
+            onClick={() => onSelectView({ kind: "integrations" })}
+          >
+            <span>◇</span>
+            <span className="agent-nav-label">{t("sidebar.aiConnections")}</span>
+          </button>
+        </nav>
         <label className="language-control">
           <span>{t("language.label")}</span>
           <select

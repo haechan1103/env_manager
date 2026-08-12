@@ -18,6 +18,7 @@ interface Props {
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  onRenameFile: (path: string, name: string) => void;
 }
 
 export function FileEditor({
@@ -27,6 +28,7 @@ export function FileEditor({
   onRefresh,
   onError,
   onNotice,
+  onRenameFile,
 }: Props) {
   const { locale, t } = useI18n();
   const file = projection.files.find((item) => item.path === filePath);
@@ -80,10 +82,20 @@ export function FileEditor({
       <div className="file-heading">
         <div>
           <p className="eyebrow">ENV FILE</p>
-          <h2>{file.path}</h2>
+          <h2>{file.displayName}</h2>
+          {file.displayName !== file.path && <code className="file-physical-path">{file.path}</code>}
           <p>{t("file.summary", { variables: countVariables(file), groups: file.groups.length })}</p>
         </div>
         <div className="header-actions">
+          <button
+            className="quiet-button"
+            onClick={() => {
+              const name = window.prompt(t("sidebar.fileNamePrompt"), file.displayName)?.trim();
+              if (name && name !== file.displayName) onRenameFile(file.path, name);
+            }}
+          >
+            {t("common.rename")}
+          </button>
           <button
             className="quiet-button"
             onClick={() => {

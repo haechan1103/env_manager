@@ -86,6 +86,7 @@ export const demoProjection: ProjectProjection = {
   files: [
     {
       path: ".env.local",
+      displayName: "Local environment",
       warnings: [],
       groups: [
         {
@@ -138,6 +139,7 @@ export const demoProjection: ProjectProjection = {
     },
     {
       path: ".env.development",
+      displayName: "Development",
       warnings: [],
       groups: [
         {
@@ -161,6 +163,7 @@ export const demoProjection: ProjectProjection = {
     },
     {
       path: "apps/web/.env.local",
+      displayName: "Web local",
       warnings: [],
       groups: [
         {

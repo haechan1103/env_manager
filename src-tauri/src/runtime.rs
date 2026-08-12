@@ -134,7 +134,12 @@ impl AppRuntime {
                 .iter_mut()
                 .find(|project| project.id == registration.id)
             {
-                *existing = registration.clone();
+                existing.display_path = registration.display_path.clone();
+                existing.root = registration.root.clone();
+                let summary = ProjectSummary::from(&*existing);
+                self.persist(&registry)?;
+                service.initialize()?;
+                return Ok(summary);
             } else {
                 registry.projects.push(registration.clone());
                 registry.projects.sort_by(|left, right| {
@@ -147,6 +152,28 @@ impl AppRuntime {
         }
         service.initialize()?;
         Ok(ProjectSummary::from(&registration))
+    }
+
+    pub fn rename_project(&self, project_id: &str, name: &str) -> EnvResult<ProjectSummary> {
+        env_core::validate_display_name(name)?;
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let project = registry
+            .projects
+            .iter_mut()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| EnvError::unregistered_project(project_id))?;
+        project.name = name.trim().to_owned();
+        let summary = ProjectSummary::from(&*project);
+        registry.projects.sort_by(|left, right| {
+            left.name
+                .to_ascii_lowercase()
+                .cmp(&right.name.to_ascii_lowercase())
+        });
+        self.persist(&registry)?;
+        Ok(summary)
     }
 
     pub fn remove(&self, project_id: &str) -> EnvResult<()> {

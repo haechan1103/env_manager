@@ -28,6 +28,7 @@ const projection: ProjectProjection = {
   files: [
     {
       path: ".env.local",
+      displayName: ".env.local",
       warnings: [],
       groups: [{ name: "GPT", variables: [] }],
     },
@@ -46,6 +47,7 @@ describe("FileEditor", () => {
         onRefresh={refresh}
         onError={vi.fn()}
         onNotice={vi.fn()}
+        onRenameFile={vi.fn()}
       />,
     );
 

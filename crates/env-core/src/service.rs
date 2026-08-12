@@ -596,6 +596,27 @@ impl ProjectService {
         store.save(&manifest)
     }
 
+    pub fn set_file_display_name(&self, file: &str, display_name: &str) -> EnvResult<()> {
+        crate::validate_display_name(display_name)?;
+        let relative = PathBuf::from(file);
+        let _ = safe_existing_target(&self.root, &relative)?;
+        if !relative
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_env_candidate)
+        {
+            return Err(EnvError::invalid(
+                "관리 중인 env 파일만 이름을 지정할 수 있습니다.",
+            ));
+        }
+        let store = ManifestStore::for_root(&self.root);
+        let mut manifest = store.load()?;
+        manifest
+            .file_labels
+            .insert(to_manifest_path(&relative), display_name.trim().to_owned());
+        store.save(&manifest)
+    }
+
     pub fn codex_access(&self, key: &str) -> EnvResult<CodexAccess> {
         validate_key(key)?;
         Ok(ManifestStore::for_root(&self.root).load()?.access_for(key))
@@ -694,6 +715,20 @@ impl ProjectService {
         let manifest = ManifestStore::for_root(&self.root).load()?;
         let files = self.discover(&manifest)?;
         crate::apply_gitignore_guard(&self.root, &files)
+    }
+
+    pub fn export_env_files(
+        &self,
+        destination: &Path,
+        passphrase: Option<String>,
+    ) -> EnvResult<crate::ExportSummary> {
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        crate::export_project_env(
+            &self.root,
+            &manifest,
+            destination,
+            passphrase.map(age::secrecy::SecretString::from),
+        )
     }
 
     fn discover(&self, manifest: &Manifest) -> EnvResult<Vec<PathBuf>> {
@@ -880,6 +915,11 @@ fn project_file(
     }
     FileProjection {
         path: path.to_owned(),
+        display_name: manifest
+            .file_labels
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| path.to_owned()),
         groups,
         warnings,
     }
@@ -1092,6 +1132,24 @@ mod tests {
         assert_eq!(variables[1].codex_access, CodexAccess::ReadWrite);
         assert_eq!(variables[2].codex_access, CodexAccess::Unclassified);
         assert!(variables.iter().all(|item| item.display_value.is_none()));
+    }
+
+    #[test]
+    fn file_display_name_changes_projection_without_renaming_the_file() {
+        let project = SyntheticProject::new();
+        project.write("apps/web/.env.local", "PORT=fake_3000\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        service
+            .set_file_display_name("apps/web/.env.local", "Web local")
+            .expect("set display name");
+
+        let projection = service.scan().expect("scan");
+        assert_eq!(projection.files[0].display_name, "Web local");
+        assert_eq!(projection.files[0].path, "apps/web/.env.local");
+        assert!(project.root().join("apps/web/.env.local").is_file());
+        assert!(!project.root().join("apps/web/Web local").exists());
     }
 
     #[test]

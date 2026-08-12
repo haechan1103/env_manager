@@ -63,6 +63,8 @@ pub struct Manifest {
     pub variables: BTreeMap<String, VariablePolicy>,
     #[serde(default)]
     pub links: Vec<LinkGroup>,
+    #[serde(default)]
+    pub file_labels: BTreeMap<String, String>,
 }
 
 impl Default for Manifest {
@@ -72,6 +74,7 @@ impl Default for Manifest {
             scan: ScanConfig::default(),
             variables: BTreeMap::new(),
             links: Vec::new(),
+            file_labels: BTreeMap::new(),
         }
     }
 }
@@ -114,8 +117,22 @@ impl Manifest {
                 }
             }
         }
+        for (path, label) in &self.file_labels {
+            validate_relative_path(path)?;
+            validate_display_name(label)?;
+        }
         Ok(())
     }
+}
+
+pub fn validate_display_name(name: &str) -> EnvResult<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 80 || trimmed.chars().any(char::is_control) {
+        return Err(EnvError::invalid(
+            "표시 이름은 1~80자의 일반 문자여야 합니다.",
+        ));
+    }
+    Ok(())
 }
 
 pub struct ManifestStore {

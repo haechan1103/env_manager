@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+age.workspace = true
 blake3.workspace = true
 secrecy.workspace = true
 serde.workspace = true
@@ -14,6 +15,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 walkdir.workspace = true
 zeroize.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 env-test-support = { path = "../env-test-support" }

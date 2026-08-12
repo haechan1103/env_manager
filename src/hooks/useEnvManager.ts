@@ -101,6 +101,28 @@ export function useEnvManager() {
     [locale, projects, t],
   );
 
+  const renameProject = useCallback(async (projectId: string, name: string) => {
+    try {
+      const updated = await api.renameProject(projectId, name);
+      setProjects((current) => current
+        .map((project) => project.id === projectId ? updated : project)
+        .sort((left, right) => left.name.localeCompare(right.name)));
+      setNotice(t("notice.projectRenamed", { name: updated.name }));
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.rename"));
+    }
+  }, [locale, t]);
+
+  const renameEnvFile = useCallback(async (projectId: string, file: string, name: string) => {
+    try {
+      await api.renameEnvFile(projectId, file, name);
+      await refreshProject(projectId);
+      setNotice(t("notice.fileRenamed", { name }));
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.rename"));
+    }
+  }, [locale, refreshProject, t]);
+
   const applyGitignoreGuard = useCallback(async () => {
     if (!selectedProjectId) return;
     setError(null);
@@ -140,6 +162,8 @@ export function useEnvManager() {
     selectProject: setSelectedProjectId,
     register,
     remove,
+    renameProject,
+    renameEnvFile,
     applyGitignoreGuard,
     refreshProject,
     clearError,

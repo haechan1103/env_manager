@@ -8,6 +8,7 @@ import type {
   AgentActivityEvent,
   CodexAccess,
   GitignoreUpdateSummary,
+  ExportResult,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -84,6 +85,28 @@ export async function chooseAndRegisterProject(dialogTitle: string): Promise<Pro
 export async function removeProject(projectId: string): Promise<void> {
   if (!isTauriRuntime) return;
   return call("remove_project", { request: { projectId } });
+}
+
+export async function renameProject(projectId: string, name: string): Promise<ProjectSummary> {
+  if (!isTauriRuntime) {
+    const project = demoProjects.find((item) => item.id === projectId) ?? {
+      id: projectId,
+      name,
+      displayPath: "/demo/project",
+    };
+    return { ...project, name };
+  }
+  return call("rename_project", { request: { projectId, name } });
+}
+
+export async function renameEnvFile(projectId: string, file: string, name: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("rename_env_file", { request: { projectId, file, name } });
+}
+
+export async function exportEnvFiles(projectId: string, passphrase: string | null, locale: "en" | "ko"): Promise<ExportResult> {
+  if (!isTauriRuntime) return { fileCount: demoProjection.files.length, encrypted: passphrase !== null, cancelled: false };
+  return call("export_env_files", { request: { projectId, passphrase, locale } });
 }
 
 export async function scanProject(projectId: string): Promise<ProjectProjection> {

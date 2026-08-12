@@ -14,6 +14,7 @@ license = "MIT"
 rust-version = "1.85"
 
 [workspace.dependencies]
+age = "0.12.1"
 arboard = "3.6"
 blake3 = "1.8"
 directories = "6.0"
@@ -26,3 +27,4 @@ tempfile = "3.23"
 thiserror = "2.0"
 walkdir = "2.5"
 zeroize = { version = "1.8", features = ["derive"] }
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
