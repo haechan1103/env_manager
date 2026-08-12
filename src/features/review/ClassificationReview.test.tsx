@@ -30,4 +30,40 @@ describe("ClassificationReview", () => {
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /allow all/i })).not.toBeInTheDocument();
   });
+
+  it("filters pending variables by env file and scopes protect all to that file", async () => {
+    const user = userEvent.setup();
+    const projection = {
+      ...demoProjection,
+      classificationReview: [
+        ...demoProjection.classificationReview,
+        {
+          key: "MOBILE_REGION",
+          files: ["apps/web/.env.local"],
+          access: "unclassified" as const,
+          classifiedBy: "heuristic" as const,
+          suggestion: { access: "unclassified" as const, reason: "Ambiguous fixture name." },
+          clientExposed: false,
+        },
+      ],
+    };
+    render(
+      <ClassificationReview
+        projectId="demo-project"
+        projection={projection}
+        onRefresh={vi.fn(async () => undefined)}
+        onOpenFile={vi.fn()}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "All env files, 2 needing decision" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Web local, 1 needing decision" }));
+
+    expect(screen.getByText("MOBILE_REGION")).toBeInTheDocument();
+    expect(screen.queryByText("GPT_MODEL")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Protect all 1" }));
+    expect(api.protectVariables).toHaveBeenLastCalledWith("demo-project", ["MOBILE_REGION"]);
+  });
 });

@@ -125,6 +125,19 @@ select:focus-visible {
   cursor: wait;
 }
 
+.sidebar-footer > .version {
+  width: max-content;
+  margin: 0;
+  padding: 3px 1px;
+  color: #78827e;
+  text-align: left;
+}
+
+.sidebar-footer > .version:hover {
+  color: #c5cec9;
+  background: transparent;
+}
+
 .update-dot {
   display: inline-block;
   width: 6px;
@@ -471,8 +484,7 @@ select:focus-visible {
 .field-help { color: var(--muted); }
 .field-error { color: var(--red); }
 
-.language-control,
-.local-status {
+.language-control {
   display: flex;
   width: 100%;
   align-items: center;
@@ -494,11 +506,6 @@ select:focus-visible {
   border-radius: 7px;
   font-size: 10px;
   cursor: pointer;
-}
-
-.local-status {
-  justify-content: flex-start;
-  gap: 7px;
 }
 
 .status-dot {
@@ -1440,6 +1447,12 @@ select:focus-visible {
 
 .review-panel { overflow: hidden; padding: 0; }
 .review-panel .panel-title { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+.review-file-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; background: #fafbfa; border-bottom: 1px solid var(--line-soft); scrollbar-width: thin; }
+.review-file-tabs button { display: inline-flex; min-width: max-content; align-items: center; gap: 7px; padding: 7px 9px; color: #6b7570; background: white; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; font-size: 9px; font-weight: 700; }
+.review-file-tabs button:hover { color: var(--ink); border-color: #bfcac4; }
+.review-file-tabs button.active { color: var(--green); background: var(--green-pale); border-color: #b9dfd0; }
+.review-file-tabs button b { display: grid; min-width: 17px; height: 17px; padding: 0 4px; place-items: center; color: #6e7873; background: #edf0ee; border-radius: 999px; font-size: 8px; }
+.review-file-tabs button.active b { color: white; background: var(--green); }
 .review-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 15px 17px; border-bottom: 1px solid var(--line-soft); }
 .review-item:last-child { border-bottom: 0; }
 .review-item strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
@@ -2236,7 +2249,6 @@ select:focus-visible {
   .project-name,
   .file-navigation,
   .language-control > span,
-  .local-status > span:last-child,
   .agent-nav-label {
     display: none;
   }
@@ -2269,8 +2281,9 @@ select:focus-visible {
     padding-inline: 5px;
   }
 
-  .local-status {
-    justify-content: center;
+  .sidebar-footer > .version {
+    width: 100%;
+    text-align: center;
   }
 
   .integration-page {
