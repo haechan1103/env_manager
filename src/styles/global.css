@@ -181,6 +181,7 @@ select:focus-visible {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  white-space: pre-line;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }

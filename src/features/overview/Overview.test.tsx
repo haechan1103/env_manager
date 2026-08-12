@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { demoProjection } from "../../lib/demo";
+import { I18nProvider } from "../../i18n";
 import { Overview } from "./Overview";
 
 describe("Overview", () => {
@@ -51,5 +52,17 @@ describe("Overview", () => {
     expect(screen.getByText("apps/api/.env.development")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add exact .gitignore rules" }));
     expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it("localizes the action inbox title in Korean", () => {
+    window.localStorage.setItem("env-manager.locale", "ko");
+    render(
+      <I18nProvider>
+        <Overview projection={demoProjection} onOpenFile={vi.fn()} onApplyGitignoreGuard={vi.fn()} onOpenReview={vi.fn()} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("조치할 항목")).toBeInTheDocument();
+    expect(screen.queryByText("Action inbox")).not.toBeInTheDocument();
   });
 });
