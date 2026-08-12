@@ -1093,7 +1093,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
 name = "env-broker"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "directories",
  "env-core",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "env-core"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "age",
  "blake3",
@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "env-manager-app"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "arboard",
  "blake3",
@@ -1143,7 +1143,7 @@ dependencies = [
 
 [[package]]
 name = "env-test-support"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "tempfile",
 ]

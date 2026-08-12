@@ -49,7 +49,7 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpen
       <div className="overview-grid">
         <section className="panel">
           <div className="panel-title">
-            <h3>Action inbox</h3>
+            <h3>{t("overview.actionInbox")}</h3>
             <span>{actionCount}</span>
           </div>
           {actionCount === 0 ? (

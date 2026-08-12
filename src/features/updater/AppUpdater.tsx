@@ -10,12 +10,26 @@ import {
 
 type UpdateState = "idle" | "checking" | "available" | "installing" | "current" | "error";
 
+export function localizedUpdateNotes(notes: string | null, locale: "en" | "ko") {
+  if (!notes) return null;
+  const sections = notes
+    .replace(/\r\n/g, "\n")
+    .split(/^\s*---\s*$/m)
+    .map((section) => section.trim())
+    .filter(Boolean);
+  if (locale === "ko") {
+    return sections.find((section) => /[가-힣]/.test(section)) ?? null;
+  }
+  return sections.find((section) => !/[가-힣]/.test(section)) ?? sections[0] ?? null;
+}
+
 export function AppUpdater() {
   const { locale, t } = useI18n();
-  const [version, setVersion] = useState("0.5.1");
+  const [version, setVersion] = useState("0.5.2");
   const [state, setState] = useState<UpdateState>("idle");
   const [update, setUpdate] = useState<AppUpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const updateNotes = localizedUpdateNotes(update?.notes ?? null, locale);
 
   const runCheck = useCallback(async (manual: boolean) => {
     setState("checking");
@@ -68,9 +82,9 @@ export function AppUpdater() {
           {state === "available" || state === "installing" ? (
             <>
               <div>
-                <span className="update-kicker">UPDATE AVAILABLE</span>
+                <span className="update-kicker">{t("updater.availableTitle")}</span>
                 <strong>Env Manager {update?.version}</strong>
-                {update?.notes && <p>{update.notes}</p>}
+                {updateNotes && <p>{updateNotes}</p>}
               </div>
               <button type="button" onClick={() => void install()} disabled={state === "installing"}>
                 {state === "installing" ? t("common.installing") : t("updater.install")}
