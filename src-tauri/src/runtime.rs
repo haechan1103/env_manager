@@ -38,6 +38,7 @@ struct RegistryData {
 
 pub struct AppRuntime {
     registry_path: PathBuf,
+    audit_dir: PathBuf,
     registry: Mutex<RegistryData>,
     watchers: Mutex<HashMap<String, RecommendedWatcher>>,
     migration_plans: Mutex<HashMap<String, StoredMigration>>,
@@ -56,6 +57,21 @@ pub struct MigrationPlanProjection {
     pub plan_id: String,
     pub expires_in_seconds: u64,
     pub preview: MigrationPreview,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentActivityEvent {
+    pub timestamp_ms: u64,
+    pub project_id: String,
+    pub actor: String,
+    pub category: String,
+    pub operation: String,
+    pub relative_paths: Vec<String>,
+    pub variable_names: Vec<String>,
+    pub policy_decision: String,
+    pub outcome: String,
+    pub result_code: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,6 +94,7 @@ impl AppRuntime {
         };
         Ok(Self {
             registry_path,
+            audit_dir: app_data.join("agent-activity"),
             registry: Mutex::new(registry),
             watchers: Mutex::new(HashMap::new()),
             migration_plans: Mutex::new(HashMap::new()),
@@ -117,7 +134,12 @@ impl AppRuntime {
                 .iter_mut()
                 .find(|project| project.id == registration.id)
             {
-                *existing = registration.clone();
+                existing.display_path = registration.display_path.clone();
+                existing.root = registration.root.clone();
+                let summary = ProjectSummary::from(&*existing);
+                self.persist(&registry)?;
+                service.initialize()?;
+                return Ok(summary);
             } else {
                 registry.projects.push(registration.clone());
                 registry.projects.sort_by(|left, right| {
@@ -130,6 +152,28 @@ impl AppRuntime {
         }
         service.initialize()?;
         Ok(ProjectSummary::from(&registration))
+    }
+
+    pub fn rename_project(&self, project_id: &str, name: &str) -> EnvResult<ProjectSummary> {
+        env_core::validate_display_name(name)?;
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let project = registry
+            .projects
+            .iter_mut()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| EnvError::unregistered_project(project_id))?;
+        project.name = name.trim().to_owned();
+        let summary = ProjectSummary::from(&*project);
+        registry.projects.sort_by(|left, right| {
+            left.name
+                .to_ascii_lowercase()
+                .cmp(&right.name.to_ascii_lowercase())
+        });
+        self.persist(&registry)?;
+        Ok(summary)
     }
 
     pub fn remove(&self, project_id: &str) -> EnvResult<()> {
@@ -155,6 +199,38 @@ impl AppRuntime {
     pub fn service(&self, project_id: &str) -> EnvResult<ProjectService> {
         let root = self.root(project_id)?;
         ProjectService::open(root)
+    }
+
+    pub fn agent_activity(&self, project_id: &str) -> EnvResult<Vec<AgentActivityEvent>> {
+        // Resolve through the registration first so arbitrary file names cannot be requested.
+        let service = self.service(project_id)?;
+        let path = self
+            .audit_dir
+            .join(format!("{}.jsonl", service.project_id()));
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(_) => return Err(EnvError::invalid("AI 활동 기록을 읽지 못했습니다.")),
+        };
+        let start = bytes.len().saturating_sub(2 * 1024 * 1024);
+        let slice = if start == 0 {
+            &bytes[..]
+        } else {
+            let offset = bytes[start..]
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(bytes.len(), |offset| start + offset + 1);
+            &bytes[offset..]
+        };
+        let mut events = slice
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| serde_json::from_slice::<AgentActivityEvent>(line).ok())
+            .filter(|event| event.project_id == project_id)
+            .collect::<Vec<_>>();
+        events.sort_by_key(|event| std::cmp::Reverse(event.timestamp_ms));
+        events.truncate(200);
+        Ok(events)
     }
 
     pub fn plan_migration(

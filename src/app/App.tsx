@@ -1,21 +1,27 @@
 import { useEffect, useState } from "react";
 
 import { FileEditor } from "../features/file-editor/FileEditor";
+import { ExportEnvModal } from "../features/export/ExportEnvModal";
+import { AgentActivity } from "../features/activity/AgentActivity";
 import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
 import { ProjectSidebar } from "../features/projects/ProjectSidebar";
+import { ClassificationReview } from "../features/review/ClassificationReview";
 import { useEnvManager } from "../hooks/useEnvManager";
 import { useI18n } from "../i18n";
 
 type View =
   | { kind: "overview" }
   | { kind: "file"; path: string }
-  | { kind: "integrations" };
+  | { kind: "integrations" }
+  | { kind: "activity" }
+  | { kind: "review" };
 
 export function App() {
   const { t } = useI18n();
   const manager = useEnvManager();
   const [view, setView] = useState<View>({ kind: "overview" });
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     setView({ kind: "overview" });
@@ -45,6 +51,8 @@ export function App() {
         onSelectProject={manager.selectProject}
         onSelectView={setView}
         onRegister={() => void manager.register()}
+        onRenameProject={(projectId, name) => void manager.renameProject(projectId, name)}
+        onRenameFile={(projectId, path, name) => void manager.renameEnvFile(projectId, path, name)}
       />
 
       <main className="main-panel">
@@ -151,6 +159,11 @@ export function App() {
                 <h1>{manager.selectedProject.name}</h1>
               </div>
               <div className="header-actions">
+                <button className="quiet-button" onClick={() => {
+                  const name = window.prompt(t("sidebar.projectNamePrompt"), manager.selectedProject!.name)?.trim();
+                  if (name && name !== manager.selectedProject!.name) void manager.renameProject(manager.selectedProject!.id, name);
+                }}>{t("common.rename")}</button>
+                <button className="quiet-button" onClick={() => setExporting(true)}>{t("export.action")}</button>
                 <button className="quiet-button" onClick={() => void refresh()}>
                   {t("common.refresh")}
                 </button>
@@ -176,6 +189,8 @@ export function App() {
                 <Overview
                   projection={manager.projection}
                   onOpenFile={(path) => setView({ kind: "file", path })}
+                  onApplyGitignoreGuard={manager.applyGitignoreGuard}
+                  onOpenReview={() => setView({ kind: "review" })}
                 />
               )}
               {view.kind === "file" && (
@@ -186,7 +201,21 @@ export function App() {
                   onRefresh={refresh}
                   onError={manager.showError}
                   onNotice={manager.showNotice}
+                  onRenameFile={(path, name) => void manager.renameEnvFile(manager.selectedProject!.id, path, name)}
                 />
+              )}
+              {view.kind === "review" && (
+                <ClassificationReview
+                  projectId={manager.selectedProject.id}
+                  projection={manager.projection}
+                  onRefresh={refresh}
+                  onOpenFile={(path) => setView({ kind: "file", path })}
+                  onError={manager.showError}
+                  onNotice={manager.showNotice}
+                />
+              )}
+              {view.kind === "activity" && (
+                <AgentActivity projectId={manager.selectedProject.id} onError={manager.showError} />
               )}
             </div>
           </>
@@ -200,6 +229,9 @@ export function App() {
         >
           {manager.error ?? manager.notice}
         </div>
+      )}
+      {exporting && manager.selectedProject && (
+        <ExportEnvModal projectId={manager.selectedProject.id} onClose={() => setExporting(false)} onError={manager.showError} onNotice={manager.showNotice} />
       )}
     </div>
   );

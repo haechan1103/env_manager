@@ -1,6 +1,8 @@
 mod discovery;
 mod effective;
 mod error;
+mod export;
+mod git_safety;
 mod manifest;
 mod migration;
 mod model;
@@ -14,16 +16,24 @@ pub use effective::{
     EffectiveContext, EffectiveOccurrence, EffectiveProjection, FrameworkKind, resolve_effective,
 };
 pub use error::{EnvError, EnvErrorCode, EnvResult};
+pub use export::{ExportFormat, ExportSummary, export_project_env};
+pub use git_safety::{
+    GitSafetyProjection, GitSafetyState, GitignoreUpdateSummary, apply_gitignore_guard,
+    inspect_git_safety,
+};
 pub use manifest::{
     ClassificationSource, CodexAccess, LinkGroup, LinkMember, MANIFEST_FILE_NAME, Manifest,
-    ManifestStore, VariablePolicy,
+    ManifestStore, VariablePolicy, validate_display_name,
 };
 pub use migration::{MigrationPlan, MigrationPreview, MigrationSuggestion};
 pub use model::{
-    FileProjection, GroupProjection, OccurrenceProjection, ProjectProjection, RedactedValueState,
+    ClassificationReviewProjection, FileProjection, GroupProjection, OccurrenceProjection,
+    ProjectProjection, RedactedValueState,
 };
 pub use parser::{AssignmentRef, Document, NewlineStyle, Node, Span};
-pub use policy::{ClassificationSuggestion, suggest_access};
+pub use policy::{
+    ClassificationSuggestion, ClientExposureWarning, detect_client_exposure, suggest_access,
+};
 pub use service::{
     AddVariableRequest, CreateEnvFileRequest, CreateGroupRequest, DeleteVariableRequest,
     LinkRequest, MoveVariableRequest, MutationSummary, ProjectService, RenameGroupRequest,

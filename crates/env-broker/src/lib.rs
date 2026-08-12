@@ -37,6 +37,9 @@ struct StoredPlan {
     root: PathBuf,
     expires_at: Instant,
     operation: PlannedOperation,
+    affected_files: Vec<String>,
+    keys: Vec<String>,
+    risk: &'static str,
 }
 
 enum PlannedOperation {
@@ -183,13 +186,15 @@ struct ApplyArgs {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AuditEvent<'a> {
-    timestamp_ms: u128,
+    timestamp_ms: u64,
     project_id: &'a str,
-    actor: &'static str,
+    actor: String,
+    category: &'static str,
     operation: &'a str,
     relative_paths: &'a [String],
     variable_names: &'a [String],
     policy_decision: &'a str,
+    outcome: &'static str,
     result_code: &'a str,
 }
 
@@ -256,7 +261,16 @@ impl Broker {
     fn plan_value(&self, args: PlanValueArgs) -> Result<Value, EnvError> {
         let service = self.open_registered(&args.project_path)?;
         if service.codex_access(&args.key)? != CodexAccess::ReadWrite {
-            return Err(EnvError::access_blocked(&args.key));
+            let error = EnvError::access_blocked(&args.key);
+            audit(
+                service.project_id(),
+                "plan_set_allowed_value",
+                std::slice::from_ref(&args.file),
+                std::slice::from_ref(&args.key),
+                "blocked-by-policy",
+                error.code().as_str(),
+            );
+            return Err(error);
         }
         self.store_plan(
             &service,
@@ -488,6 +502,9 @@ impl Broker {
                     root: service.root().to_path_buf(),
                     expires_at: Instant::now() + PLAN_TTL,
                     operation,
+                    affected_files: affected_files.clone(),
+                    keys: keys.clone(),
+                    risk,
                 },
             );
         audit(
@@ -516,54 +533,64 @@ impl Broker {
         if service.project_id() != stored.project_id {
             return Err(EnvError::unregistered_project(&stored.project_id));
         }
-        let result = match stored.operation {
+        let affected_files = stored.affected_files.clone();
+        let keys = stored.keys.clone();
+        let risk = stored.risk;
+        let result: Result<Value, EnvError> = match stored.operation {
             PlannedOperation::SetAllowedValue(request) => {
                 if service.codex_access(&request.key)? != CodexAccess::ReadWrite {
-                    return Err(EnvError::access_blocked(&request.key));
+                    let error = EnvError::access_blocked(&request.key);
+                    audit(
+                        service.project_id(),
+                        "apply_plan",
+                        &affected_files,
+                        &keys,
+                        "blocked-by-policy",
+                        error.code().as_str(),
+                    );
+                    return Err(error);
                 }
-                serde_json::to_value(service.save_value(request)?)
+                serialize_result(service.save_value(request))
             }
             PlannedOperation::CreateEnvFile(request) => {
-                serde_json::to_value(service.create_env_file(request)?)
+                serialize_result(service.create_env_file(request))
             }
             PlannedOperation::AddVariable(request) => {
-                serde_json::to_value(service.add_variable(request)?)
+                serialize_result(service.add_variable(request))
             }
             PlannedOperation::CreateGroup(request) => {
-                serde_json::to_value(service.create_group(request)?)
+                serialize_result(service.create_group(request))
             }
             PlannedOperation::RenameGroup(request) => {
-                serde_json::to_value(service.rename_group(request)?)
+                serialize_result(service.rename_group(request))
             }
             PlannedOperation::MoveVariable(request) => {
-                serde_json::to_value(service.move_variable(request)?)
+                serialize_result(service.move_variable(request))
             }
             PlannedOperation::UpdateDescription(request) => {
-                serde_json::to_value(service.save_description(request)?)
+                serialize_result(service.save_description(request))
             }
-            PlannedOperation::Link(request) => serde_json::to_value(service.create_link(request)?),
-            PlannedOperation::Detach { link_id, file } => {
-                service.detach_link_member(&link_id, &file)?;
-                Ok(json!({ "affectedFiles": [file], "keys": [] }))
-            }
-            PlannedOperation::Classification { key, access } => {
-                service.set_codex_access_by(&key, access, ClassificationSource::Codex)?;
-                Ok(json!({ "affectedFiles": [], "keys": [key] }))
-            }
-            PlannedOperation::Migration(plan) => {
-                serde_json::to_value(service.apply_migration(plan)?)
-            }
-        }
-        .map_err(EnvError::serialization)?;
+            PlannedOperation::Link(request) => serialize_result(service.create_link(request)),
+            PlannedOperation::Detach { link_id, file } => service
+                .detach_link_member(&link_id, &file)
+                .map(|()| json!({ "affectedFiles": [file], "keys": [] })),
+            PlannedOperation::Classification { key, access } => service
+                .set_codex_access_by(&key, access, ClassificationSource::Codex)
+                .map(|()| json!({ "affectedFiles": [], "keys": [key] })),
+            PlannedOperation::Migration(plan) => serialize_result(service.apply_migration(plan)),
+        };
+        let result_code = result
+            .as_ref()
+            .map_or_else(|error| error.code().as_str(), |_| "OK");
         audit(
             service.project_id(),
             "apply_plan",
-            &[],
-            &[],
-            "request-authorized",
-            "OK",
+            &affected_files,
+            &keys,
+            risk,
+            result_code,
         );
-        Ok(result)
+        result
     }
 
     fn open_registered(&self, project_path: &str) -> Result<ProjectService, EnvError> {
@@ -594,6 +621,10 @@ impl Broker {
 
 fn parse<T: for<'de> Deserialize<'de>>(value: Value) -> Result<T, EnvError> {
     serde_json::from_value(value).map_err(|_| EnvError::invalid("도구 인자가 올바르지 않습니다."))
+}
+
+fn serialize_result<T: Serialize>(result: Result<T, EnvError>) -> Result<Value, EnvError> {
+    result.and_then(|value| serde_json::to_value(value).map_err(EnvError::serialization))
 }
 
 /// Returns a Claude/Copilot-compatible PreToolUse decision without echoing tool input.
@@ -761,13 +792,24 @@ fn audit(
     let event = AuditEvent {
         timestamp_ms: SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis()),
+            .map_or(0, |duration| duration.as_millis() as u64),
         project_id,
-        actor: "codex",
+        actor: std::env::var("ENV_MANAGER_AGENT_HOST")
+            .ok()
+            .filter(|actor| matches!(actor.as_str(), "codex" | "claude-code" | "github-copilot"))
+            .unwrap_or_else(|| "unknown-agent".to_owned()),
+        category: audit_category(operation, policy_decision),
         operation,
         relative_paths,
         variable_names,
         policy_decision,
+        outcome: if result_code == "OK" {
+            "allowed"
+        } else if result_code == "CODEX_ACCESS_BLOCKED" {
+            "blocked"
+        } else {
+            "failed"
+        },
         result_code,
     };
     let directory = std::env::var_os("ENV_MANAGER_AUDIT_DIR")
@@ -777,11 +819,28 @@ fn audit(
         return;
     }
     let path = directory.join(format!("{project_id}.jsonl"));
+    if fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 2 * 1024 * 1024) {
+        let previous = directory.join(format!("{project_id}.previous.jsonl"));
+        let _ = fs::remove_file(&previous);
+        let _ = fs::rename(&path, previous);
+    }
     let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
         return;
     };
     if serde_json::to_writer(&mut file, &event).is_ok() {
         let _ = file.write_all(b"\n");
+    }
+}
+
+fn audit_category(operation: &str, policy_decision: &str) -> &'static str {
+    if operation == "inspect_project" {
+        "structure-inspection"
+    } else if operation == "read_allowed_value" {
+        "value-read"
+    } else if policy_decision == "policy-change" || policy_decision == "protection-downgrade" {
+        "policy-change"
+    } else {
+        "mutation"
     }
 }
 
@@ -944,6 +1003,31 @@ mod tests {
         let service = ProjectService::open(project.root()).expect("service");
         service.initialize().expect("initialize");
         (project, service)
+    }
+
+    #[test]
+    fn audit_schema_contains_only_allowlisted_metadata() {
+        let paths = vec![".env.local".to_owned()];
+        let keys = vec!["GPT_API_KEY".to_owned()];
+        let event = AuditEvent {
+            timestamp_ms: 1,
+            project_id: "synthetic-project",
+            actor: "claude-code".to_owned(),
+            category: audit_category("read_allowed_value", "policy-checked"),
+            operation: "read_allowed_value",
+            relative_paths: &paths,
+            variable_names: &keys,
+            policy_decision: "policy-checked",
+            outcome: "blocked",
+            result_code: "CODEX_ACCESS_BLOCKED",
+        };
+        let serialized = serde_json::to_string(&event).expect("serialize audit event");
+        assert!(serialized.contains("claude-code"));
+        assert!(serialized.contains("GPT_API_KEY"));
+        assert!(!serialized.contains(CANARY));
+        for forbidden_field in ["value", "valueFragment", "replacement", "valueHash"] {
+            assert!(!serialized.contains(&format!("\"{forbidden_field}\"")));
+        }
     }
 
     #[test]

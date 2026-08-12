@@ -5,7 +5,10 @@ import { demoAgentIntegrations, demoProjection, demoProjects } from "./demo";
 import type {
   AgentIntegrationId,
   AgentIntegrationStatus,
+  AgentActivityEvent,
   CodexAccess,
+  GitignoreUpdateSummary,
+  ExportResult,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -84,9 +87,41 @@ export async function removeProject(projectId: string): Promise<void> {
   return call("remove_project", { request: { projectId } });
 }
 
+export async function renameProject(projectId: string, name: string): Promise<ProjectSummary> {
+  if (!isTauriRuntime) {
+    const project = demoProjects.find((item) => item.id === projectId) ?? {
+      id: projectId,
+      name,
+      displayPath: "/demo/project",
+    };
+    return { ...project, name };
+  }
+  return call("rename_project", { request: { projectId, name } });
+}
+
+export async function renameEnvFile(projectId: string, file: string, name: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("rename_env_file", { request: { projectId, file, name } });
+}
+
+export async function exportEnvFiles(projectId: string, passphrase: string | null, locale: "en" | "ko"): Promise<ExportResult> {
+  if (!isTauriRuntime) return { fileCount: demoProjection.files.length, encrypted: passphrase !== null, cancelled: false };
+  return call("export_env_files", { request: { projectId, passphrase, locale } });
+}
+
 export async function scanProject(projectId: string): Promise<ProjectProjection> {
   if (!isTauriRuntime) return demoProjection;
   return call("scan_project", { request: { projectId } });
+}
+
+export async function applyGitignoreGuard(projectId: string): Promise<GitignoreUpdateSummary> {
+  if (!isTauriRuntime) {
+    return {
+      addedPatterns: demoProjection.gitSafety.missingIgnoreFiles.map((path) => `/${path}`),
+      trackedFiles: demoProjection.gitSafety.trackedFiles,
+    };
+  }
+  return call("apply_gitignore_guard", { request: { projectId } });
 }
 
 export async function saveValue(
@@ -183,6 +218,43 @@ export async function setCodexAccess(
 ): Promise<void> {
   if (!isTauriRuntime) return;
   return call("set_codex_access", { request: { projectId, key, access, confirmed } });
+}
+
+export async function protectVariables(projectId: string, keys: string[]): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("protect_variables", { request: { projectId, keys } });
+}
+
+export async function listAgentActivity(projectId: string): Promise<AgentActivityEvent[]> {
+  if (!isTauriRuntime) {
+    return [
+      {
+        timestampMs: Date.now() - 45_000,
+        projectId,
+        actor: "codex",
+        category: "structure-inspection",
+        operation: "inspect_project",
+        relativePaths: [],
+        variableNames: [],
+        policyDecision: "redacted",
+        outcome: "allowed",
+        resultCode: "OK",
+      },
+      {
+        timestampMs: Date.now() - 180_000,
+        projectId,
+        actor: "claude-code",
+        category: "value-read",
+        operation: "read_allowed_value",
+        relativePaths: [".env.local"],
+        variableNames: ["GPT_API_KEY"],
+        policyDecision: "policy-checked",
+        outcome: "blocked",
+        resultCode: "CODEX_ACCESS_BLOCKED",
+      },
+    ];
+  }
+  return call("list_agent_activity", { request: { projectId } });
 }
 
 export async function readValue(

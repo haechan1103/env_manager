@@ -26,6 +26,7 @@ const variable: OccurrenceProjection = {
   linkId: "gpt-link",
   linkedFiles: [".env.local", ".env.development", "apps/api/.env"],
   duplicate: false,
+  clientExposure: null,
 };
 
 describe("VariableRow", () => {

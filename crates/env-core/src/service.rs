@@ -9,10 +9,11 @@ use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
 use crate::manifest::MANIFEST_FILE_NAME;
 use crate::{
-    ClassificationSource, CodexAccess, DiscoveryOptions, Document, EnvError, EnvResult,
-    FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember, Manifest, ManifestStore,
-    Node, OccurrenceProjection, PlannedFileChange, ProjectProjection, RedactedValueState,
-    TransactionPlan, VariablePolicy, discover_env_files, suggest_access,
+    ClassificationReviewProjection, ClassificationSource, CodexAccess, DiscoveryOptions, Document,
+    EnvError, EnvResult, FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember,
+    Manifest, ManifestStore, Node, OccurrenceProjection, PlannedFileChange, ProjectProjection,
+    RedactedValueState, TransactionPlan, VariablePolicy, detect_client_exposure,
+    discover_env_files, suggest_access,
 };
 
 #[derive(Deserialize)]
@@ -576,6 +577,46 @@ impl ProjectService {
         store.save(&manifest)
     }
 
+    pub fn set_codex_access_batch(&self, keys: &[String], access: CodexAccess) -> EnvResult<()> {
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let store = ManifestStore::for_root(&self.root);
+        let mut manifest = store.load()?;
+        for key in keys {
+            validate_key(key)?;
+            manifest.variables.insert(
+                key.clone(),
+                VariablePolicy {
+                    codex_access: access,
+                    classified_by: ClassificationSource::User,
+                },
+            );
+        }
+        store.save(&manifest)
+    }
+
+    pub fn set_file_display_name(&self, file: &str, display_name: &str) -> EnvResult<()> {
+        crate::validate_display_name(display_name)?;
+        let relative = PathBuf::from(file);
+        let _ = safe_existing_target(&self.root, &relative)?;
+        if !relative
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_env_candidate)
+        {
+            return Err(EnvError::invalid(
+                "관리 중인 env 파일만 이름을 지정할 수 있습니다.",
+            ));
+        }
+        let store = ManifestStore::for_root(&self.root);
+        let mut manifest = store.load()?;
+        manifest
+            .file_labels
+            .insert(to_manifest_path(&relative), display_name.trim().to_owned());
+        store.save(&manifest)
+    }
+
     pub fn codex_access(&self, key: &str) -> EnvResult<CodexAccess> {
         validate_key(key)?;
         Ok(ManifestStore::for_root(&self.root).load()?.access_for(key))
@@ -623,6 +664,38 @@ impl ProjectService {
             projections.push(projection);
         }
 
+        let git_safety = crate::inspect_git_safety(&self.root, &files_for_git_safety(&projections));
+        let mut review_by_key = BTreeMap::<String, (BTreeSet<String>, bool)>::new();
+        for file in &projections {
+            for variable in file.groups.iter().flat_map(|group| &group.variables) {
+                let entry = review_by_key
+                    .entry(variable.key.clone())
+                    .or_insert_with(|| (BTreeSet::new(), false));
+                entry.0.insert(file.path.clone());
+                entry.1 |= variable.client_exposure.is_some();
+            }
+        }
+        let classification_review = review_by_key
+            .into_iter()
+            .map(|(key, (files, client_exposed))| {
+                let policy = manifest.variables.get(&key);
+                ClassificationReviewProjection {
+                    suggestion: suggest_access(&key),
+                    access: policy.map_or(CodexAccess::Unclassified, |item| item.codex_access),
+                    classified_by: policy
+                        .map_or(ClassificationSource::Heuristic, |item| item.classified_by),
+                    key,
+                    files: files.into_iter().collect(),
+                    client_exposed,
+                }
+            })
+            .collect::<Vec<_>>();
+        let client_exposure_count = projections
+            .iter()
+            .flat_map(|file| file.groups.iter())
+            .flat_map(|group| group.variables.iter())
+            .filter(|variable| variable.client_exposure.is_some())
+            .count();
         Ok(ProjectProjection {
             project_id: self.project_id.clone(),
             name: self.root.file_name().map_or_else(
@@ -632,7 +705,30 @@ impl ProjectService {
             files: projections,
             unclassified_count: unclassified.len(),
             issue_count,
+            git_safety,
+            classification_review,
+            client_exposure_count,
         })
+    }
+
+    pub fn apply_gitignore_guard(&self) -> EnvResult<crate::GitignoreUpdateSummary> {
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let files = self.discover(&manifest)?;
+        crate::apply_gitignore_guard(&self.root, &files)
+    }
+
+    pub fn export_env_files(
+        &self,
+        destination: &Path,
+        passphrase: Option<String>,
+    ) -> EnvResult<crate::ExportSummary> {
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        crate::export_project_env(
+            &self.root,
+            &manifest,
+            destination,
+            passphrase.map(age::secrecy::SecretString::from),
+        )
     }
 
     fn discover(&self, manifest: &Manifest) -> EnvResult<Vec<PathBuf>> {
@@ -729,6 +825,13 @@ impl ProjectService {
     }
 }
 
+fn files_for_git_safety(projections: &[FileProjection]) -> Vec<PathBuf> {
+    projections
+        .iter()
+        .map(|projection| PathBuf::from(&projection.path))
+        .collect()
+}
+
 struct LoadedDocument {
     document: Document,
     revision: FileRevision,
@@ -793,6 +896,7 @@ fn project_file(
                             .collect()
                     }),
                     duplicate: duplicates.contains_key(&key),
+                    client_exposure: detect_client_exposure(&key),
                     key,
                 });
             }
@@ -811,6 +915,11 @@ fn project_file(
     }
     FileProjection {
         path: path.to_owned(),
+        display_name: manifest
+            .file_labels
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| path.to_owned()),
         groups,
         warnings,
     }
@@ -1023,6 +1132,24 @@ mod tests {
         assert_eq!(variables[1].codex_access, CodexAccess::ReadWrite);
         assert_eq!(variables[2].codex_access, CodexAccess::Unclassified);
         assert!(variables.iter().all(|item| item.display_value.is_none()));
+    }
+
+    #[test]
+    fn file_display_name_changes_projection_without_renaming_the_file() {
+        let project = SyntheticProject::new();
+        project.write("apps/web/.env.local", "PORT=fake_3000\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        service
+            .set_file_display_name("apps/web/.env.local", "Web local")
+            .expect("set display name");
+
+        let projection = service.scan().expect("scan");
+        assert_eq!(projection.files[0].display_name, "Web local");
+        assert_eq!(projection.files[0].path, "apps/web/.env.local");
+        assert!(project.root().join("apps/web/.env.local").is_file());
+        assert!(!project.root().join("apps/web/Web local").exists());
     }
 
     #[test]

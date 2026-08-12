@@ -101,6 +101,48 @@ export function useEnvManager() {
     [locale, projects, t],
   );
 
+  const renameProject = useCallback(async (projectId: string, name: string) => {
+    try {
+      const updated = await api.renameProject(projectId, name);
+      setProjects((current) => current
+        .map((project) => project.id === projectId ? updated : project)
+        .sort((left, right) => left.name.localeCompare(right.name)));
+      setNotice(t("notice.projectRenamed", { name: updated.name }));
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.rename"));
+    }
+  }, [locale, t]);
+
+  const renameEnvFile = useCallback(async (projectId: string, file: string, name: string) => {
+    try {
+      await api.renameEnvFile(projectId, file, name);
+      await refreshProject(projectId);
+      setNotice(t("notice.fileRenamed", { name }));
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.rename"));
+    }
+  }, [locale, refreshProject, t]);
+
+  const applyGitignoreGuard = useCallback(async () => {
+    if (!selectedProjectId) return;
+    setError(null);
+    try {
+      const summary = await api.applyGitignoreGuard(selectedProjectId);
+      await refreshProject(selectedProjectId);
+      setNotice(
+        summary.trackedFiles.length > 0
+          ? t("notice.gitignoreAddedTracked", {
+              patterns: summary.addedPatterns.length,
+              tracked: summary.trackedFiles.length,
+            })
+          : t("notice.gitignoreAdded", { count: summary.addedPatterns.length }),
+      );
+    } catch (cause) {
+      setError(localizeError(cause, locale, "error.gitSafety"));
+      throw cause;
+    }
+  }, [locale, refreshProject, selectedProjectId, t]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
@@ -120,6 +162,9 @@ export function useEnvManager() {
     selectProject: setSelectedProjectId,
     register,
     remove,
+    renameProject,
+    renameEnvFile,
+    applyGitignoreGuard,
     refreshProject,
     clearError,
     clearNotice,

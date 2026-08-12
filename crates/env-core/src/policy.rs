@@ -47,6 +47,32 @@ const SAFE_PREFIXES: &[&str] = &[
     "REACT_APP_",
 ];
 
+const CLIENT_EXPOSED_PREFIXES: &[&str] = &["VITE_", "NEXT_PUBLIC_", "EXPO_PUBLIC_"];
+const SECRET_NAME_INDICATORS: &[&str] = &["SECRET", "TOKEN", "PASSWORD", "API_KEY", "PRIVATE_KEY"];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientExposureWarning {
+    pub public_prefix: String,
+    pub secret_indicator: String,
+}
+
+/// Detects a likely secret placed in a framework-defined client-visible variable.
+/// This intentionally analyzes only the variable name; it never needs the value.
+pub fn detect_client_exposure(key: &str) -> Option<ClientExposureWarning> {
+    let upper = key.to_ascii_uppercase();
+    let public_prefix = CLIENT_EXPOSED_PREFIXES
+        .iter()
+        .find(|prefix| upper.starts_with(**prefix))?;
+    let secret_indicator = SECRET_NAME_INDICATORS
+        .iter()
+        .find(|indicator| upper.contains(**indicator))?;
+    Some(ClientExposureWarning {
+        public_prefix: (*public_prefix).to_owned(),
+        secret_indicator: (*secret_indicator).to_owned(),
+    })
+}
+
 pub fn suggest_access(key: &str) -> ClassificationSuggestion {
     let upper = key.to_ascii_uppercase();
     if let Some(indicator) = PROTECTED_INDICATORS
@@ -88,5 +114,15 @@ mod tests {
     fn unknown_name_stays_unclassified() {
         let suggestion = suggest_access("CUSTOM_MODE");
         assert_eq!(suggestion.access, CodexAccess::Unclassified);
+    }
+
+    #[test]
+    fn client_exposure_requires_both_public_prefix_and_secret_indicator() {
+        let warning = detect_client_exposure("NEXT_PUBLIC_DATABASE_PASSWORD")
+            .expect("client exposure warning");
+        assert_eq!(warning.public_prefix, "NEXT_PUBLIC_");
+        assert_eq!(warning.secret_indicator, "PASSWORD");
+        assert!(detect_client_exposure("NEXT_PUBLIC_API_BASE_URL").is_none());
+        assert!(detect_client_exposure("DATABASE_PASSWORD").is_none());
     }
 }

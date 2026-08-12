@@ -2,6 +2,26 @@ export type CodexAccess = "read-write" | "protected" | "unclassified";
 export type ValueState = "empty" | "present";
 export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
 export type AgentProtection = "broker" | "guarded" | "inactive";
+export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
+
+export interface GitSafetyProjection {
+  state: GitSafetyState;
+  ignoredFiles: string[];
+  missingIgnoreFiles: string[];
+  trackedFiles: string[];
+  historyFiles: string[];
+  remoteHistoryFiles: string[];
+}
+
+export interface ClientExposureWarning {
+  publicPrefix: string;
+  secretIndicator: string;
+}
+
+export interface GitignoreUpdateSummary {
+  addedPatterns: string[];
+  trackedFiles: string[];
+}
 
 export interface AgentIntegrationStatus {
   id: AgentIntegrationId;
@@ -32,6 +52,18 @@ export interface OccurrenceProjection {
   linkId: string | null;
   linkedFiles: string[];
   duplicate: boolean;
+  clientExposure: ClientExposureWarning | null;
+}
+
+export type ClassificationSource = "heuristic" | "user" | "codex";
+
+export interface ClassificationReviewProjection {
+  key: string;
+  files: string[];
+  access: CodexAccess;
+  classifiedBy: ClassificationSource;
+  suggestion: { access: CodexAccess; reason: string };
+  clientExposed: boolean;
 }
 
 export interface GroupProjection {
@@ -41,8 +73,15 @@ export interface GroupProjection {
 
 export interface FileProjection {
   path: string;
+  displayName: string;
   groups: GroupProjection[];
   warnings: string[];
+}
+
+export interface ExportResult {
+  fileCount: number;
+  encrypted: boolean;
+  cancelled: boolean;
 }
 
 export interface ProjectProjection {
@@ -51,6 +90,22 @@ export interface ProjectProjection {
   files: FileProjection[];
   unclassifiedCount: number;
   issueCount: number;
+  gitSafety: GitSafetyProjection;
+  classificationReview: ClassificationReviewProjection[];
+  clientExposureCount: number;
+}
+
+export interface AgentActivityEvent {
+  timestampMs: number;
+  projectId: string;
+  actor: string;
+  category: "structure-inspection" | "value-read" | "policy-change" | "mutation";
+  operation: string;
+  relativePaths: string[];
+  variableNames: string[];
+  policyDecision: string;
+  outcome: "allowed" | "blocked" | "failed";
+  resultCode: string;
 }
 
 export interface MutationSummary {

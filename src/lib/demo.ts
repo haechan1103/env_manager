@@ -10,8 +10,8 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     name: "Codex",
     detected: true,
     installed: true,
-    installedVersion: "0.4.0",
-    currentVersion: "0.4.0",
+    installedVersion: "0.5.0",
+    currentVersion: "0.5.0",
     updateAvailable: false,
     protection: "broker",
     detail: "The redacted broker is connected. Direct-file blocking depends on the Codex permission profile.",
@@ -23,7 +23,7 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.4.0",
+    currentVersion: "0.5.0",
     updateAvailable: false,
     protection: "inactive",
     detail: "The tool was detected and can be connected to Env Manager.",
@@ -35,7 +35,7 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.4.0",
+    currentVersion: "0.5.0",
     updateAvailable: false,
     protection: "inactive",
     detail: "VS Code was detected, but the Copilot CLI is required before connecting it.",
@@ -56,9 +56,37 @@ export const demoProjection: ProjectProjection = {
   name: "sample-saas",
   unclassifiedCount: 1,
   issueCount: 0,
+  clientExposureCount: 0,
+  classificationReview: [
+    {
+      key: "GPT_API_KEY",
+      files: [".env.local", ".env.development"],
+      access: "protected",
+      classifiedBy: "heuristic",
+      suggestion: { access: "protected", reason: "Contains a secret-looking name pattern." },
+      clientExposed: false,
+    },
+    {
+      key: "GPT_MODEL",
+      files: [".env.local"],
+      access: "unclassified",
+      classifiedBy: "heuristic",
+      suggestion: { access: "unclassified", reason: "Cannot classify safely from its name." },
+      clientExposed: false,
+    },
+  ],
+  gitSafety: {
+    state: "protected",
+    ignoredFiles: [".env.local", ".env.development", "apps/web/.env.local"],
+    missingIgnoreFiles: [],
+    trackedFiles: [],
+    historyFiles: [],
+    remoteHistoryFiles: [],
+  },
   files: [
     {
       path: ".env.local",
+      displayName: "Local environment",
       warnings: [],
       groups: [
         {
@@ -74,6 +102,7 @@ export const demoProjection: ProjectProjection = {
               linkId: "demo-gpt-link",
               linkedFiles: [".env.local", ".env.development"],
               duplicate: false,
+              clientExposure: null,
             },
             {
               key: "GPT_MODEL",
@@ -85,6 +114,7 @@ export const demoProjection: ProjectProjection = {
               linkId: null,
               linkedFiles: [],
               duplicate: false,
+              clientExposure: null,
             },
           ],
         },
@@ -101,6 +131,7 @@ export const demoProjection: ProjectProjection = {
               linkId: null,
               linkedFiles: [],
               duplicate: false,
+              clientExposure: null,
             },
           ],
         },
@@ -108,6 +139,7 @@ export const demoProjection: ProjectProjection = {
     },
     {
       path: ".env.development",
+      displayName: "Development",
       warnings: [],
       groups: [
         {
@@ -123,6 +155,7 @@ export const demoProjection: ProjectProjection = {
               linkId: "demo-gpt-link",
               linkedFiles: [".env.local", ".env.development"],
               duplicate: false,
+              clientExposure: null,
             },
           ],
         },
@@ -130,6 +163,7 @@ export const demoProjection: ProjectProjection = {
     },
     {
       path: "apps/web/.env.local",
+      displayName: "Web local",
       warnings: [],
       groups: [
         {
@@ -145,6 +179,7 @@ export const demoProjection: ProjectProjection = {
               linkId: null,
               linkedFiles: [],
               duplicate: false,
+              clientExposure: null,
             },
           ],
         },

@@ -15,9 +15,20 @@ const projection: ProjectProjection = {
   name: "demo",
   unclassifiedCount: 0,
   issueCount: 0,
+  clientExposureCount: 0,
+  classificationReview: [],
+  gitSafety: {
+    state: "protected",
+    ignoredFiles: [".env.local"],
+    missingIgnoreFiles: [],
+    trackedFiles: [],
+    historyFiles: [],
+    remoteHistoryFiles: [],
+  },
   files: [
     {
       path: ".env.local",
+      displayName: ".env.local",
       warnings: [],
       groups: [{ name: "GPT", variables: [] }],
     },
@@ -36,6 +47,7 @@ describe("FileEditor", () => {
         onRefresh={refresh}
         onError={vi.fn()}
         onNotice={vi.fn()}
+        onRenameFile={vi.fn()}
       />,
     );
 

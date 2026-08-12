@@ -12,7 +12,7 @@ type UpdateState = "idle" | "checking" | "available" | "installing" | "current" 
 
 export function AppUpdater() {
   const { locale, t } = useI18n();
-  const [version, setVersion] = useState("0.4.0");
+  const [version, setVersion] = useState("0.5.0");
   const [state, setState] = useState<UpdateState>("idle");
   const [update, setUpdate] = useState<AppUpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);

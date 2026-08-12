@@ -70,7 +70,7 @@ pub fn install(
         message: "먼저 해당 AI 코딩 도구를 설치해주세요.",
     })?;
     let broker = ensure_current_broker(app)?;
-    let catalog = materialize_catalog(app, &broker)?;
+    let catalog = materialize_catalog(app, &broker, id)?;
 
     let _ = run_agent_command(
         &executable,
@@ -386,7 +386,11 @@ fn catalog_is_valid(root: &Path) -> bool {
         && root.join(".claude-plugin/marketplace.json").is_file()
 }
 
-fn materialize_catalog(app: &AppHandle, broker: &Path) -> Result<PathBuf, IntegrationError> {
+fn materialize_catalog(
+    app: &AppHandle,
+    broker: &Path,
+    id: AgentIntegrationId,
+) -> Result<PathBuf, IntegrationError> {
     let source = catalog_source(app).ok_or(IntegrationError {
         code: "PLUGIN_CATALOG_MISSING",
         message: "앱에 포함된 플러그인 catalog를 찾지 못했습니다.",
@@ -397,7 +401,8 @@ fn materialize_catalog(app: &AppHandle, broker: &Path) -> Result<PathBuf, Integr
     })?;
     let target = app_data
         .join("agent-integrations/catalogs")
-        .join(CURRENT_VERSION);
+        .join(CURRENT_VERSION)
+        .join(integration_slug(id));
     copy_directory(&source.join("plugins"), &target.join("plugins"))?;
     copy_directory(&source.join(".agents"), &target.join(".agents"))?;
     copy_directory(
@@ -410,6 +415,10 @@ fn materialize_catalog(app: &AppHandle, broker: &Path) -> Result<PathBuf, Integr
     let mut mcp = read_json(&mcp_path)?;
     mcp["mcpServers"]["env-manager"]["command"] =
         Value::String(broker.to_string_lossy().into_owned());
+    mcp["mcpServers"]["env-manager"]["env"] = json!({
+        "ENV_MANAGER_AUDIT_DIR": app_data.join("agent-activity").to_string_lossy(),
+        "ENV_MANAGER_AGENT_HOST": integration_slug(id),
+    });
     write_json(&mcp_path, &mcp)?;
 
     let hook_path = plugin.join("hooks/hooks.json");

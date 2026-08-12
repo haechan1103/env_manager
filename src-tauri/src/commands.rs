@@ -3,13 +3,14 @@ use std::time::Duration;
 
 use env_core::{
     AddVariableRequest, CodexAccess, CreateGroupRequest, DeleteVariableRequest, EnvError,
-    LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection, RenameGroupRequest,
-    SaveDescriptionRequest, SaveValueRequest,
+    GitignoreUpdateSummary, LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection,
+    RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 
-use crate::runtime::{AppRuntime, MigrationPlanProjection, ProjectSummary};
+use crate::runtime::{AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary};
 use crate::{integrations, integrations::AgentIntegrationId};
 
 #[derive(Debug, Serialize)]
@@ -71,6 +72,13 @@ pub struct ClassificationRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BatchProtectionRequest {
+    project_id: String,
+    keys: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValueRequest {
     project_id: String,
     file: String,
@@ -97,6 +105,37 @@ pub struct ApplyMigrationRequest {
     project_id: String,
     plan_id: String,
     confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameProjectRequest {
+    project_id: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFileRequest {
+    project_id: String,
+    file: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportRequest {
+    project_id: String,
+    passphrase: Option<String>,
+    locale: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    file_count: usize,
+    encrypted: bool,
+    cancelled: bool,
 }
 
 #[tauri::command]
@@ -140,6 +179,125 @@ pub fn remove_project(
 }
 
 #[tauri::command]
+pub fn rename_project(
+    request: RenameProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<ProjectSummary> {
+    runtime
+        .rename_project(&request.project_id, &request.name)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn rename_env_file(
+    request: RenameFileRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<()> {
+    runtime
+        .service(&request.project_id)?
+        .set_file_display_name(&request.file, &request.name)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn export_env_files(
+    request: ExportRequest,
+    app: AppHandle,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<ExportResult> {
+    let encrypted = request.passphrase.is_some();
+    let korean = request.locale == "ko";
+    if request
+        .passphrase
+        .as_ref()
+        .is_some_and(|passphrase| passphrase.chars().count() < 10)
+    {
+        return Err(EnvError::invalid("암호는 10자 이상이어야 합니다.").into());
+    }
+    let project = runtime
+        .list()
+        .into_iter()
+        .find(|project| project.id == request.project_id)
+        .ok_or_else(|| EnvError::unregistered_project(&request.project_id))?;
+    let safe_name = project
+        .name
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let extension = if encrypted { "zip.age" } else { "zip" };
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title(if encrypted {
+            if korean {
+                "암호화 env 내보내기"
+            } else {
+                "Export encrypted env files"
+            }
+        } else {
+            if korean {
+                "env 내보내기"
+            } else {
+                "Export env files"
+            }
+        })
+        .set_file_name(format!("{safe_name}-env.{extension}"))
+        .add_filter(
+            if encrypted {
+                "age encrypted ZIP"
+            } else {
+                "ZIP archive"
+            },
+            &[if encrypted { "age" } else { "zip" }],
+        );
+    let Some(destination) = dialog.blocking_save_file() else {
+        return Ok(ExportResult {
+            file_count: 0,
+            encrypted,
+            cancelled: true,
+        });
+    };
+    let destination = destination
+        .into_path()
+        .map_err(|_| EnvError::invalid("선택한 내보내기 경로를 사용할 수 없습니다."))?;
+    let valid_extension = if encrypted {
+        destination
+            .extension()
+            .is_some_and(|extension| extension == "age")
+    } else {
+        destination
+            .extension()
+            .is_some_and(|extension| extension == "zip")
+    };
+    if !valid_extension {
+        return Err(EnvError::invalid(if encrypted {
+            "암호화 내보내기 파일은 .age 확장자여야 합니다."
+        } else {
+            "일반 내보내기 파일은 .zip 확장자여야 합니다."
+        })
+        .into());
+    }
+    let service = runtime.service(&request.project_id)?;
+    let passphrase = request.passphrase;
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        service.export_env_files(&destination, passphrase)
+    })
+    .await
+    .map_err(|_| EnvError::invalid("내보내기 작업이 중단되었습니다."))??;
+    Ok(ExportResult {
+        file_count: summary.file_count,
+        encrypted,
+        cancelled: false,
+    })
+}
+
+#[tauri::command]
 pub fn scan_project(
     request: ProjectRequest,
     app: AppHandle,
@@ -153,6 +311,17 @@ pub fn scan_project(
         .collect::<Vec<_>>();
     runtime.start_watching(&app, &request.project_id, &paths)?;
     Ok(projection)
+}
+
+#[tauri::command]
+pub fn apply_gitignore_guard(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<GitignoreUpdateSummary> {
+    runtime
+        .service(&request.project_id)?
+        .apply_gitignore_guard()
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -269,6 +438,27 @@ pub fn set_codex_access(
     runtime
         .service(&request.project_id)?
         .set_codex_access(&request.key, request.access)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn protect_variables(
+    request: BatchProtectionRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<()> {
+    runtime
+        .service(&request.project_id)?
+        .set_codex_access_batch(&request.keys, CodexAccess::Protected)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn list_agent_activity(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<AgentActivityEvent>> {
+    runtime
+        .agent_activity(&request.project_id)
         .map_err(Into::into)
 }
 
