@@ -141,6 +141,7 @@ export type TeamImportOccurrenceState = "new" | "unchanged" | "conflict";
 export interface TeamImportPreview {
   files: Array<{
     path: string;
+    targetPath: string;
     occurrences: Array<{
       id: string;
       key: string;
@@ -152,6 +153,8 @@ export interface TeamImportPreview {
   unchangedCount: number;
   conflictCount: number;
 }
+
+export type TeamImportValueSide = "local" | "shared";
 
 export interface TeamImportPlanProjection {
   planId: string;

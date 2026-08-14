@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager logo" />
   <h1>Env Manager</h1>
-  <p><strong>Manage every <code>.env</code> file locally, while keeping protected values out of supported AI-agent workflows.</strong></p>
+  <p><strong>Edit, link, share, and deploy the <code>.env</code> files your projects already use.</strong></p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
   <p>
     <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
@@ -11,11 +11,9 @@
   </p>
 </div>
 
-![Env Manager demo showing project overview, env editing, and AI tool connections](assets/screenshots/env-manager-demo.gif)
+![Env Manager demo showing project overview, env editing, Cloudflare push, and AI tool connections](assets/screenshots/env-manager-demo.gif)
 
-Env Manager is a local-first desktop app for the `.env` files already inside your projects. Register a project, discover its env files, edit variables in one clear UI, and explicitly link matching values across two or more files.
-
-It is especially useful with AI coding agents: supported integrations can inspect and edit env structure through a redacted local broker without receiving values marked as protected.
+Env Manager is a local-first desktop app for environment variables. Register a project and manage its existing `.env`, `.env.local`, `.env.development`, and nested app env files from one UI—without changing how the project starts or moving values into a proprietary vault.
 
 <div align="center">
   <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS</strong></a>
@@ -25,53 +23,60 @@ It is especially useful with AI coding agents: supported integrations can inspec
   <a href="SECURITY.md">Security model</a>
 </div>
 
-## Why Env Manager?
+## Where it helps
 
-- **One view for scattered files.** Discover `.env`, `.env.local`, `.env.development`, and nested app env files after you register a project.
-- **Values stay where your app expects them.** Env Manager edits the original files; it does not migrate them into a proprietary vault.
-- **Linked values update together.** Connect the same key across any number of files and edit it once.
-- **Readable structure.** Manage groups, descriptions, variables, and comments without flattening the file.
-- **Protected by default.** Values are masked in the UI and redacted from normal AI-tool responses.
-- **Local and lightweight.** Only registered projects are scanned, and only discovered env files are watched while the app is open.
-- **Push when you choose.** Send selected values to GitHub Actions secrets/variables or Cloudflare Worker secrets through the official local CLI—without creating a temporary env file or storing provider tokens.
-- **English by default, Korean when you want it.** Switch languages in the sidebar; the choice is saved on this device.
+| Situation | What Env Manager does |
+| --- | --- |
+| You are vibe-coding and an AI agent asks for API keys | Enter values in a masked desktop UI instead of pasting them into chat. The agent can still work with names, groups, and approved operations. |
+| A project has `.env.local`, `.env.development`, and multiple app env files | Discover and browse them together while preserving their real paths and source formatting. |
+| The same key must stay equal in two, three, or more files | Explicitly link those occurrences, then edit from any linked file and save once. |
+| A teammate needs only part of your local setup | Export all or selected variables as a passphrase-encrypted `age` package, then import and merge it into the receiver's project. |
+| Local values must become deployment secrets | Select only the required variables and push them to GitHub Actions or Cloudflare Workers through the official local CLI. |
+| Codex, Claude Code, or Copilot needs to update env structure | Connect the shared Agent Skill and redacted broker so protected values stay outside normal inspection responses. |
 
-## Install
+![Env Manager project overview with Git safety and AI access status](assets/screenshots/env-manager-overview.png)
 
-Download the latest DMG from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
+## Manage local env files without replacing them
 
-- Apple Silicon (M1 or newer): `aarch64` DMG
-- Intel Mac: `x86_64` DMG
+- Discover supported env files only inside projects you register.
+- Edit the original files used by your existing framework and commands.
+- Organize variables with groups and descriptions while preserving unrelated comments and formatting.
+- Rename projects and env files with local display aliases; physical paths stay unchanged.
+- Mask values by default, copy variable names, and reveal values only through an explicit short-lived action.
+- Jump between groups when a file contains many variables.
+- Detect missing Git ignore coverage, already tracked env files, historical paths, and suspicious public frontend variable names.
+- `.env.example` variants remain intentionally excluded from discovery in the current release.
 
-The current public build uses ad-hoc signing. If macOS blocks the first launch, Control-click Env Manager in Finder and choose **Open**. Apple Developer ID notarization and Windows support are planned.
+![Env Manager file editor with masked synthetic values, linked files, and group navigation](assets/screenshots/env-manager-editor.png)
 
-Env Manager checks GitHub Releases for updates. It does not send project paths or environment-variable data.
+## Push selected variables to deployment providers
 
-## The workflow
+Env Manager can send a selected subset of one managed env file to a deployment provider. It invokes an already installed official CLI and passes values through standard input; provider tokens and temporary env files are not stored by Env Manager.
 
-1. Register a project folder in Env Manager.
-2. Review the env files and unresolved items it discovers.
-3. Add groups and descriptions, classify AI access, or link matching variables.
-4. Edit once; Env Manager writes back to the original file or every explicitly linked file.
-5. When needed, use **Push variables** to send a selected subset to GitHub Actions or Cloudflare Workers.
+| Provider | Supported targets | Target discovery |
+| --- | --- | --- |
+| GitHub Actions | Repository or deployment Environment secrets and configuration variables | Detects the nearest Git worktree and GitHub `origin`, lists accessible repositories and Environments through `gh`, and can explicitly create an Environment. |
+| Cloudflare Workers | Worker secrets for the default Worker or a configured Wrangler environment | Detects the nearest `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`, including Worker name and configured `env.*` names. |
 
-`.env.example` variants are intentionally excluded from discovery in the current release.
+![Push selected masked variables to a Cloudflare Worker through Wrangler](assets/screenshots/env-manager-cloudflare-push.png)
 
-Provider push is explicit and one-way. Install and sign in to `gh` or Wrangler first;
-Env Manager passes values through CLI standard input and cannot read remote secret
-values back.
+This is an explicit, one-way push—not remote secret synchronization. Env Manager cannot read secret values back, compare local and remote values, or delete unselected remote entries. Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) first.
 
-<details>
-  <summary><strong>See the file editor and AI integration screens</strong></summary>
-  <br />
-  <img src="assets/screenshots/env-manager-editor.png" alt="Env Manager file editor with masked synthetic values" />
-  <br /><br />
-  <img src="assets/screenshots/env-manager-ai-integrations.png" alt="Env Manager AI tool integration screen" />
-</details>
+## Share a full setup or only selected variables
+
+- **Standard ZIP:** portable plaintext export for trusted local handling.
+- **Encrypted export:** an `age`-compatible, passphrase-protected package with no plaintext intermediate archive.
+- **Full or partial scope:** share every managed file, selected files, or individual variables. Linked occurrences are selected together.
+- **Safe import:** add missing variables, keep unrelated receiver content, and resolve differing local values before applying.
+- The passphrase is never saved or recoverable by Env Manager. Transfer the package and passphrase through separate trusted channels.
+
+![Choose individual variables for a passphrase-encrypted Env Manager package](assets/screenshots/env-manager-encrypted-share.png)
 
 ## Connect your AI coding agent
 
-The same local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app can detect and install supported integrations from **AI tool connections**.
+The same independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app detects supported tools and installs their Env Manager connection from **AI tool connections**.
+
+![Env Manager connections for Codex, Claude Code, and GitHub Copilot](assets/screenshots/env-manager-ai-integrations.png)
 
 You can also install from a terminal:
 
@@ -102,15 +107,15 @@ copilot plugin install env-manager@env-manager
 ```
 </details>
 
-Register the project in Env Manager first, then start a new agent session and ask naturally:
+Register the project in Env Manager first, start a new agent session, and ask naturally:
 
 ```text
 Inspect this project's env structure without reading values.
+Create a Database group and add an empty DATABASE_URL variable.
 Link GPT_API_KEY across local and development.
-Create a GPT group and add an empty DATABASE_URL variable.
 ```
 
-The integration does not register arbitrary projects on its own. Only projects already registered in the desktop app are accepted by the broker.
+The integration never registers arbitrary projects on its own. Only projects already registered in the desktop app are accepted by the broker.
 
 ## AI access policies
 
@@ -120,9 +125,20 @@ The integration does not register arbitrary projects on its own. Only projects a
 | `unclassified` | Blocked like `protected` until you choose a policy |
 | `read-write` | Explicit broker value tools may read or update the value |
 
-Normal structure inspection never returns values, including `read-write` values. A value is returned only when a dedicated value tool is called for a key already marked `read-write`.
+Normal structure inspection never returns values, including `read-write` values. A value can be returned only when a dedicated value tool is called for a key already marked `read-write`.
 
-> Env Manager is not an operating-system sandbox or a replacement for a production secret manager. Values remain in the original env files and are processed in memory when needed. See [SECURITY.md](SECURITY.md) for the complete boundary and reporting process.
+> Env Manager reduces accidental exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
+
+## Install
+
+Download the latest DMG from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
+
+- Apple Silicon (M1 or newer): `aarch64` DMG
+- Intel Mac: `x86_64` DMG
+
+The current public build uses ad-hoc signing. If macOS blocks the first launch, Control-click Env Manager in Finder and choose **Open**. Apple Developer ID notarization and Windows support are planned.
+
+Env Manager checks the fixed GitHub Releases endpoint for signed app updates. It does not send project paths, env metadata, or values during an update check.
 
 ## Develop locally
 
@@ -147,7 +163,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS project. The current release is focused on reliable local file editing, guarded AI-agent integrations, and English/Korean UI support. Windows support, notarized macOS builds, and additional languages are next-stage work.
+Env Manager is an early-stage macOS project. Version `0.5.4` focuses on local file editing, linked values, conflict-aware encrypted handoff, GitHub/Cloudflare provider push, compact project switching, guarded AI-agent integrations, and English/Korean UI support. Windows support, notarized macOS builds, and additional languages are next-stage work.
 
 ## Community
 

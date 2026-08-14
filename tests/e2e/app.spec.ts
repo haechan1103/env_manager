@@ -1,5 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+test("keeps project selection compact in the sidebar", async ({ page }) => {
+  await page.goto("/");
+
+  const sidebar = page.locator(".sidebar");
+  await expect(sidebar.getByText("sample-saas", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("PROJECTS", { exact: true })).toHaveCount(0);
+  await sidebar.getByRole("button", { name: "Change" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Switch project" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("/Users/demo/dev/sample-saas")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Add project" })).toBeVisible();
+});
+
 test("navigates the redacted V1 workflow", async ({ page }) => {
   await page.goto("/");
 
@@ -88,4 +102,38 @@ test("offers complete and variable-level env sharing", async ({ page }) => {
   await expect(page.getByText("GPT_API_KEY").first()).toBeVisible();
   await expect(page.getByText("Selects 2 linked files together").first()).toBeVisible();
   await expect(page.getByText("fake_preview_value")).toHaveCount(0);
+});
+
+test("reviews encrypted-share conflicts individually before applying", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Import share" }).click();
+  await page.getByLabel("Share passphrase").fill("fake-team-passphrase-2026");
+  await page.getByRole("button", { name: "Choose encrypted file" }).click();
+
+  await expect(page.getByText("Choose where each file goes")).toBeVisible();
+  await expect(page.getByText("Linked across 2 files")).toBeVisible();
+  await expect(page.getByText("Use received 0")).toBeVisible();
+  await expect(page.getByText("fake_local_value")).toHaveCount(0);
+
+  const publicConflict = page.locator(".import-conflict-card").filter({ hasText: "VITE_API_BASE_URL" });
+  await publicConflict.getByRole("button", { name: "Reveal my local value" }).click();
+  await expect(publicConflict.getByText("fake_local_value")).toBeVisible();
+  await publicConflict.getByRole("button", { name: "Use shared" }).click();
+  await expect(page.getByText("Use received 1")).toBeVisible();
+
+  await publicConflict.getByRole("button", { name: "Hide value" }).click();
+  const webTarget = page.getByLabel("Target file for apps/web/.env.local");
+  await webTarget.fill("apps/web/.env.staging");
+  await webTarget.locator("..").getByRole("button", { name: "Change" }).click();
+  await expect(webTarget).toHaveValue("apps/web/.env.staging");
+  await expect(page.locator(".import-summary .conflict strong")).toHaveText("2");
+
+  await page.getByRole("button", { name: "Use all shared" }).click();
+  await expect(page.getByText("Use received 2")).toBeVisible();
+  await expect(page.getByText("fake_local_value")).toHaveCount(0);
+  await page.screenshot({
+    path: "test-results/env-manager-import-conflicts.png",
+    fullPage: true,
+  });
 });

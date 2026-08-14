@@ -4,7 +4,7 @@ use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use age::secrecy::SecretString;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use zeroize::Zeroizing;
 
@@ -40,6 +40,7 @@ pub struct TeamImportOccurrenceProjection {
 #[serde(rename_all = "camelCase")]
 pub struct TeamImportFileProjection {
     pub path: String,
+    pub target_path: String,
     pub occurrences: Vec<TeamImportOccurrenceProjection>,
 }
 
@@ -70,10 +71,18 @@ pub struct TeamImportPlan {
 }
 
 struct TeamImportEntry {
-    relative_path: PathBuf,
+    source_path: PathBuf,
+    target_path: PathBuf,
     package_bytes: Zeroizing<Vec<u8>>,
     occurrences: Vec<IncomingOccurrence>,
     expected: ExpectedTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TeamImportValueSide {
+    Local,
+    Shared,
 }
 
 struct IncomingOccurrence {
@@ -114,6 +123,71 @@ impl TeamImportPlan {
         let changes = build_changes(&self.root, &self.entries, &accepted)?;
         validate_link_invariants(&self.root, &self.manifest, &changes)?;
         apply_entries(&self.root, self.entries, changes, &self.preview, &accepted)
+    }
+
+    pub fn remap_file(
+        &mut self,
+        source_path: &str,
+        target_path: &str,
+    ) -> EnvResult<TeamImportPreview> {
+        let source = validate_package_path(source_path)?;
+        let target = validate_package_path(target_path)?;
+        let target_normalized = to_manifest_path(&target);
+        if !is_managed_import_path(&target, &target_normalized, &self.manifest) {
+            return Err(package_invalid());
+        }
+        if self
+            .entries
+            .iter()
+            .any(|entry| entry.source_path != source && entry.target_path == target)
+        {
+            return Err(package_invalid());
+        }
+        let index = self
+            .entries
+            .iter()
+            .position(|entry| entry.source_path == source)
+            .ok_or_else(package_invalid)?;
+        let package_bytes = Zeroizing::new(self.entries[index].package_bytes.to_vec());
+        let replacement = build_entry(&self.root, &self.manifest, source, target, package_bytes)?;
+        let previous = std::mem::replace(&mut self.entries[index], replacement);
+        if let Err(error) = validate_package_links(&self.manifest, &self.entries) {
+            self.entries[index] = previous;
+            return Err(error);
+        }
+        self.preview = project_preview(&self.entries);
+        Ok(self.preview.clone())
+    }
+
+    pub fn reveal_conflict(
+        &self,
+        occurrence_id: &str,
+        side: TeamImportValueSide,
+    ) -> EnvResult<Zeroizing<String>> {
+        let (entry, occurrence) = self
+            .entries
+            .iter()
+            .find_map(|entry| {
+                entry
+                    .occurrences
+                    .iter()
+                    .find(|occurrence| occurrence.id == occurrence_id)
+                    .map(|occurrence| (entry, occurrence))
+            })
+            .filter(|(_, occurrence)| occurrence.state == TeamImportOccurrenceState::Conflict)
+            .ok_or_else(package_invalid)?;
+        match side {
+            TeamImportValueSide::Shared => Ok(Zeroizing::new(occurrence.decoded_value.to_string())),
+            TeamImportValueSide::Local => {
+                verify_expected(&self.root, entry)?;
+                let current = Zeroizing::new(
+                    fs::read(self.root.join(&entry.target_path))
+                        .map_err(|error| EnvError::io(&entry.target_path, error))?,
+                );
+                let document = Document::parse(current.to_vec(), &entry.target_path)?;
+                Ok(Zeroizing::new(document.decoded_value(&occurrence.key)?))
+            }
+        }
     }
 }
 
@@ -182,54 +256,77 @@ pub fn plan_encrypted_team_import(
         if package_bytes.len() as u64 > MAX_ENTRY_BYTES {
             return Err(package_invalid());
         }
-        let package_document = Document::parse(package_bytes.to_vec(), &relative)?;
-        if !package_document.duplicate_keys().is_empty()
-            || package_document.assignments().is_empty()
-        {
-            return Err(package_invalid());
-        }
-        let (expected, current_document) = inspect_target(&root, &relative)?;
-        let mut occurrences = Vec::new();
-        for assignment in package_document.assignments() {
-            let key = assignment.key.to_owned();
-            let decoded_value = Zeroizing::new(package_document.decoded_value(&key)?);
-            let state =
-                current_document
-                    .as_ref()
-                    .map_or(TeamImportOccurrenceState::New, |current| {
-                        match current.decoded_value(&key) {
-                            Ok(value) if value == *decoded_value => {
-                                TeamImportOccurrenceState::Unchanged
-                            }
-                            Ok(_) => TeamImportOccurrenceState::Conflict,
-                            Err(_) => TeamImportOccurrenceState::New,
-                        }
-                    });
-            let link_id = manifest
-                .link_for(&to_manifest_path(&relative), &key)
-                .map(|link| link.id.clone());
-            occurrences.push(IncomingOccurrence {
-                id: occurrence_id(&relative, &key),
-                key,
-                decoded_value,
-                raw_value: Zeroizing::new(assignment.value_bytes().to_vec()),
-                state,
-                link_id,
-            });
-        }
-        entries.push(TeamImportEntry {
-            relative_path: relative,
+        entries.push(build_entry(
+            &root,
+            manifest,
+            relative.clone(),
+            relative,
             package_bytes,
-            occurrences,
-            expected,
+        )?);
+    }
+    entries.sort_by(|left, right| left.source_path.cmp(&right.source_path));
+    validate_package_links(manifest, &entries)?;
+    let preview = project_preview(&entries);
+    Ok(TeamImportPlan {
+        root,
+        manifest: manifest.clone(),
+        entries,
+        preview,
+    })
+}
+
+fn build_entry(
+    root: &Path,
+    manifest: &Manifest,
+    source_path: PathBuf,
+    target_path: PathBuf,
+    package_bytes: Zeroizing<Vec<u8>>,
+) -> EnvResult<TeamImportEntry> {
+    let package_document = Document::parse(package_bytes.to_vec(), &source_path)?;
+    if !package_document.duplicate_keys().is_empty() || package_document.assignments().is_empty() {
+        return Err(package_invalid());
+    }
+    let (expected, current_document) = inspect_target(root, &target_path)?;
+    let mut occurrences = Vec::new();
+    for assignment in package_document.assignments() {
+        let key = assignment.key.to_owned();
+        let decoded_value = Zeroizing::new(package_document.decoded_value(&key)?);
+        let state = current_document
+            .as_ref()
+            .map_or(TeamImportOccurrenceState::New, |current| {
+                match current.decoded_value(&key) {
+                    Ok(value) if value == *decoded_value => TeamImportOccurrenceState::Unchanged,
+                    Ok(_) => TeamImportOccurrenceState::Conflict,
+                    Err(_) => TeamImportOccurrenceState::New,
+                }
+            });
+        let link_id = manifest
+            .link_for(&to_manifest_path(&target_path), &key)
+            .map(|link| link.id.clone());
+        occurrences.push(IncomingOccurrence {
+            id: occurrence_id(&source_path, &key),
+            key,
+            decoded_value,
+            raw_value: Zeroizing::new(assignment.value_bytes().to_vec()),
+            state,
+            link_id,
         });
     }
-    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    validate_package_links(manifest, &entries)?;
+    Ok(TeamImportEntry {
+        source_path,
+        target_path,
+        package_bytes,
+        occurrences,
+        expected,
+    })
+}
+
+fn project_preview(entries: &[TeamImportEntry]) -> TeamImportPreview {
     let files = entries
         .iter()
         .map(|entry| TeamImportFileProjection {
-            path: to_manifest_path(&entry.relative_path),
+            path: to_manifest_path(&entry.source_path),
+            target_path: to_manifest_path(&entry.target_path),
             occurrences: entry
                 .occurrences
                 .iter()
@@ -243,7 +340,7 @@ pub fn plan_encrypted_team_import(
         })
         .collect::<Vec<_>>();
     let states = files.iter().flat_map(|file| &file.occurrences);
-    let preview = TeamImportPreview {
+    TeamImportPreview {
         new_count: states
             .clone()
             .filter(|item| item.state == TeamImportOccurrenceState::New)
@@ -256,13 +353,7 @@ pub fn plan_encrypted_team_import(
             .filter(|item| item.state == TeamImportOccurrenceState::Conflict)
             .count(),
         files,
-    };
-    Ok(TeamImportPlan {
-        root,
-        manifest: manifest.clone(),
-        entries,
-        preview,
-    })
+    }
 }
 
 fn validate_package_links(manifest: &Manifest, entries: &[TeamImportEntry]) -> EnvResult<()> {
@@ -271,7 +362,7 @@ fn validate_package_links(manifest: &Manifest, entries: &[TeamImportEntry]) -> E
         for member in &link.members {
             let occurrence = entries
                 .iter()
-                .find(|entry| to_manifest_path(&entry.relative_path) == member.file)
+                .find(|entry| to_manifest_path(&entry.target_path) == member.file)
                 .and_then(|entry| {
                     entry
                         .occurrences
@@ -302,13 +393,13 @@ fn build_changes(
 ) -> EnvResult<BTreeMap<String, Zeroizing<Vec<u8>>>> {
     let mut changes = BTreeMap::new();
     for entry in entries {
-        let path = to_manifest_path(&entry.relative_path);
+        let path = to_manifest_path(&entry.target_path);
         let proposed = match &entry.expected {
             ExpectedTarget::Missing => Zeroizing::new(entry.package_bytes.to_vec()),
             ExpectedTarget::Existing(_) => {
-                let target = root.join(&entry.relative_path);
+                let target = root.join(&entry.target_path);
                 let mut proposed = Zeroizing::new(
-                    fs::read(&target).map_err(|error| EnvError::io(&entry.relative_path, error))?,
+                    fs::read(&target).map_err(|error| EnvError::io(&entry.target_path, error))?,
                 );
                 for occurrence in &entry.occurrences {
                     match occurrence.state {
@@ -322,8 +413,7 @@ fn build_changes(
                         TeamImportOccurrenceState::Conflict
                             if accepted.contains(&occurrence.id) =>
                         {
-                            let document =
-                                Document::parse(proposed.to_vec(), &entry.relative_path)?;
+                            let document = Document::parse(proposed.to_vec(), &entry.target_path)?;
                             *proposed = document
                                 .replace_value(&occurrence.key, &occurrence.decoded_value)?;
                         }
@@ -334,7 +424,7 @@ fn build_changes(
                 proposed
             }
         };
-        Document::parse(proposed.to_vec(), &entry.relative_path)?;
+        Document::parse(proposed.to_vec(), &entry.target_path)?;
         changes.insert(path, proposed);
     }
     Ok(changes)
@@ -513,7 +603,7 @@ fn apply_entries(
     let mut prepared = Vec::new();
     let mut affected_files = Vec::new();
     for entry in entries {
-        let path = to_manifest_path(&entry.relative_path);
+        let path = to_manifest_path(&entry.target_path);
         let changed = matches!(entry.expected, ExpectedTarget::Missing)
             || entry.occurrences.iter().any(|occurrence| {
                 occurrence.state == TeamImportOccurrenceState::New
@@ -524,21 +614,21 @@ fn apply_entries(
             continue;
         }
         let proposed = changes.remove(&path).ok_or_else(package_invalid)?;
-        let target = root.join(&entry.relative_path);
+        let target = root.join(&entry.target_path);
         let parent = target.parent().ok_or_else(package_invalid)?;
         let mut staged = NamedTempFile::new_in(parent)
-            .map_err(|error| EnvError::io(&entry.relative_path, error))?;
+            .map_err(|error| EnvError::io(&entry.target_path, error))?;
         staged
             .write_all(&proposed)
-            .map_err(|error| EnvError::io(&entry.relative_path, error))?;
+            .map_err(|error| EnvError::io(&entry.target_path, error))?;
         let permissions = if target.exists() {
             let permissions = fs::metadata(&target)
-                .map_err(|error| EnvError::io(&entry.relative_path, error))?
+                .map_err(|error| EnvError::io(&entry.target_path, error))?
                 .permissions();
             staged
                 .as_file_mut()
                 .set_permissions(permissions.clone())
-                .map_err(|error| EnvError::io(&entry.relative_path, error))?;
+                .map_err(|error| EnvError::io(&entry.target_path, error))?;
             Some(permissions)
         } else {
             None
@@ -546,19 +636,17 @@ fn apply_entries(
         staged
             .as_file_mut()
             .sync_all()
-            .map_err(|error| EnvError::io(&entry.relative_path, error))?;
+            .map_err(|error| EnvError::io(&entry.target_path, error))?;
         let original = match entry.expected {
             ExpectedTarget::Missing => None,
-            ExpectedTarget::Existing(_) => {
-                Some(Zeroizing::new(fs::read(&target).map_err(|error| {
-                    EnvError::io(&entry.relative_path, error)
-                })?))
-            }
+            ExpectedTarget::Existing(_) => Some(Zeroizing::new(
+                fs::read(&target).map_err(|error| EnvError::io(&entry.target_path, error))?,
+            )),
         };
         affected_files.push(path);
         prepared.push(PreparedImport {
             target,
-            relative_path: entry.relative_path,
+            relative_path: entry.target_path,
             original,
             permissions,
             staged,
@@ -575,22 +663,22 @@ fn apply_entries(
 }
 
 fn verify_expected(root: &Path, entry: &TeamImportEntry) -> EnvResult<()> {
-    let target = root.join(&entry.relative_path);
+    let target = root.join(&entry.target_path);
     match &entry.expected {
         ExpectedTarget::Missing => match fs::symlink_metadata(&target) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            _ => Err(EnvError::changed_externally(&entry.relative_path)),
+            _ => Err(EnvError::changed_externally(&entry.target_path)),
         },
         ExpectedTarget::Existing(expected) => {
             let metadata = fs::symlink_metadata(&target)
-                .map_err(|_| EnvError::changed_externally(&entry.relative_path))?;
+                .map_err(|_| EnvError::changed_externally(&entry.target_path))?;
             if metadata.file_type().is_symlink() || !metadata.is_file() {
-                return Err(EnvError::changed_externally(&entry.relative_path));
+                return Err(EnvError::changed_externally(&entry.target_path));
             }
-            let current = fs::read(&target)
-                .map_err(|_| EnvError::changed_externally(&entry.relative_path))?;
+            let current =
+                fs::read(&target).map_err(|_| EnvError::changed_externally(&entry.target_path))?;
             if &FileRevision::from_bytes(&current) != expected {
-                return Err(EnvError::changed_externally(&entry.relative_path));
+                return Err(EnvError::changed_externally(&entry.target_path));
             }
             Ok(())
         }
@@ -770,6 +858,68 @@ mod tests {
             b"# local comment\nTOKEN=fake_team_import_canary\nLOCAL_ONLY=fake_keep_me\n"
         );
         assert!(!destination.root().join("apps/web/.env.dev").exists());
+    }
+
+    #[test]
+    fn remaps_one_incoming_file_and_reveals_only_an_explicit_conflict_side() {
+        let selection = vec![ExportOccurrence {
+            file: ".env.local".to_owned(),
+            key: "TOKEN".to_owned(),
+        }];
+        let (_source, package, passphrase) = encrypted_fixture(Some(&selection));
+        let destination = SyntheticProject::new();
+        destination.write(
+            ".env.staging",
+            "TOKEN=fake_staging_local\nLOCAL_ONLY=fake_keep_me\n",
+        );
+
+        let mut plan = plan_encrypted_team_import(
+            destination.root(),
+            &Manifest::default(),
+            &package,
+            passphrase,
+        )
+        .expect("plan");
+        let preview = plan
+            .remap_file(".env.local", ".env.staging")
+            .expect("remap");
+        assert_eq!(preview.files[0].path, ".env.local");
+        assert_eq!(preview.files[0].target_path, ".env.staging");
+        assert_eq!(preview.conflict_count, 1);
+
+        let conflict_id = preview.files[0].occurrences[0].id.clone();
+        let local = plan
+            .reveal_conflict(&conflict_id, TeamImportValueSide::Local)
+            .expect("local reveal");
+        let shared = plan
+            .reveal_conflict(&conflict_id, TeamImportValueSide::Shared)
+            .expect("shared reveal");
+        assert_eq!(local.as_str(), "fake_staging_local");
+        assert_eq!(shared.as_str(), "fake_team_import_canary");
+
+        plan.apply(&[conflict_id]).expect("apply remapped value");
+        assert_eq!(
+            destination.read(".env.staging"),
+            b"TOKEN=fake_team_import_canary\nLOCAL_ONLY=fake_keep_me\n"
+        );
+        assert!(!destination.root().join(".env.local").exists());
+    }
+
+    #[test]
+    fn rejects_mapping_two_package_files_to_one_target() {
+        let (_source, package, passphrase) = encrypted_fixture(None);
+        let destination = SyntheticProject::new();
+        fs::create_dir_all(destination.root().join("apps/web")).expect("destination directory");
+        let mut plan = plan_encrypted_team_import(
+            destination.root(),
+            &Manifest::default(),
+            &package,
+            passphrase,
+        )
+        .expect("plan");
+
+        let result = plan.remap_file(".env.local", "apps/web/.env.dev");
+        assert!(matches!(result, Err(error) if error.code() == EnvErrorCode::PackageInvalid));
     }
 
     #[test]

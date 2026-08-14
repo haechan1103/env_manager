@@ -44,6 +44,7 @@ pub use service::{
 };
 pub use team_import::{
     TeamImportFileProjection, TeamImportOccurrenceProjection, TeamImportOccurrenceState,
-    TeamImportPlan, TeamImportPreview, TeamImportSummary, plan_encrypted_team_import,
+    TeamImportPlan, TeamImportPreview, TeamImportSummary, TeamImportValueSide,
+    plan_encrypted_team_import,
 };
 pub use transaction::{FileRevision, PlannedFileChange, TransactionPlan};

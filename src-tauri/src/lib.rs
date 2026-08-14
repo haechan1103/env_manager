@@ -10,8 +10,9 @@ use commands::{
     install_agent_integration, list_agent_activity, list_agent_integrations,
     list_deployment_providers, list_github_environments, list_github_repositories, list_projects,
     move_variable, plan_migration, plan_team_import, protect_variables, push_to_provider,
-    read_value, register_project, remove_project, rename_env_file, rename_group, rename_project,
-    save_description, save_value, scan_project, set_codex_access,
+    read_value, register_project, remap_team_import_file, remove_project, rename_env_file,
+    rename_group, rename_project, reveal_team_import_conflict, save_description, save_value,
+    scan_project, set_codex_access,
 };
 use runtime::AppRuntime;
 use tauri::Manager;
@@ -45,6 +46,8 @@ pub fn run() {
             rename_env_file,
             export_env_files,
             plan_team_import,
+            remap_team_import_file,
+            reveal_team_import_conflict,
             apply_team_import,
             discard_team_import,
             scan_project,

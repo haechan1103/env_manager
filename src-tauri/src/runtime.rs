@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use env_core::{
     EnvError, EnvErrorCode, EnvResult, MigrationPlan, MigrationPreview, MutationSummary,
-    ProjectService, TeamImportPlan, TeamImportPreview, TeamImportSummary,
+    ProjectService, TeamImportPlan, TeamImportPreview, TeamImportSummary, TeamImportValueSide,
 };
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -408,6 +408,46 @@ impl AppRuntime {
             return Err(team_import_plan_expired());
         }
         stored.plan.apply(shared_conflicts)
+    }
+
+    pub fn remap_team_import_file(
+        &self,
+        project_id: &str,
+        plan_id: &str,
+        source_file: &str,
+        target_file: &str,
+    ) -> EnvResult<TeamImportPreview> {
+        let mut plans = self
+            .team_import_plans
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let stored = plans
+            .get_mut(plan_id)
+            .ok_or_else(team_import_plan_expired)?;
+        if stored.project_id != project_id || stored.expires_at < Instant::now() {
+            plans.remove(plan_id);
+            return Err(team_import_plan_expired());
+        }
+        stored.plan.remap_file(source_file, target_file)
+    }
+
+    pub fn reveal_team_import_conflict(
+        &self,
+        project_id: &str,
+        plan_id: &str,
+        occurrence_id: &str,
+        side: TeamImportValueSide,
+    ) -> EnvResult<String> {
+        let plans = self
+            .team_import_plans
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let stored = plans.get(plan_id).ok_or_else(team_import_plan_expired)?;
+        if stored.project_id != project_id || stored.expires_at < Instant::now() {
+            return Err(team_import_plan_expired());
+        }
+        let value = stored.plan.reveal_conflict(occurrence_id, side)?;
+        Ok(value.to_string())
     }
 
     pub fn discard_team_import(&self, project_id: &str, plan_id: &str) {

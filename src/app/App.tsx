@@ -58,7 +58,6 @@ export function App() {
         onSelectProject={manager.selectProject}
         onSelectView={setView}
         onRegister={() => void manager.register()}
-        onRenameProject={(projectId, name) => void manager.renameProject(projectId, name)}
         onRenameFile={(projectId, path, name) => void manager.renameEnvFile(projectId, path, name)}
       />
 
@@ -247,9 +246,10 @@ export function App() {
       {exporting && manager.selectedProject && (
         <ExportEnvModal projectId={manager.selectedProject.id} projection={manager.projection!} onClose={() => setExporting(false)} onError={manager.showError} onNotice={manager.showNotice} />
       )}
-      {importing && manager.selectedProject && (
+      {importing && manager.selectedProject && manager.projection && (
         <ImportEnvModal
           projectId={manager.selectedProject.id}
+          projection={manager.projection}
           onApplied={() => manager.refreshProject(manager.selectedProject!.id).then(() => undefined)}
           onClose={() => setImporting(false)}
           onError={manager.showError}

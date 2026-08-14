@@ -4,6 +4,7 @@ import { RenameModal } from "../../components/RenameModal";
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
 import { supportedLocales, useI18n, type Locale } from "../../i18n";
 import { AppUpdater } from "../updater/AppUpdater";
+import { ProjectSwitcherModal } from "./ProjectSwitcherModal";
 
 interface View {
   kind: "overview" | "file" | "integrations" | "activity" | "review";
@@ -20,7 +21,6 @@ interface Props {
     view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" } | { kind: "activity" } | { kind: "review" },
   ) => void;
   onRegister: () => void;
-  onRenameProject: (projectId: string, name: string) => void;
   onRenameFile: (projectId: string, path: string, name: string) => void;
 }
 
@@ -32,15 +32,15 @@ export function ProjectSidebar({
   onSelectProject,
   onSelectView,
   onRegister,
-  onRenameProject,
   onRenameFile,
 }: Props) {
   const { locale, setLocale, t } = useI18n();
+  const [switchingProject, setSwitchingProject] = useState(false);
   const [renameTarget, setRenameTarget] = useState<
-    | { kind: "project"; id: string; name: string }
-    | { kind: "file"; projectId: string; path: string; name: string }
+    { kind: "file"; projectId: string; path: string; name: string }
     | null
   >(null);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -50,31 +50,22 @@ export function ProjectSidebar({
         <span>Env Manager</span>
       </div>
 
-      <div className="sidebar-section-title">
-        <span>PROJECTS</span>
-        <button aria-label={t("sidebar.registerProject")} onClick={onRegister}>+</button>
-      </div>
-
-      <nav className="project-list" aria-label={t("sidebar.registeredProjects")}>
-        {projects.map((project) => (
-          <button
-            key={project.id}
-            className={project.id === selectedProjectId ? "project-item selected" : "project-item"}
-            onClick={() => onSelectProject(project.id)}
-            onDoubleClick={() => setRenameTarget({ kind: "project", id: project.id, name: project.name })}
-            title={t("sidebar.renameHint")}
-          >
-            <span className="project-glyph">{project.name.slice(0, 1).toUpperCase()}</span>
-            <span className="project-name">{project.name}</span>
-          </button>
-        ))}
-        {projects.length === 0 && (
-          <div className="sidebar-empty">
-            <span>—</span>
-            {t("sidebar.noProjects")}
-          </div>
-        )}
-      </nav>
+      <section className="current-project-panel" aria-label={t("projectSwitcher.currentProject")}>
+        <div className="current-project-identity">
+          <span className="project-glyph" aria-hidden="true">
+            {selectedProject?.name.slice(0, 1).toUpperCase() ?? "—"}
+          </span>
+          <span className="current-project-copy">
+            <strong>{selectedProject?.name ?? t("projectSwitcher.noneSelected")}</strong>
+          </span>
+        </div>
+        <button className="project-change-button" type="button" onClick={() => setSwitchingProject(true)}>
+          <span className="project-change-label">
+            {selectedProject ? t("projectSwitcher.change") : t("projectSwitcher.add")}
+          </span>
+          <span className="project-change-icon" aria-hidden="true">↕</span>
+        </button>
+      </section>
 
       {projection && (
         <nav className="file-navigation" aria-label={t("sidebar.projectViews")}>
@@ -150,13 +141,21 @@ export function ProjectSidebar({
       </div>
       {renameTarget && (
         <RenameModal
-          title={t(renameTarget.kind === "project" ? "sidebar.projectNamePrompt" : "sidebar.fileNamePrompt")}
+          title={t("sidebar.fileNamePrompt")}
           currentName={renameTarget.name}
           onClose={() => setRenameTarget(null)}
           onRename={(name) => {
-            if (renameTarget.kind === "project") onRenameProject(renameTarget.id, name);
-            else onRenameFile(renameTarget.projectId, renameTarget.path, name);
+            onRenameFile(renameTarget.projectId, renameTarget.path, name);
           }}
+        />
+      )}
+      {switchingProject && (
+        <ProjectSwitcherModal
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onClose={() => setSwitchingProject(false)}
+          onRegister={onRegister}
+          onSelectProject={onSelectProject}
         />
       )}
     </aside>

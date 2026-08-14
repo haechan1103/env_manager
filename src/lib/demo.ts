@@ -122,6 +122,15 @@ export const demoProjection: ProjectProjection = {
               duplicate: false,
               clientExposure: null,
             },
+            demoVariable("OPENAI_BASE_URL", "Custom API endpoint"),
+          ],
+        },
+        {
+          name: "Database",
+          variables: [
+            demoVariable("DATABASE_URL", "Development database connection", "protected"),
+            demoVariable("DATABASE_POOL_SIZE", "Maximum connection pool size"),
+            demoVariable("DATABASE_SCHEMA", "Default database schema"),
           ],
         },
         {
@@ -139,6 +148,10 @@ export const demoProjection: ProjectProjection = {
               duplicate: false,
               clientExposure: null,
             },
+            demoVariable("APP_ENV", "Application environment"),
+            demoVariable("LOG_LEVEL", "Runtime logging level"),
+            demoVariable("ENABLE_CACHE", "Enable the local cache"),
+            demoVariable("SESSION_TTL", "Session lifetime in seconds"),
           ],
         },
       ],
@@ -193,3 +206,22 @@ export const demoProjection: ProjectProjection = {
     },
   ],
 };
+
+function demoVariable(
+  key: string,
+  description: string,
+  codexAccess: "protected" | "read-write" = "read-write",
+) {
+  return {
+    key,
+    description: [description],
+    valueState: "present" as const,
+    displayValue: null,
+    codexAccess,
+    linkedCount: 0,
+    linkId: null,
+    linkedFiles: [],
+    duplicate: false,
+    clientExposure: null,
+  };
+}

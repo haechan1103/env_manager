@@ -21,7 +21,7 @@ describe("Overview", () => {
     expect(screen.getByText("NEXT_PUBLIC_APP_URL")).toBeInTheDocument();
     expect(screen.getByText("Unclassified AI access")).toBeInTheDocument();
     expect(screen.getByText("All managed env files are ignored")).toBeInTheDocument();
-    expect(screen.getByText("2 values blocked")).toBeInTheDocument();
+    expect(screen.getByText("3 values blocked")).toBeInTheDocument();
     expect(screen.queryByText("fake_preview_value")).not.toBeInTheDocument();
   });
 

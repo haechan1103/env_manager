@@ -24,9 +24,41 @@ const projection: ProjectProjection = {
 };
 
 describe("ProjectSidebar", () => {
-  it("renames projects from the in-app dialog on double-click", async () => {
+  it("shows only the current project and switches from the project dialog", async () => {
     const user = userEvent.setup();
-    const renameProject = vi.fn();
+    const selectProject = vi.fn();
+    render(
+      <ProjectSidebar
+        projects={[
+          { id: "demo", name: "demo", displayPath: "/fake/demo" },
+          { id: "second", name: "second", displayPath: "/fake/second" },
+        ]}
+        selectedProjectId="demo"
+        projection={projection}
+        view={{ kind: "overview" }}
+        onSelectProject={selectProject}
+        onSelectView={vi.fn()}
+        onRegister={vi.fn()}
+        onRenameFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Current project")).toHaveTextContent("demo");
+    expect(screen.queryByText("second")).not.toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Change" }));
+    expect(screen.getByRole("heading", { name: "Switch project" })).toBeInTheDocument();
+    expect(screen.getByText("/fake/second")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /second/ }));
+
+    expect(selectProject).toHaveBeenCalledWith("second");
+    expect(screen.queryByRole("heading", { name: "Switch project" })).not.toBeInTheDocument();
+  });
+
+  it("starts registration from the project dialog", async () => {
+    const user = userEvent.setup();
+    const register = vi.fn();
     render(
       <ProjectSidebar
         projects={[{ id: "demo", name: "demo", displayPath: "/fake/demo" }]}
@@ -35,18 +67,15 @@ describe("ProjectSidebar", () => {
         view={{ kind: "overview" }}
         onSelectProject={vi.fn()}
         onSelectView={vi.fn()}
-        onRegister={vi.fn()}
-        onRenameProject={renameProject}
+        onRegister={register}
         onRenameFile={vi.fn()}
       />,
     );
 
-    await user.dblClick(screen.getByRole("button", { name: /demo/ }));
-    const input = screen.getByLabelText("New name");
-    await user.clear(input);
-    await user.type(input, "Demo workspace");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Change" }));
+    await user.click(screen.getByRole("button", { name: "Add project" }));
 
-    expect(renameProject).toHaveBeenCalledWith("demo", "Demo workspace");
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("heading", { name: "Switch project" })).not.toBeInTheDocument();
   });
 });

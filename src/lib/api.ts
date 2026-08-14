@@ -17,6 +17,7 @@ import type {
   ExportOccurrence,
   TeamImportPlanProjection,
   TeamImportSummary,
+  TeamImportValueSide,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
@@ -203,7 +204,41 @@ export async function planTeamImport(
   passphrase: string,
   locale: "en" | "ko",
 ): Promise<TeamImportPlanProjection | null> {
-  if (!isTauriRuntime) return null;
+  if (!isTauriRuntime) {
+    return {
+      planId: "demo-team-import-plan",
+      expiresInSeconds: 300,
+      preview: {
+        files: [
+          {
+            path: ".env.local",
+            targetPath: ".env.local",
+            occurrences: [
+              { id: "demo-gpt-local", key: "GPT_API_KEY", state: "conflict", linkId: "demo-gpt-link" },
+              { id: "demo-base-url", key: "OPENAI_BASE_URL", state: "new", linkId: null },
+            ],
+          },
+          {
+            path: ".env.development",
+            targetPath: ".env.development",
+            occurrences: [
+              { id: "demo-gpt-development", key: "GPT_API_KEY", state: "conflict", linkId: "demo-gpt-link" },
+            ],
+          },
+          {
+            path: "apps/web/.env.local",
+            targetPath: "apps/web/.env.local",
+            occurrences: [
+              { id: "demo-public-url", key: "VITE_API_BASE_URL", state: "conflict", linkId: null },
+            ],
+          },
+        ],
+        newCount: 1,
+        unchangedCount: 0,
+        conflictCount: 3,
+      },
+    };
+  }
   return call("plan_team_import", { request: { projectId, passphrase, locale } });
 }
 
@@ -213,9 +248,56 @@ export async function applyTeamImport(
   sharedConflicts: string[],
 ): Promise<TeamImportSummary> {
   if (!isTauriRuntime) {
-    return { addedCount: 0, updatedCount: 0, unchangedCount: 0, keptLocalCount: 0, affectedFiles: [] };
+    return {
+      addedCount: 1,
+      updatedCount: sharedConflicts.length,
+      unchangedCount: 0,
+      keptLocalCount: 3 - sharedConflicts.length,
+      affectedFiles: [".env.local"],
+    };
   }
   return call("apply_team_import", { request: { projectId, planId, sharedConflicts } });
+}
+
+export async function remapTeamImportFile(
+  projectId: string,
+  planId: string,
+  sourceFile: string,
+  targetFile: string,
+): Promise<TeamImportPlanProjection["preview"]> {
+  if (!isTauriRuntime) {
+    const demoPlan = await planTeamImport(projectId, "fake-demo-passphrase", "en");
+    if (!demoPlan) throw new ApiError("UNAVAILABLE", "Demo import plan is unavailable");
+    const files = demoPlan.preview.files.map((file) => file.path === sourceFile
+      ? {
+          ...file,
+          targetPath: targetFile,
+          occurrences: file.occurrences.map((occurrence) => ({ ...occurrence, state: "new" as const, linkId: null })),
+        }
+      : file);
+    const occurrences = files.flatMap((file) => file.occurrences);
+    return {
+      files,
+      newCount: occurrences.filter((item) => item.state === "new").length,
+      unchangedCount: occurrences.filter((item) => item.state === "unchanged").length,
+      conflictCount: occurrences.filter((item) => item.state === "conflict").length,
+    };
+  }
+  return call("remap_team_import_file", {
+    request: { projectId, planId, sourceFile, targetFile },
+  });
+}
+
+export async function revealTeamImportConflict(
+  projectId: string,
+  planId: string,
+  occurrenceId: string,
+  side: TeamImportValueSide,
+): Promise<string> {
+  if (!isTauriRuntime) return side === "local" ? "fake_local_value" : "fake_shared_value";
+  return call("reveal_team_import_conflict", {
+    request: { projectId, planId, occurrenceId, side },
+  });
 }
 
 export async function discardTeamImport(projectId: string, planId: string): Promise<void> {

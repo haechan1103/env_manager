@@ -6,14 +6,15 @@ interface Props {
   description?: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }
 
-export function Modal({ title, description, children, onClose }: Props) {
+export function Modal({ title, description, children, onClose, className }: Props) {
   const { t } = useI18n();
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
-        className="modal"
+        className={className ? `modal ${className}` : "modal"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

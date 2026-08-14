@@ -43,17 +43,27 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
   const [loadingCloudflareTarget, setLoadingCloudflareTarget] = useState(false);
   const [selection, setSelection] = useState<Selection>({});
   const [busy, setBusy] = useState(false);
+  const [uiReady, setUiReady] = useState(false);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setUiReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!uiReady) return;
+    let active = true;
     void api.listDeploymentProviders(projectId)
-      .then(setProviders)
-      .catch((error) => onError(localizeError(error, locale, "push.statusError")))
-      .finally(() => setLoadingProviders(false));
-  }, [locale, onError, projectId]);
+      .then((result) => { if (active) setProviders(result); })
+      .catch((error) => { if (active) onError(localizeError(error, locale, "push.statusError")); })
+      .finally(() => { if (active) setLoadingProviders(false); });
+    return () => { active = false; };
+  }, [locale, onError, projectId, uiReady]);
 
   useEffect(() => setSelection({}), [file]);
 
   useEffect(() => {
+    if (!uiReady || provider !== "github-actions") return;
     let active = true;
     setDetectingRepository(true);
     void api.detectGitHubRepository(projectId, file)
@@ -66,9 +76,10 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         if (active) setDetectingRepository(false);
       });
     return () => { active = false; };
-  }, [file, projectId]);
+  }, [file, projectId, provider, uiReady]);
 
   useEffect(() => {
+    if (!uiReady || provider !== "cloudflare-workers") return;
     let active = true;
     setLoadingCloudflareTarget(true);
     void api.detectCloudflareTarget(projectId, file)
@@ -88,12 +99,12 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         if (active) setLoadingCloudflareTarget(false);
       });
     return () => { active = false; };
-  }, [file, projectId]);
+  }, [file, projectId, provider, uiReady]);
 
   const githubAvailable = providers.find((item) => item.id === "github-actions")?.available ?? false;
 
   useEffect(() => {
-    if (!githubAvailable) return;
+    if (!uiReady || provider !== "github-actions" || !githubAvailable) return;
     let active = true;
     setLoadingRepositories(true);
     void api.listGitHubRepositories(projectId)
@@ -110,9 +121,10 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         if (active) setLoadingRepositories(false);
       });
     return () => { active = false; };
-  }, [githubAvailable, locale, projectId]);
+  }, [githubAvailable, locale, projectId, provider, uiReady]);
 
   useEffect(() => {
+    if (!uiReady || provider !== "github-actions") return;
     const normalizedRepository = repository.trim();
     if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(normalizedRepository)) {
       setGithubEnvironments([]);
@@ -143,12 +155,12 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [locale, projectId, repository]);
+  }, [locale, projectId, provider, repository, uiReady]);
 
   const currentFile = projection.files.find((item) => item.path === file);
   const variables = useMemo(
-    () => currentFile?.groups.flatMap((group) => group.variables) ?? [],
-    [currentFile],
+    () => uiReady ? currentFile?.groups.flatMap((group) => group.variables) ?? [] : [],
+    [currentFile, uiReady],
   );
   const selected = variables
     .filter((variable) => selection[variable.key]?.selected)
@@ -347,7 +359,9 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
           }}>{t("push.selectAll")}</button>
         </header>
         <div className="push-variable-list">
-          {variables.map((variable) => (
+          {!uiReady ? (
+            <div className="push-variable-loading" role="status"><span className="spinner" />{t("push.preparing")}</div>
+          ) : variables.map((variable) => (
             <label className={variable.valueState === "empty" ? "push-variable disabled" : "push-variable"} key={variable.key}>
               <input
                 type="checkbox"
@@ -362,17 +376,19 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
               {provider === "github-actions" ? (
                 <select
                   aria-label={t("push.kindFor", { key: variable.key })}
-                  disabled={!selection[variable.key]?.selected}
                   value={selection[variable.key]?.kind ?? "secret"}
                   onChange={(event) => setSelection((current) => ({
                     ...current,
-                    [variable.key]: { selected: true, kind: event.target.value as GitHubEntryKind },
+                    [variable.key]: {
+                      selected: current[variable.key]?.selected ?? false,
+                      kind: event.target.value as GitHubEntryKind,
+                    },
                   }))}
                 >
                   <option value="secret">Secret</option>
                   <option value="variable">Variable</option>
                 </select>
-              ) : <span className="secret-only-badge">Secret</span>}
+              ) : <span className="secret-only-badge">{t("push.workerSecret")}</span>}
             </label>
           ))}
         </div>
@@ -381,7 +397,7 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
       <div className="provider-push-warning">
         <strong>{t("push.networkTitle")}</strong>
         <p>{t("push.networkBody")}</p>
-        {provider === "github-actions" && selected.some((item) => item.kind === "variable") && (
+        {provider === "github-actions" && Object.values(selection).some((item) => item.kind === "variable") && (
           <p className="provider-variable-warning">{t("push.variableVisible")}</p>
         )}
       </div>

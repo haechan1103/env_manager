@@ -11,8 +11,11 @@ const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 const outputDir = path.join(root, "assets", "screenshots");
 const brandDir = path.join(root, "assets", "brand");
 const workDir = path.join(root, "test-results", "readme-media");
+const overviewPath = path.join(outputDir, "env-manager-overview.png");
 const heroPath = path.join(outputDir, "env-manager-editor.png");
 const integrationsPath = path.join(outputDir, "env-manager-ai-integrations.png");
+const providerPath = path.join(outputDir, "env-manager-cloudflare-push.png");
+const sharingPath = path.join(outputDir, "env-manager-encrypted-share.png");
 const gifPath = path.join(outputDir, "env-manager-demo.gif");
 const socialPreviewPath = path.join(brandDir, "env-manager-social-preview.png");
 
@@ -27,9 +30,27 @@ async function captureScreenshots() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 940 } });
   const page = await context.newPage();
   await page.goto(baseUrl);
-  await page.getByRole("button", { name: ".env.local", exact: true }).click();
-  await page.getByRole("heading", { name: ".env.local" }).waitFor();
+  await page.getByText("Action inbox").waitFor();
+  await page.screenshot({ path: overviewPath, fullPage: true });
+
+  await page.getByRole("button", { name: /Local environment.*\.env\.local/ }).click();
+  await page.getByRole("heading", { name: "Local environment" }).waitFor();
   await page.screenshot({ path: heroPath, fullPage: true });
+
+  await page.getByRole("button", { name: "Push variables" }).click();
+  await page.getByRole("heading", { name: "Push variables" }).waitFor();
+  await page.getByRole("button", { name: /Cloudflare Workers/ }).click();
+  await page.getByLabel("Worker").fill("sample-worker");
+  await page.getByRole("button", { name: "Select all" }).click();
+  await page.screenshot({ path: providerPath, fullPage: true });
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("heading", { name: "Export env files" }).waitFor();
+  await page.getByText("Choose what to share").click();
+  await page.getByRole("dialog").locator(".share-variable-select").filter({ hasText: "GPT_API_KEY" }).first().click();
+  await page.screenshot({ path: sharingPath, fullPage: true });
+  await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "AI tool connections" }).click();
   await page.getByRole("heading", { name: "AI tool connections" }).waitFor();
@@ -53,11 +74,16 @@ async function captureDemoFrames() {
   await page.goto(baseUrl);
   await page.getByText("Action inbox").waitFor();
   await capture(6);
-  await page.getByRole("button", { name: ".env.local", exact: true }).hover();
+  await page.getByRole("button", { name: /Local environment.*\.env\.local/ }).hover();
   await capture(2);
-  await page.getByRole("button", { name: ".env.local", exact: true }).click();
-  await page.getByRole("heading", { name: ".env.local" }).waitFor();
+  await page.getByRole("button", { name: /Local environment.*\.env\.local/ }).click();
+  await page.getByRole("heading", { name: "Local environment" }).waitFor();
   await capture(6);
+  await page.getByRole("button", { name: "Push variables" }).click();
+  await page.getByRole("heading", { name: "Push variables" }).waitFor();
+  await page.getByRole("button", { name: /Cloudflare Workers/ }).click();
+  await capture(6);
+  await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "AI tool connections" }).hover();
   await capture(2);
   await page.getByRole("button", { name: "AI tool connections" }).click();
@@ -76,7 +102,7 @@ async function captureDemoFrames() {
 async function renderSocialPreview() {
   const appImage = (await readFile(heroPath)).toString("base64");
   const logoImage = (
-    await readFile(path.join(brandDir, "env-manager-logo-concept-v1.png"))
+    await readFile(path.join(brandDir, "env-manager-logo-v1.png"))
   ).toString("base64");
   const context = await browser.newContext({ viewport: { width: 1280, height: 640 } });
   const page = await context.newPage();
@@ -134,12 +160,12 @@ async function renderSocialPreview() {
             <span class="name">Env Manager</span>
           </div>
           <section class="copy">
-            <h1>Manage every<br />.env locally.</h1>
-            <p>Let supported AI agents edit the structure without receiving protected values.</p>
+            <h1>Edit. Share.<br />Deploy your .env.</h1>
+            <p>Manage local env files, work with AI agents, and push selected values without exposing everything.</p>
             <div class="chips">
               <span class="chip">Local-first</span>
-              <span class="chip">Tauri</span>
-              <span class="chip">AI agent ready</span>
+              <span class="chip">GitHub Actions</span>
+              <span class="chip">Cloudflare</span>
             </div>
           </section>
           <section class="app">
