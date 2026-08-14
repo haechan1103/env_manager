@@ -12,12 +12,14 @@ const integrations: AgentIntegrationStatus[] = [
     name: "Codex",
     detected: true,
     installed: true,
-    installedVersion: "0.4.0",
-    currentVersion: "0.4.0",
+    installedVersion: "1.0.0",
+    legacyVersion: false,
+    currentVersion: "1.0.0",
     updateAvailable: false,
     protection: "broker",
     detail: "The redacted broker is connected.",
     canInstall: true,
+    actionBlocker: null,
   },
   {
     id: "claude-code",
@@ -25,11 +27,13 @@ const integrations: AgentIntegrationStatus[] = [
     detected: true,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.4.0",
+    legacyVersion: false,
+    currentVersion: "1.0.0",
     updateAvailable: false,
     protection: "inactive",
     detail: "The integration can be installed.",
     canInstall: true,
+    actionBlocker: null,
   },
   {
     id: "github-copilot",
@@ -37,11 +41,13 @@ const integrations: AgentIntegrationStatus[] = [
     detected: false,
     installed: false,
     installedVersion: null,
-    currentVersion: "0.4.0",
+    legacyVersion: false,
+    currentVersion: "1.0.0",
     updateAvailable: false,
     protection: "inactive",
     detail: "Install the tool to connect it.",
     canInstall: false,
+    actionBlocker: "tool-not-found",
   },
 ];
 
@@ -50,7 +56,7 @@ vi.mock("../../lib/api", () => ({
   installAgentIntegration: vi.fn(async (id: string) => ({
     ...integrations.find((item) => item.id === id)!,
     installed: true,
-    installedVersion: "0.4.0",
+    installedVersion: "1.0.0",
     protection: "guarded",
   })),
 }));
@@ -76,5 +82,22 @@ describe("AgentIntegrations", () => {
 
     expect(api.installAgentIntegration).toHaveBeenCalledWith("claude-code");
     expect(onNotice).toHaveBeenCalledWith(expect.stringContaining("Claude Code"));
+  });
+
+  it("explains why an integration action is disabled", async () => {
+    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+
+    const copilotCard = (await screen.findByText("GitHub Copilot / VS Code")).closest("article");
+    expect(copilotCard).not.toBeNull();
+    expect(within(copilotCard!).getByText(/CLI was not found/)).toBeInTheDocument();
+  });
+
+  it("labels app-linked plugin versions as legacy bundle state", async () => {
+    vi.mocked(api.listAgentIntegrations).mockResolvedValueOnce([
+      { ...integrations[0]!, installedVersion: "0.5.0", legacyVersion: true, updateAvailable: true },
+    ]);
+    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+
+    expect(await screen.findByText("0.5.0 (legacy app-linked) → 1.0.0")).toBeInTheDocument();
   });
 });

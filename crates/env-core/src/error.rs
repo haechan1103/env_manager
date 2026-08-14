@@ -26,6 +26,9 @@ pub enum EnvErrorCode {
     InvalidRequest,
     Io,
     Serialization,
+    PackageDecryptFailed,
+    PackageInvalid,
+    PackageConflict,
 }
 
 impl EnvErrorCode {
@@ -50,6 +53,9 @@ impl EnvErrorCode {
             Self::InvalidRequest => "INVALID_REQUEST",
             Self::Io => "IO_ERROR",
             Self::Serialization => "SERIALIZATION_ERROR",
+            Self::PackageDecryptFailed => "PACKAGE_DECRYPT_FAILED",
+            Self::PackageInvalid => "PACKAGE_INVALID",
+            Self::PackageConflict => "PACKAGE_CONFLICT",
         }
     }
 }

@@ -7,12 +7,22 @@ import type {
   AgentIntegrationStatus,
   AgentActivityEvent,
   CodexAccess,
+  CloudflareTargetContext,
+  DeploymentProviderStatus,
+  GitHubEnvironmentOptions,
+  GitHubRepositoryContext,
+  GitHubRepositoryOptions,
   GitignoreUpdateSummary,
   ExportResult,
+  ExportOccurrence,
+  TeamImportPlanProjection,
+  TeamImportSummary,
   MutationSummary,
   MigrationPlanProjection,
   ProjectProjection,
   ProjectSummary,
+  ProviderPushRequest,
+  ProviderPushResult,
 } from "./types";
 
 export const isTauriRuntime = "__TAURI_INTERNALS__" in window;
@@ -52,6 +62,80 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 export async function listAgentIntegrations(): Promise<AgentIntegrationStatus[]> {
   if (!isTauriRuntime) return demoAgentIntegrations;
   return call("list_agent_integrations");
+}
+
+export async function listDeploymentProviders(
+  projectId: string,
+): Promise<DeploymentProviderStatus[]> {
+  if (!isTauriRuntime) {
+    return [
+      { id: "github-actions", name: "GitHub Actions", available: true, detail: "GitHub CLI ready" },
+      { id: "cloudflare-workers", name: "Cloudflare Workers", available: true, detail: "Wrangler v4 ready" },
+    ];
+  }
+  return call("list_deployment_providers", { request: { projectId } });
+}
+
+export async function listGitHubRepositories(
+  projectId: string,
+): Promise<GitHubRepositoryOptions> {
+  if (!isTauriRuntime) {
+    return { repositories: ["owner/repository", "owner/another-project"] };
+  }
+  return call("list_github_repositories", { request: { projectId } });
+}
+
+export async function detectGitHubRepository(
+  projectId: string,
+  file: string,
+): Promise<GitHubRepositoryContext> {
+  if (!isTauriRuntime) return { repository: null };
+  return call("detect_github_repository", { request: { projectId, file } });
+}
+
+export async function listGitHubEnvironments(
+  projectId: string,
+  repository: string,
+): Promise<GitHubEnvironmentOptions> {
+  if (!isTauriRuntime) {
+    return { repository, environments: ["preview", "production"] };
+  }
+  return call("list_github_environments", { request: { projectId, repository } });
+}
+
+export async function createGitHubEnvironment(
+  projectId: string,
+  repository: string,
+  environment: string,
+): Promise<GitHubEnvironmentOptions> {
+  if (!isTauriRuntime) {
+    return { repository, environments: ["preview", "production", environment].sort() };
+  }
+  return call("create_github_environment", {
+    request: { projectId, repository, environment },
+  });
+}
+
+export async function detectCloudflareTarget(
+  projectId: string,
+  file: string,
+): Promise<CloudflareTargetContext> {
+  if (!isTauriRuntime) return { worker: null, environments: [], configPath: null };
+  return call("detect_cloudflare_target", { request: { projectId, file } });
+}
+
+export async function pushToProvider(
+  projectId: string,
+  request: ProviderPushRequest,
+): Promise<ProviderPushResult> {
+  if (!isTauriRuntime) {
+    return {
+      provider: request.provider,
+      pushedCount: request.selections.length,
+      failedKeys: [],
+    };
+  }
+  return call("push_to_provider", { payload: { projectId, request } });
 }
 
 export async function installAgentIntegration(
@@ -104,9 +188,39 @@ export async function renameEnvFile(projectId: string, file: string, name: strin
   return call("rename_env_file", { request: { projectId, file, name } });
 }
 
-export async function exportEnvFiles(projectId: string, passphrase: string | null, locale: "en" | "ko"): Promise<ExportResult> {
+export async function exportEnvFiles(
+  projectId: string,
+  passphrase: string | null,
+  selection: ExportOccurrence[] | null,
+  locale: "en" | "ko",
+): Promise<ExportResult> {
   if (!isTauriRuntime) return { fileCount: demoProjection.files.length, encrypted: passphrase !== null, cancelled: false };
-  return call("export_env_files", { request: { projectId, passphrase, locale } });
+  return call("export_env_files", { request: { projectId, passphrase, selection, locale } });
+}
+
+export async function planTeamImport(
+  projectId: string,
+  passphrase: string,
+  locale: "en" | "ko",
+): Promise<TeamImportPlanProjection | null> {
+  if (!isTauriRuntime) return null;
+  return call("plan_team_import", { request: { projectId, passphrase, locale } });
+}
+
+export async function applyTeamImport(
+  projectId: string,
+  planId: string,
+  sharedConflicts: string[],
+): Promise<TeamImportSummary> {
+  if (!isTauriRuntime) {
+    return { addedCount: 0, updatedCount: 0, unchangedCount: 0, keptLocalCount: 0, affectedFiles: [] };
+  }
+  return call("apply_team_import", { request: { projectId, planId, sharedConflicts } });
+}
+
+export async function discardTeamImport(projectId: string, planId: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("discard_team_import", { request: { projectId, planId } });
 }
 
 export async function scanProject(projectId: string): Promise<ProjectProjection> {

@@ -181,6 +181,8 @@ describe("VariableRow", () => {
     );
 
     expect(screen.getByText("The same key exists in 2 files")).toBeInTheDocument();
+    expect(screen.queryByText("They are managed separately. Link them to save one input across every selected file.")).not.toBeInTheDocument();
+    expect(document.querySelector(".relationship-icon")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Manage together" })).toBeInTheDocument();
   });
 });

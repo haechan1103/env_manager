@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/brand/env-manager-logo-concept-v1.png" width="104" alt="Env Manager logo" />
+  <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager logo" />
   <h1>Env Manager</h1>
   <p><strong>Manage every <code>.env</code> file locally, while keeping protected values out of supported AI-agent workflows.</strong></p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
@@ -33,6 +33,7 @@ It is especially useful with AI coding agents: supported integrations can inspec
 - **Readable structure.** Manage groups, descriptions, variables, and comments without flattening the file.
 - **Protected by default.** Values are masked in the UI and redacted from normal AI-tool responses.
 - **Local and lightweight.** Only registered projects are scanned, and only discovered env files are watched while the app is open.
+- **Push when you choose.** Send selected values to GitHub Actions secrets/variables or Cloudflare Worker secrets through the official local CLI—without creating a temporary env file or storing provider tokens.
 - **English by default, Korean when you want it.** Switch languages in the sidebar; the choice is saved on this device.
 
 ## Install
@@ -52,8 +53,13 @@ Env Manager checks GitHub Releases for updates. It does not send project paths o
 2. Review the env files and unresolved items it discovers.
 3. Add groups and descriptions, classify AI access, or link matching variables.
 4. Edit once; Env Manager writes back to the original file or every explicitly linked file.
+5. When needed, use **Push variables** to send a selected subset to GitHub Actions or Cloudflare Workers.
 
 `.env.example` variants are intentionally excluded from discovery in the current release.
+
+Provider push is explicit and one-way. Install and sign in to `gh` or Wrangler first;
+Env Manager passes values through CLI standard input and cannot read remote secret
+values back.
 
 <details>
   <summary><strong>See the file editor and AI integration screens</strong></summary>

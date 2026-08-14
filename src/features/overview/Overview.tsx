@@ -29,7 +29,6 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpen
     <section className="page-stack">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">PROJECT HEALTH</p>
           <h2>{t("overview.heading")}</h2>
         </div>
       </div>

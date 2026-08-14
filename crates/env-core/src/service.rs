@@ -12,7 +12,7 @@ use crate::{
     ClassificationReviewProjection, ClassificationSource, CodexAccess, DiscoveryOptions, Document,
     EnvError, EnvResult, FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember,
     Manifest, ManifestStore, Node, OccurrenceProjection, PlannedFileChange, ProjectProjection,
-    RedactedValueState, TransactionPlan, VariablePolicy, detect_client_exposure,
+    ProviderValue, RedactedValueState, TransactionPlan, VariablePolicy, detect_client_exposure,
     discover_env_files, suggest_access,
 };
 
@@ -124,6 +124,13 @@ impl ProjectService {
     }
 
     pub fn initialize(&self) -> EnvResult<ProjectProjection> {
+        self.initialize_with_file_labels(&BTreeMap::new())
+    }
+
+    pub fn initialize_with_file_labels(
+        &self,
+        file_labels: &BTreeMap<String, String>,
+    ) -> EnvResult<ProjectProjection> {
         let store = ManifestStore::for_root(&self.root);
         let mut manifest = store.load()?;
         let files = self.discover(&manifest)?;
@@ -150,7 +157,7 @@ impl ProjectService {
         if changed || !self.root.join(MANIFEST_FILE_NAME).exists() {
             store.save(&manifest)?;
         }
-        self.scan_with_manifest(&manifest)
+        self.scan_with_manifest(&manifest, file_labels)
     }
 
     pub fn scan(&self) -> EnvResult<ProjectProjection> {
@@ -596,8 +603,7 @@ impl ProjectService {
         store.save(&manifest)
     }
 
-    pub fn set_file_display_name(&self, file: &str, display_name: &str) -> EnvResult<()> {
-        crate::validate_display_name(display_name)?;
+    pub fn validate_file_for_display_name(&self, file: &str) -> EnvResult<String> {
         let relative = PathBuf::from(file);
         let _ = safe_existing_target(&self.root, &relative)?;
         if !relative
@@ -609,12 +615,7 @@ impl ProjectService {
                 "관리 중인 env 파일만 이름을 지정할 수 있습니다.",
             ));
         }
-        let store = ManifestStore::for_root(&self.root);
-        let mut manifest = store.load()?;
-        manifest
-            .file_labels
-            .insert(to_manifest_path(&relative), display_name.trim().to_owned());
-        store.save(&manifest)
+        Ok(to_manifest_path(&relative))
     }
 
     pub fn codex_access(&self, key: &str) -> EnvResult<CodexAccess> {
@@ -635,6 +636,43 @@ impl ProjectService {
         self.read_value(file, key)
     }
 
+    pub fn provider_values(&self, file: &str, keys: &[String]) -> EnvResult<Vec<ProviderValue>> {
+        if keys.is_empty() || keys.len() > 100 {
+            return Err(EnvError::invalid(
+                "한 번에 1개 이상 100개 이하의 변수를 선택해주세요.",
+            ));
+        }
+        let unique = keys.iter().collect::<BTreeSet<_>>();
+        if unique.len() != keys.len() {
+            return Err(EnvError::invalid("같은 변수를 중복 선택할 수 없습니다."));
+        }
+
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let relative = PathBuf::from(file);
+        if !self
+            .discover(&manifest)?
+            .iter()
+            .any(|path| path == &relative)
+        {
+            return Err(EnvError::invalid(
+                "관리 중인 env 파일만 전송할 수 있습니다.",
+            ));
+        }
+        let loaded = self.load_document(&relative)?;
+        keys.iter()
+            .map(|key| {
+                validate_key(key)?;
+                let value = loaded.document.decoded_value(key)?;
+                if value.is_empty() {
+                    return Err(EnvError::invalid(format!(
+                        "값이 비어 있는 {key} 변수는 전송할 수 없습니다."
+                    )));
+                }
+                Ok(ProviderValue::new(key.clone(), value))
+            })
+            .collect()
+    }
+
     pub fn plan_migration(&self, file: &str) -> EnvResult<crate::MigrationPlan> {
         let relative = PathBuf::from(file);
         let loaded = self.load_document(&relative)?;
@@ -650,7 +688,11 @@ impl ProjectService {
         })
     }
 
-    fn scan_with_manifest(&self, manifest: &Manifest) -> EnvResult<ProjectProjection> {
+    fn scan_with_manifest(
+        &self,
+        manifest: &Manifest,
+        file_labels: &BTreeMap<String, String>,
+    ) -> EnvResult<ProjectProjection> {
         let files = self.discover(manifest)?;
         let mut projections = Vec::with_capacity(files.len());
         let mut unclassified = BTreeSet::new();
@@ -659,7 +701,13 @@ impl ProjectService {
         for relative in files {
             let loaded = self.load_document(&relative)?;
             let path = to_manifest_path(&relative);
-            let projection = project_file(&path, &loaded.document, manifest, &mut unclassified);
+            let projection = project_file(
+                &path,
+                &loaded.document,
+                manifest,
+                file_labels,
+                &mut unclassified,
+            );
             issue_count += projection.warnings.len();
             projections.push(projection);
         }
@@ -721,6 +769,7 @@ impl ProjectService {
         &self,
         destination: &Path,
         passphrase: Option<String>,
+        selection: Option<&[crate::ExportOccurrence]>,
     ) -> EnvResult<crate::ExportSummary> {
         let manifest = ManifestStore::for_root(&self.root).load()?;
         crate::export_project_env(
@@ -728,6 +777,7 @@ impl ProjectService {
             &manifest,
             destination,
             passphrase.map(age::secrecy::SecretString::from),
+            selection,
         )
     }
 
@@ -841,6 +891,7 @@ fn project_file(
     path: &str,
     document: &Document,
     manifest: &Manifest,
+    file_labels: &BTreeMap<String, String>,
     unclassified: &mut BTreeSet<String>,
 ) -> FileProjection {
     let duplicates = document.duplicate_keys();
@@ -915,8 +966,7 @@ fn project_file(
     }
     FileProjection {
         path: path.to_owned(),
-        display_name: manifest
-            .file_labels
+        display_name: file_labels
             .get(path)
             .cloned()
             .unwrap_or_else(|| path.to_owned()),
@@ -1135,17 +1185,18 @@ mod tests {
     }
 
     #[test]
-    fn file_display_name_changes_projection_without_renaming_the_file() {
+    fn local_file_display_name_changes_projection_without_renaming_the_file() {
         let project = SyntheticProject::new();
         project.write("apps/web/.env.local", "PORT=fake_3000\n");
         let service = ProjectService::open(project.root()).expect("service");
         service.initialize().expect("initialize");
 
-        service
-            .set_file_display_name("apps/web/.env.local", "Web local")
-            .expect("set display name");
-
-        let projection = service.scan().expect("scan");
+        let path = service
+            .validate_file_for_display_name("apps/web/.env.local")
+            .expect("valid display target");
+        let projection = service
+            .initialize_with_file_labels(&BTreeMap::from([(path, "Web local".to_owned())]))
+            .expect("scan");
         assert_eq!(projection.files[0].display_name, "Web local");
         assert_eq!(projection.files[0].path, "apps/web/.env.local");
         assert!(project.root().join("apps/web/.env.local").is_file());
@@ -1216,6 +1267,47 @@ mod tests {
 
         assert_eq!(project.read(".env.local"), b"PORT=fake_4000\n");
         assert_eq!(project.read(".env.development"), b"PORT=fake_4000\n");
+    }
+
+    #[test]
+    fn provider_values_require_managed_unique_non_empty_names() {
+        let project = SyntheticProject::new();
+        project.write(
+            ".env.production",
+            "API_KEY=fake_provider_secret\nAPI_HOST=fake_api_host\nEMPTY=\n",
+        );
+        project.write("notes.env", "OTHER=fake_other\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+
+        let selected = service
+            .provider_values(
+                ".env.production",
+                &["API_KEY".to_owned(), "API_HOST".to_owned()],
+            )
+            .expect("provider values");
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].key(), "API_KEY");
+        assert_eq!(selected[0].value(), "fake_provider_secret");
+
+        assert!(
+            service
+                .provider_values(".env.production", &["EMPTY".to_owned()])
+                .is_err()
+        );
+        assert!(
+            service
+                .provider_values(
+                    ".env.production",
+                    &["API_KEY".to_owned(), "API_KEY".to_owned()],
+                )
+                .is_err()
+        );
+        assert!(
+            service
+                .provider_values("notes.env", &["OTHER".to_owned()])
+                .is_err()
+        );
     }
 
     #[test]

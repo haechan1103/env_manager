@@ -30,7 +30,6 @@ export function AgentActivity({ projectId, onError }: Props) {
     <section className="page-stack activity-page">
       <div className="section-heading activity-heading">
         <div>
-          <p className="eyebrow">AI ACTIVITY · VALUE-FREE AUDIT</p>
           <h2>{t("activity.title")}</h2>
           <p>{t("activity.body")}</p>
         </div>

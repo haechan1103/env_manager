@@ -281,10 +281,8 @@ export function VariableRow({
 
       {variable.linkId && variable.linkedFiles.length > 1 && (
         <div className="relationship-panel linked-relationship">
-          <span className="relationship-icon" aria-hidden="true">↔</span>
           <div className="relationship-copy">
             <strong>{t("row.linkedTitle", { count: variable.linkedFiles.length })}</strong>
-            <span>{t("row.linkedBody")}</span>
             <div className="relationship-paths">
               {variable.linkedFiles.map((path) => (
                 <code className={path === file ? "current" : ""} key={path}>
@@ -317,10 +315,8 @@ export function VariableRow({
 
       {hasIndependentPeers && (
         <div className="relationship-panel available-relationship">
-          <span className="relationship-icon" aria-hidden="true">＋</span>
           <div className="relationship-copy">
             <strong>{t("row.peersTitle", { count: sameKeyFiles.length })}</strong>
-            <span>{t("row.peersBody")}</span>
             <div className="relationship-paths">
               {sameKeyFiles.map((path) => (
                 <code className={path === file ? "current" : ""} key={path}>

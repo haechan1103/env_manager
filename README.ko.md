@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/brand/env-manager-logo-concept-v1.png" width="104" alt="Env Manager 로고" />
+  <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager 로고" />
   <h1>Env Manager</h1>
   <p><strong>흩어진 <code>.env</code>는 한곳에서, 보호된 값은 지원 AI 에이전트에게 넘기지 않은 채 관리하세요.</strong></p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
@@ -33,6 +33,7 @@ AI 코딩 에이전트와 함께 쓸 때는 지원 연동이 보호된 값을 �
 - **읽기 쉬운 구조.** 원본 파일을 납작하게 만들지 않고 그룹·설명·변수·주석을 관리합니다.
 - **기본값은 보호.** 화면에서는 값을 가리고, 일반 AI 도구 응답에서는 값을 제거합니다.
 - **로컬에서 가볍게.** 등록한 프로젝트만 탐색하고 앱이 켜진 동안 발견된 env 파일만 감시합니다.
+- **원할 때 바로 배포.** 임시 env 파일이나 서비스 토큰 저장 없이 공식 로컬 CLI를 통해 선택한 값만 GitHub Actions Secret/Variable 또는 Cloudflare Worker Secret으로 올립니다.
 - **영어 기본, 한국어도 그대로.** 사이드바에서 언어를 즉시 바꿀 수 있고 선택은 이 기기에 저장됩니다.
 
 ## 설치
@@ -52,8 +53,11 @@ AI 코딩 에이전트와 함께 쓸 때는 지원 연동이 보호된 값을 �
 2. 발견된 env 파일과 확인할 항목을 살펴봅니다.
 3. 그룹과 설명을 추가하고, AI 접근을 분류하거나 같은 변수를 연결합니다.
 4. 한 번 수정하면 원본 파일 또는 명시적으로 연결한 모든 파일에 저장됩니다.
+5. 필요할 때 **환경변수 올리기**에서 일부 변수만 골라 GitHub Actions나 Cloudflare Workers로 보냅니다.
 
 현재 버전은 `.env.example` 계열을 탐색에서 의도적으로 제외합니다.
+
+서비스 전송은 사용자가 직접 시작하는 단방향 작업입니다. 먼저 `gh` 또는 Wrangler를 설치하고 로그인해야 하며, Env Manager는 값을 CLI 표준 입력으로만 전달하고 원격 Secret 값을 다시 읽지는 못합니다.
 
 <details>
   <summary><strong>파일 편집 화면과 AI 연동 화면 보기</strong></summary>

@@ -35,5 +35,12 @@ Env Manager is a local file manager, not a secret vault or operating-system sand
 - A `read-write` value can be returned only through an explicit value operation.
 - Claude Code and GitHub Copilot integrations install a direct `.env*` access guard, but tool prompts and hooks are not an OS-level isolation boundary.
 - Codex direct-file protection depends on the host's permissions and sandbox configuration.
+- Provider push runs only after a user clicks **Push variables**. Selected values are
+  sent to the displayed GitHub Actions or Cloudflare Workers target through the
+  installed official CLI's standard input; they are never placed in command
+  arguments or a temporary env file.
+- Env Manager does not store `gh`/Wrangler credentials, fetch remote secret values,
+  or continuously synchronize a provider. Provider authentication remains owned by
+  the official CLI.
 
 Use a dedicated production secret manager and appropriate operating-system permissions for high-value credentials.

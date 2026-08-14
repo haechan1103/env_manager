@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "../../components/Modal";
+import { RenameModal } from "../../components/RenameModal";
 import { displayGroupName, localizeError, useI18n } from "../../i18n";
 import * as api from "../../lib/api";
 import type {
   FileProjection,
+  GroupProjection,
   MigrationPlanProjection,
   OccurrenceProjection,
   ProjectProjection,
@@ -36,6 +38,10 @@ export function FileEditor({
   const [addingGroup, setAddingGroup] = useState(false);
   const [linking, setLinking] = useState<OccurrenceProjection | null>(null);
   const [migration, setMigration] = useState<MigrationPlanProjection | null>(null);
+  const [renamingFile, setRenamingFile] = useState(false);
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
+  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
+  const editorRef = useRef<HTMLElement>(null);
 
   const occurrenceFilesByKey = useMemo(() => {
     const filesByKey = new Map<string, Set<string>>();
@@ -59,6 +65,41 @@ export function FileEditor({
     );
   }, [linking, occurrenceFilesByKey, projection.files]);
 
+  const variableCount = file ? countVariables(file) : 0;
+  const showGroupNavigation = Boolean(file && variableCount >= 10 && file.groups.length > 1);
+
+  useEffect(() => {
+    setActiveGroupIndex(0);
+  }, [filePath]);
+
+  useEffect(() => {
+    if (!showGroupNavigation || !editorRef.current) return;
+    const scrollRoot = editorRef.current.closest<HTMLElement>(".content-scroll");
+    const groupElements = [...editorRef.current.querySelectorAll<HTMLElement>("[data-env-group]")];
+    if (!scrollRoot || groupElements.length === 0) return;
+    let frame = 0;
+    const updateActiveGroup = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const rootTop = scrollRoot.getBoundingClientRect().top;
+        const activationLine = rootTop + 86;
+        let current = 0;
+        for (const [index, element] of groupElements.entries()) {
+          if (element.getBoundingClientRect().top <= activationLine) current = index;
+        }
+        setActiveGroupIndex(current);
+      });
+    };
+    updateActiveGroup();
+    scrollRoot.addEventListener("scroll", updateActiveGroup, { passive: true });
+    window.addEventListener("resize", updateActiveGroup);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scrollRoot.removeEventListener("scroll", updateActiveGroup);
+      window.removeEventListener("resize", updateActiveGroup);
+    };
+  }, [file?.groups, filePath, showGroupNavigation]);
+
   if (!file) {
     return (
       <section className="center-state">
@@ -78,21 +119,18 @@ export function FileEditor({
   };
 
   return (
-    <section className="page-stack">
+    <section className="page-stack" ref={editorRef}>
       <div className="file-heading">
         <div>
-          <p className="eyebrow">ENV FILE</p>
           <h2>{file.displayName}</h2>
           {file.displayName !== file.path && <code className="file-physical-path">{file.path}</code>}
-          <p>{t("file.summary", { variables: countVariables(file), groups: file.groups.length })}</p>
+          <p>{t("file.summary", { variables: variableCount, groups: file.groups.length })}</p>
         </div>
         <div className="header-actions">
           <button
             className="quiet-button"
-            onClick={() => {
-              const name = window.prompt(t("sidebar.fileNamePrompt"), file.displayName)?.trim();
-              if (name && name !== file.displayName) onRenameFile(file.path, name);
-            }}
+            aria-label={t("file.renameFile")}
+            onClick={() => setRenamingFile(true)}
           >
             {t("common.rename")}
           </button>
@@ -123,9 +161,26 @@ export function FileEditor({
         </div>
       )}
 
+      {showGroupNavigation && (
+        <GroupJumpNavigation
+          groups={file.groups}
+          activeGroupIndex={activeGroupIndex}
+          onJump={(groupIndex) => {
+            setActiveGroupIndex(groupIndex);
+            editorRef.current
+              ?.querySelector<HTMLElement>(`[data-env-group="${groupIndex}"]`)
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+      )}
+
       <div className="groups-stack">
         {file.groups.map((group, groupIndex) => (
-          <section className="group-card" key={`${group.name}:${groupIndex}`}>
+          <section
+            className="group-card"
+            data-env-group={groupIndex}
+            key={`${group.name}:${groupIndex}`}
+          >
             <header className="group-header">
               <div>
                 <span className="group-fold">⌄</span>
@@ -135,19 +190,8 @@ export function FileEditor({
               {group.name !== "기타" && (
                 <button
                   className="quiet-button compact"
-                  onClick={() => {
-                    const name = window.prompt(t("file.renameGroupPrompt"), group.name)?.trim();
-                    if (!name || name === group.name) return;
-                    void mutate(
-                      () =>
-                        api.renameGroup(projectId, {
-                          file: file.path,
-                          currentName: group.name,
-                          newName: name,
-                        }),
-                      t("file.groupRenamed"),
-                    );
-                  }}
+                  aria-label={t("file.renameGroupNamed", { name: displayGroupName(group.name, t) })}
+                  onClick={() => setRenamingGroup(group.name)}
                 >
                   {t("file.renameGroup")}
                 </button>
@@ -233,7 +277,152 @@ export function FileEditor({
           }}
         />
       )}
+      {renamingFile && (
+        <RenameModal
+          title={t("sidebar.fileNamePrompt")}
+          currentName={file.displayName}
+          onClose={() => setRenamingFile(false)}
+          onRename={(name) => onRenameFile(file.path, name)}
+        />
+      )}
+      {renamingGroup && (
+        <RenameModal
+          title={t("file.renameGroupPrompt")}
+          currentName={renamingGroup}
+          onClose={() => setRenamingGroup(null)}
+          onRename={(name) => {
+            const currentName = renamingGroup;
+            void mutate(
+              () => api.renameGroup(projectId, {
+                file: file.path,
+                currentName,
+                newName: name,
+              }),
+              t("file.groupRenamed"),
+            );
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+function GroupJumpNavigation({
+  groups,
+  activeGroupIndex,
+  onJump,
+}: {
+  groups: GroupProjection[];
+  activeGroupIndex: number;
+  onJump: (index: number) => void;
+}) {
+  const { t } = useI18n();
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const updateOverflow = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    setCanScrollLeft(track.scrollLeft > 2);
+    setCanScrollRight(track.scrollLeft + track.clientWidth < track.scrollWidth - 2);
+  };
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    updateOverflow();
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updateOverflow);
+    resizeObserver?.observe(track);
+    window.addEventListener("resize", updateOverflow);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateOverflow);
+    };
+  }, [groups]);
+
+  useEffect(() => {
+    if (expanded) return;
+    const track = trackRef.current;
+    const active = track?.querySelector<HTMLElement>(`[data-group-shortcut="${activeGroupIndex}"]`);
+    if (!track || !active) return;
+    const left = active.offsetLeft;
+    const right = left + active.offsetWidth;
+    const visibleLeft = track.scrollLeft;
+    const visibleRight = visibleLeft + track.clientWidth;
+    if (left < visibleLeft || right > visibleRight) {
+      track.scrollTo({
+        left: Math.max(0, left - (track.clientWidth - active.offsetWidth) / 2),
+        behavior: "smooth",
+      });
+    }
+  }, [activeGroupIndex, expanded]);
+
+  const moveTrack = (direction: -1 | 1) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollBy({ left: direction * Math.max(160, track.clientWidth * 0.7), behavior: "smooth" });
+  };
+
+  return (
+    <nav className={`group-jump-nav${expanded ? " expanded" : ""}`} aria-label={t("file.groupNavigation")}>
+      {!expanded && (
+        <button
+          className="group-jump-arrow"
+          aria-label={t("file.previousGroups")}
+          disabled={!canScrollLeft}
+          onClick={() => moveTrack(-1)}
+        >‹</button>
+      )}
+      <div className={`group-jump-window${!expanded && canScrollLeft ? " can-scroll-left" : ""}${!expanded && canScrollRight ? " can-scroll-right" : ""}`}>
+        <div className="group-jump-track" ref={trackRef} onScroll={updateOverflow}>
+          {groups.map((group, groupIndex) => (
+            <button
+              key={`${group.name}:${groupIndex}`}
+              data-group-shortcut={groupIndex}
+              className={activeGroupIndex === groupIndex ? "active" : undefined}
+              aria-label={`${displayGroupName(group.name, t)} · ${group.variables.length}`}
+              aria-current={activeGroupIndex === groupIndex ? "location" : undefined}
+              onClick={() => onJump(groupIndex)}
+            >
+              {displayGroupName(group.name, t)}
+              <small>{group.variables.length}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+      {!expanded && (
+        <button
+          className="group-jump-arrow"
+          aria-label={t("file.nextGroups")}
+          disabled={!canScrollRight}
+          onClick={() => moveTrack(1)}
+        >›</button>
+      )}
+      <button
+        className="group-jump-all"
+        aria-label={expanded ? t("file.collapseGroups") : t("file.allGroups")}
+        title={expanded ? t("file.collapseGroups") : t("file.allGroups")}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        {expanded ? (
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="m5 12 5-5 5 5" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="5" height="5" rx="1" />
+            <rect x="11.5" y="3.5" width="5" height="5" rx="1" />
+            <rect x="3.5" y="11.5" width="5" height="5" rx="1" />
+            <rect x="11.5" y="11.5" width="5" height="5" rx="1" />
+          </svg>
+        )}
+      </button>
+    </nav>
   );
 }
 

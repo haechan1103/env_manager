@@ -56,7 +56,6 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
     <section className="integration-page">
       <div className="integration-intro">
         <div>
-          <p className="eyebrow">ONE LOCAL BUNDLE</p>
           <h2>{t("integration.heading")}</h2>
           <p>{t("integration.body")}</p>
         </div>
@@ -68,6 +67,7 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
       <div className="integration-grid" aria-live="polite">
         {items.map((item) => {
           const busy = installing === item.id;
+          const actionNeeded = !item.installed || item.updateAvailable;
           const actionLabel = item.updateAvailable
             ? t("integration.update")
             : item.installed
@@ -90,7 +90,12 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
               <dl className="integration-meta">
                 <div>
                   <dt>{t("integration.version")}</dt>
-                  <dd>{item.installedVersion ?? "—"}{item.updateAvailable ? ` → ${item.currentVersion}` : ""}</dd>
+                  <dd>
+                    {item.legacyVersion
+                      ? t("integration.legacyVersion", { version: item.installedVersion ?? "—" })
+                      : item.installedVersion ?? "—"}
+                    {item.updateAvailable ? ` → ${item.currentVersion}` : ""}
+                  </dd>
                 </div>
                 <div>
                   <dt>{t("integration.protection")}</dt>
@@ -100,11 +105,14 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
 
               <button
                 className={item.installed && !item.updateAvailable ? "quiet-button integration-action" : "primary-button integration-action"}
-                disabled={!item.canInstall || busy || (item.installed && !item.updateAvailable)}
+                disabled={busy || !actionNeeded || !item.canInstall}
                 onClick={() => void install(item)}
               >
                 {busy ? t("common.installing") : actionLabel}
               </button>
+              {actionNeeded && item.actionBlocker && (
+                <p className="integration-action-hint">{actionBlockerLabel(item, t)}</p>
+              )}
             </article>
           );
         })}
@@ -139,4 +147,17 @@ function integrationDetail(
   }
   if (item.detected) return t("integration.detailDetected");
   return t("integration.detailMissing");
+}
+
+function actionBlockerLabel(
+  item: AgentIntegrationStatus,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (item.actionBlocker === "broker-unavailable") {
+    return t("integration.blockerBroker");
+  }
+  if (item.actionBlocker === "bundle-unavailable") {
+    return t("integration.blockerBundle");
+  }
+  return t("integration.blockerTool", { name: item.name });
 }

@@ -3,6 +3,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::{EnvError, EnvErrorCode, EnvResult};
 
@@ -56,6 +57,12 @@ pub struct Document {
     newline_style: NewlineStyle,
     has_bom: bool,
     has_final_newline: bool,
+}
+
+impl Drop for Document {
+    fn drop(&mut self) {
+        self.source.zeroize();
+    }
 }
 
 pub struct AssignmentRef<'a> {

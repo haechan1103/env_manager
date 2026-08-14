@@ -4,11 +4,9 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const packageVersion = JSON.parse(await read("package.json")).version;
 const tauriVersion = JSON.parse(await read("src-tauri/tauri.conf.json")).version;
-const codexVersion = JSON.parse(await read("plugins/env-manager/.codex-plugin/plugin.json")).version;
-const claudeVersion = JSON.parse(await read("plugins/env-manager/.claude-plugin/plugin.json")).version;
 const workspaceVersion = (await read("Cargo.toml")).match(/\[workspace\.package\][\s\S]*?version = "([^"]+)"/)?.[1];
 
-const versions = { packageVersion, tauriVersion, workspaceVersion, codexVersion, claudeVersion };
+const versions = { packageVersion, tauriVersion, workspaceVersion };
 const mismatched = Object.entries(versions).filter(([, version]) => version !== packageVersion);
 if (mismatched.length > 0) {
   throw new Error(`Release versions do not match: ${JSON.stringify(versions)}`);

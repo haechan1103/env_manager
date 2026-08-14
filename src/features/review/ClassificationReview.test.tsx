@@ -29,6 +29,7 @@ describe("ClassificationReview", () => {
     expect(api.protectVariables).toHaveBeenCalledWith("demo-project", ["GPT_MODEL"]);
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /allow all/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText("The name alone is not enough to decide whether an AI tool may read its value.")).toHaveLength(1);
   });
 
   it("filters pending variables by env file and scopes protect all to that file", async () => {

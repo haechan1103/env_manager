@@ -63,7 +63,11 @@ pub struct Manifest {
     pub variables: BTreeMap<String, VariablePolicy>,
     #[serde(default)]
     pub links: Vec<LinkGroup>,
-    #[serde(default)]
+    #[serde(
+        default,
+        alias = "fileLabels",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
     pub file_labels: BTreeMap<String, String>,
 }
 
@@ -179,6 +183,16 @@ impl ManifestStore {
             .map_err(|error| EnvError::io(&self.path, error.error))?;
         Ok(())
     }
+
+    pub fn take_legacy_file_labels(&self) -> EnvResult<BTreeMap<String, String>> {
+        let mut manifest = self.load()?;
+        if manifest.file_labels.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let labels = std::mem::take(&mut manifest.file_labels);
+        self.save(&manifest)?;
+        Ok(labels)
+    }
 }
 
 fn validate_relative_path(path: &str) -> EnvResult<()> {
@@ -191,4 +205,31 @@ fn validate_relative_path(path: &str) -> EnvResult<()> {
         return Err(EnvError::path_outside(path));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_file_labels_load_but_are_omitted_after_migration() {
+        let project = tempfile::tempdir().expect("project");
+        let path = project.path().join(MANIFEST_FILE_NAME);
+        fs::write(
+            &path,
+            r#"{"version":1,"fileLabels":{".env.local":"Local env"}}"#,
+        )
+        .expect("legacy manifest");
+        let store = ManifestStore::for_root(project.path());
+
+        let labels = store.take_legacy_file_labels().expect("migrate labels");
+
+        assert_eq!(
+            labels.get(".env.local").map(String::as_str),
+            Some("Local env")
+        );
+        let persisted = fs::read_to_string(path).expect("persisted manifest");
+        assert!(!persisted.contains("fileLabels"));
+        assert!(!persisted.contains("Local env"));
+    }
 }

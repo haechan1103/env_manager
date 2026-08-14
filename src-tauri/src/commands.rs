@@ -11,7 +11,11 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::runtime::{AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary};
-use crate::{integrations, integrations::AgentIntegrationId};
+use crate::{
+    integrations,
+    integrations::AgentIntegrationId,
+    provider_push::{self, ProviderPushRequest},
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,12 +42,43 @@ impl From<integrations::IntegrationError> for CommandError {
     }
 }
 
+impl From<provider_push::ProviderPushError> for CommandError {
+    fn from(error: provider_push::ProviderPushError) -> Self {
+        Self {
+            code: error.code.to_owned(),
+            message: error.message.to_owned(),
+        }
+    }
+}
+
 type CommandResult<T> = Result<T, CommandError>;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRequest {
     project_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubRepositoryRequest {
+    project_id: String,
+    repository: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudflareTargetRequest {
+    project_id: String,
+    file: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGitHubEnvironmentRequest {
+    project_id: String,
+    repository: String,
+    environment: String,
 }
 
 #[derive(Deserialize)]
@@ -127,6 +162,7 @@ pub struct RenameFileRequest {
 pub struct ExportRequest {
     project_id: String,
     passphrase: Option<String>,
+    selection: Option<Vec<env_core::ExportOccurrence>>,
     locale: String,
 }
 
@@ -136,6 +172,29 @@ pub struct ExportResult {
     file_count: usize,
     encrypted: bool,
     cancelled: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamImportRequest {
+    project_id: String,
+    passphrase: String,
+    locale: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTeamImportRequest {
+    project_id: String,
+    plan_id: String,
+    shared_conflicts: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscardTeamImportRequest {
+    project_id: String,
+    plan_id: String,
 }
 
 #[tauri::command]
@@ -152,6 +211,74 @@ pub struct AgentIntegrationRequest {
 #[tauri::command]
 pub fn list_agent_integrations(app: AppHandle) -> Vec<integrations::AgentIntegrationStatus> {
     integrations::list(&app)
+}
+
+#[tauri::command]
+pub fn list_deployment_providers(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<provider_push::DeploymentProviderStatus>> {
+    let service = runtime.service(&request.project_id)?;
+    Ok(provider_push::list(service.root()))
+}
+
+#[tauri::command]
+pub fn list_github_repositories(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::GitHubRepositoryOptions> {
+    let service = runtime.service(&request.project_id)?;
+    provider_push::list_github_repositories(service.root()).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn detect_github_repository(
+    request: CloudflareTargetRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::GitHubRepositoryContext> {
+    let service = runtime.service(&request.project_id)?;
+    provider_push::detect_github_repository(service.root(), &request.file).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn detect_cloudflare_target(
+    request: CloudflareTargetRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::CloudflareTargetContext> {
+    let service = runtime.service(&request.project_id)?;
+    provider_push::detect_cloudflare_target(service.root(), &request.file).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn list_github_environments(
+    request: GitHubRepositoryRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::GitHubEnvironmentOptions> {
+    let service = runtime.service(&request.project_id)?;
+    provider_push::list_github_environments(service.root(), &request.repository).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn create_github_environment(
+    request: CreateGitHubEnvironmentRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::GitHubEnvironmentOptions> {
+    let service = runtime.service(&request.project_id)?;
+    provider_push::create_github_environment(
+        service.root(),
+        &request.repository,
+        &request.environment,
+    )
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn push_to_provider(
+    payload: ProjectMutation<ProviderPushRequest>,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::ProviderPushResult> {
+    let service = runtime.service(&payload.project_id)?;
+    provider_push::push(&service, payload.request).map_err(Into::into)
 }
 
 #[tauri::command]
@@ -194,8 +321,7 @@ pub fn rename_env_file(
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<()> {
     runtime
-        .service(&request.project_id)?
-        .set_file_display_name(&request.file, &request.name)
+        .rename_file(&request.project_id, &request.file, &request.name)
         .map_err(Into::into)
 }
 
@@ -285,8 +411,9 @@ pub async fn export_env_files(
     }
     let service = runtime.service(&request.project_id)?;
     let passphrase = request.passphrase;
+    let selection = request.selection;
     let summary = tauri::async_runtime::spawn_blocking(move || {
-        service.export_env_files(&destination, passphrase)
+        service.export_env_files(&destination, passphrase, selection.as_deref())
     })
     .await
     .map_err(|_| EnvError::invalid("내보내기 작업이 중단되었습니다."))??;
@@ -298,12 +425,63 @@ pub async fn export_env_files(
 }
 
 #[tauri::command]
+pub async fn plan_team_import(
+    request: TeamImportRequest,
+    app: AppHandle,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Option<crate::runtime::TeamImportPlanProjection>> {
+    if request.passphrase.chars().count() < 10 {
+        return Err(EnvError::invalid("암호는 10자 이상이어야 합니다.").into());
+    }
+    let package = app
+        .dialog()
+        .file()
+        .set_title(if request.locale == "ko" {
+            "암호화 env 공유 파일 열기"
+        } else {
+            "Open encrypted env share"
+        })
+        .add_filter("age encrypted ZIP", &["age"])
+        .blocking_pick_file();
+    let Some(package) = package else {
+        return Ok(None);
+    };
+    let package = package
+        .into_path()
+        .map_err(|_| EnvError::invalid("선택한 공유 파일을 사용할 수 없습니다."))?;
+    let project_id = request.project_id;
+    let passphrase = age::secrecy::SecretString::from(request.passphrase);
+    let runtime_handle = runtime.inner();
+    let plan = runtime_handle.plan_team_import(&project_id, &package, passphrase)?;
+    Ok(Some(plan))
+}
+
+#[tauri::command]
+pub fn apply_team_import(
+    request: ApplyTeamImportRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<env_core::TeamImportSummary> {
+    runtime
+        .apply_team_import(
+            &request.project_id,
+            &request.plan_id,
+            &request.shared_conflicts,
+        )
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn discard_team_import(request: DiscardTeamImportRequest, runtime: State<'_, AppRuntime>) {
+    runtime.discard_team_import(&request.project_id, &request.plan_id);
+}
+
+#[tauri::command]
 pub fn scan_project(
     request: ProjectRequest,
     app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<ProjectProjection> {
-    let projection = runtime.service(&request.project_id)?.scan()?;
+    let projection = runtime.scan(&request.project_id)?;
     let paths = projection
         .files
         .iter()

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 
+import { RenameModal } from "../components/RenameModal";
 import { FileEditor } from "../features/file-editor/FileEditor";
 import { ExportEnvModal } from "../features/export/ExportEnvModal";
+import { ImportEnvModal } from "../features/export/ImportEnvModal";
+import { ProviderPushModal } from "../features/provider-push/ProviderPushModal";
 import { AgentActivity } from "../features/activity/AgentActivity";
 import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
@@ -22,9 +25,13 @@ export function App() {
   const manager = useEnvManager();
   const [view, setView] = useState<View>({ kind: "overview" });
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [renamingProject, setRenamingProject] = useState(false);
 
   useEffect(() => {
     setView({ kind: "overview" });
+    setRenamingProject(false);
   }, [manager.selectedProjectId]);
 
   useEffect(() => {
@@ -60,7 +67,6 @@ export function App() {
           <>
             <header className="project-header integration-header">
               <div>
-                <p className="eyebrow">ENV MANAGER · LOCAL INTEGRATIONS</p>
                 <h1>{t("app.integrationsTitle")}</h1>
               </div>
             </header>
@@ -80,7 +86,6 @@ export function App() {
           <section className="empty-project-page">
             <header className="empty-project-header">
               <div>
-                <p className="eyebrow">PROJECTS</p>
                 <h1>{t("app.projectsTitle")}</h1>
                 <p>{t("app.projectsSubtitle")}</p>
               </div>
@@ -160,10 +165,11 @@ export function App() {
               </div>
               <div className="header-actions">
                 <button className="quiet-button" onClick={() => {
-                  const name = window.prompt(t("sidebar.projectNamePrompt"), manager.selectedProject!.name)?.trim();
-                  if (name && name !== manager.selectedProject!.name) void manager.renameProject(manager.selectedProject!.id, name);
+                  setRenamingProject(true);
                 }}>{t("common.rename")}</button>
                 <button className="quiet-button" onClick={() => setExporting(true)}>{t("export.action")}</button>
+                <button className="quiet-button" onClick={() => setImporting(true)}>{t("import.headerAction")}</button>
+                <button className="quiet-button" onClick={() => setPushing(true)}>{t("push.headerAction")}</button>
                 <button className="quiet-button" onClick={() => void refresh()}>
                   {t("common.refresh")}
                 </button>
@@ -218,6 +224,14 @@ export function App() {
                 <AgentActivity projectId={manager.selectedProject.id} onError={manager.showError} />
               )}
             </div>
+            {renamingProject && (
+              <RenameModal
+                title={t("sidebar.projectNamePrompt")}
+                currentName={manager.selectedProject.name}
+                onClose={() => setRenamingProject(false)}
+                onRename={(name) => void manager.renameProject(manager.selectedProject!.id, name)}
+              />
+            )}
           </>
         )}
       </main>
@@ -231,7 +245,25 @@ export function App() {
         </div>
       )}
       {exporting && manager.selectedProject && (
-        <ExportEnvModal projectId={manager.selectedProject.id} onClose={() => setExporting(false)} onError={manager.showError} onNotice={manager.showNotice} />
+        <ExportEnvModal projectId={manager.selectedProject.id} projection={manager.projection!} onClose={() => setExporting(false)} onError={manager.showError} onNotice={manager.showNotice} />
+      )}
+      {importing && manager.selectedProject && (
+        <ImportEnvModal
+          projectId={manager.selectedProject.id}
+          onApplied={() => manager.refreshProject(manager.selectedProject!.id).then(() => undefined)}
+          onClose={() => setImporting(false)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+        />
+      )}
+      {pushing && manager.selectedProject && manager.projection && (
+        <ProviderPushModal
+          projectId={manager.selectedProject.id}
+          projection={manager.projection}
+          onClose={() => setPushing(false)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+        />
       )}
     </div>
   );

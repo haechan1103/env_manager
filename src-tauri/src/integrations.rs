@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use directories::BaseDirs;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::path::BaseDirectory;
@@ -11,7 +12,8 @@ use tauri::{AppHandle, Manager};
 
 const PLUGIN_NAME: &str = "env-manager";
 const MARKETPLACE_NAME: &str = "env-manager";
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const AGENT_BUNDLE_VERSION: &str = include_str!("../../plugins/env-manager/VERSION");
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -29,11 +31,21 @@ pub struct AgentIntegrationStatus {
     pub detected: bool,
     pub installed: bool,
     pub installed_version: Option<String>,
+    pub legacy_version: bool,
     pub current_version: &'static str,
     pub update_available: bool,
     pub protection: &'static str,
     pub detail: String,
     pub can_install: bool,
+    pub action_blocker: Option<AgentIntegrationBlocker>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentIntegrationBlocker {
+    ToolNotFound,
+    BrokerUnavailable,
+    BundleUnavailable,
 }
 
 #[derive(Debug)]
@@ -45,7 +57,8 @@ pub struct IntegrationError {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InstallationMarker {
-    version: String,
+    #[serde(alias = "version")]
+    bundle_version: String,
 }
 
 pub fn list(app: &AppHandle) -> Vec<AgentIntegrationStatus> {
@@ -76,16 +89,27 @@ pub fn install(
         &executable,
         marketplace_add_args(id, catalog.as_os_str().to_owned()),
     );
-    let installed = run_agent_command(&executable, install_args(id));
-    let updated = if installed {
-        true
-    } else {
-        run_agent_command(&executable, update_args(id))
-    };
-    if !updated {
+    let command_succeeded = install_or_update(&executable, id);
+    if !command_succeeded {
         return Err(IntegrationError {
             code: "AGENT_INSTALL_FAILED",
             message: "플러그인을 설치하지 못했습니다. 해당 도구의 로그인과 플러그인 정책을 확인해주세요.",
+        });
+    }
+
+    if !current_bundle_is_cached(id) && marker_version(app, id).is_some() {
+        reconnect_owned_marketplace(&executable, id, catalog.as_os_str().to_owned())?;
+        if !install_or_update(&executable, id) {
+            return Err(IntegrationError {
+                code: "AGENT_INSTALL_FAILED",
+                message: "플러그인을 설치하지 못했습니다. 해당 도구의 로그인과 플러그인 정책을 확인해주세요.",
+            });
+        }
+    }
+    if !current_bundle_is_cached(id) {
+        return Err(IntegrationError {
+            code: "AGENT_BUNDLE_NOT_UPDATED",
+            message: "AI 도구가 새 연동 번들을 적용하지 않았습니다. 기존 marketplace 연결을 확인해주세요.",
         });
     }
 
@@ -104,9 +128,21 @@ fn status(
     let detected = cli_detected || vscode_detected;
     let installed_version = installed_version(app, id);
     let installed = installed_version.is_some();
+    let legacy_version = installed_version
+        .as_deref()
+        .is_some_and(is_legacy_bundle_version);
     let update_available = installed_version
         .as_deref()
-        .is_some_and(|version| version != CURRENT_VERSION);
+        .is_some_and(|version| is_update_available(version, agent_bundle_version()));
+    let action_blocker = if !cli_detected {
+        Some(AgentIntegrationBlocker::ToolNotFound)
+    } else if !broker_available {
+        Some(AgentIntegrationBlocker::BrokerUnavailable)
+    } else if !catalog_available {
+        Some(AgentIntegrationBlocker::BundleUnavailable)
+    } else {
+        None
+    };
     let (protection, detail) = match (id, installed, cli_detected, vscode_detected) {
         (AgentIntegrationId::Codex, true, _, _) => (
             "broker",
@@ -136,12 +172,29 @@ fn status(
         detected,
         installed,
         installed_version,
-        current_version: CURRENT_VERSION,
+        legacy_version,
+        current_version: agent_bundle_version(),
         update_available,
         protection,
         detail,
-        can_install: cli_detected && broker_available && catalog_available,
+        can_install: action_blocker.is_none(),
+        action_blocker,
     }
+}
+
+fn agent_bundle_version() -> &'static str {
+    AGENT_BUNDLE_VERSION.trim()
+}
+
+fn is_update_available(installed: &str, current: &str) -> bool {
+    match (Version::parse(installed), Version::parse(current)) {
+        (Ok(installed), Ok(current)) => installed < current,
+        _ => installed != current,
+    }
+}
+
+fn is_legacy_bundle_version(version: &str) -> bool {
+    Version::parse(version).is_ok_and(|version| version.major == 0)
 }
 
 fn integration_name(id: AgentIntegrationId) -> &'static str {
@@ -153,17 +206,31 @@ fn integration_name(id: AgentIntegrationId) -> &'static str {
 }
 
 fn integration_executable(id: AgentIntegrationId) -> Option<PathBuf> {
-    let executable = match id {
-        AgentIntegrationId::Codex => find_executable("codex"),
-        AgentIntegrationId::ClaudeCode => find_executable("claude"),
-        AgentIntegrationId::GithubCopilot => find_executable("copilot"),
-    }?;
-    Command::new(&executable)
-        .arg("--version")
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|_| executable)
+    executable_candidates(id).into_iter().find(|executable| {
+        Command::new(executable)
+            .arg("--version")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    })
+}
+
+fn executable_candidates(id: AgentIntegrationId) -> Vec<PathBuf> {
+    let name = match id {
+        AgentIntegrationId::Codex => "codex",
+        AgentIntegrationId::ClaudeCode => "claude",
+        AgentIntegrationId::GithubCopilot => "copilot",
+    };
+    let mut candidates = executable_candidates_named(name);
+    if cfg!(target_os = "macos") {
+        match id {
+            AgentIntegrationId::Codex => candidates.push(PathBuf::from(
+                "/Applications/Codex.app/Contents/Resources/codex",
+            )),
+            AgentIntegrationId::ClaudeCode => {}
+            AgentIntegrationId::GithubCopilot => {}
+        }
+    }
+    deduplicate_paths(candidates)
 }
 
 fn detect_vscode() -> bool {
@@ -177,16 +244,54 @@ fn detect_vscode() -> bool {
 }
 
 fn find_executable(name: &str) -> Option<PathBuf> {
+    executable_candidates_named(name).into_iter().next()
+}
+
+fn executable_candidates_named(name: &str) -> Vec<PathBuf> {
     let file_name = if cfg!(windows) {
         format!("{name}.exe")
     } else {
         name.to_owned()
     };
-    std::env::var_os("PATH")
+    let mut candidates = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
         .map(|directory| directory.join(&file_name))
-        .find(|candidate| candidate.is_file())
+        .filter(|candidate| candidate.is_file())
+        .collect::<Vec<_>>();
+
+    if let Some(base) = BaseDirs::new() {
+        for directory in [
+            base.home_dir().join(".local/bin"),
+            base.home_dir().join(".cargo/bin"),
+            base.home_dir().join(".npm-global/bin"),
+            base.home_dir().join(".bun/bin"),
+            base.home_dir().join("Library/pnpm"),
+        ] {
+            let candidate = directory.join(&file_name);
+            if candidate.is_file() {
+                candidates.push(candidate);
+            }
+        }
+    }
+    if cfg!(target_os = "macos") {
+        for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
+            let candidate = Path::new(directory).join(&file_name);
+            if candidate.is_file() {
+                candidates.push(candidate);
+            }
+        }
+    }
+    deduplicate_paths(candidates)
+}
+
+fn deduplicate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths.into_iter().fold(Vec::new(), |mut unique, path| {
+        if !unique.contains(&path) {
+            unique.push(path);
+        }
+        unique
+    })
 }
 
 fn find_broker() -> Option<PathBuf> {
@@ -265,7 +370,7 @@ fn managed_broker(app: &AppHandle) -> Option<PathBuf> {
         .ok()
         .map(|root| {
             root.join("agent-integrations/bin")
-                .join(CURRENT_VERSION)
+                .join(APP_VERSION)
                 .join(broker_file_name())
         })
         .filter(|path| path.is_file())
@@ -294,9 +399,7 @@ fn install_bundled_broker(app: &AppHandle, bundled: &Path) -> Result<PathBuf, In
         code: "APP_DATA_UNAVAILABLE",
         message: "앱 데이터 경로를 확인하지 못했습니다.",
     })?;
-    let directory = app_data
-        .join("agent-integrations/bin")
-        .join(CURRENT_VERSION);
+    let directory = app_data.join("agent-integrations/bin").join(APP_VERSION);
     fs::create_dir_all(&directory).map_err(|_| IntegrationError {
         code: "BROKER_INSTALL_FAILED",
         message: "broker 설치 디렉터리를 만들지 못했습니다.",
@@ -351,11 +454,7 @@ fn broker_version_matches(path: &Path) -> bool {
         .ok()
         .filter(|output| output.status.success())
         .and_then(|output| String::from_utf8(output.stdout).ok())
-        .is_some_and(|output| {
-            output
-                .split_whitespace()
-                .any(|part| part == CURRENT_VERSION)
-        })
+        .is_some_and(|output| output.split_whitespace().any(|part| part == APP_VERSION))
 }
 
 fn catalog_source(app: &AppHandle) -> Option<PathBuf> {
@@ -377,13 +476,15 @@ fn source_repository_root(_app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn catalog_is_valid(root: &Path) -> bool {
-    root.join("plugins/env-manager/.codex-plugin/plugin.json")
-        .is_file()
-        && root
-            .join("plugins/env-manager/.claude-plugin/plugin.json")
-            .is_file()
+    let plugin = root.join("plugins/env-manager");
+    let codex_manifest = plugin.join(".codex-plugin/plugin.json");
+    let claude_manifest = plugin.join(".claude-plugin/plugin.json");
+    let marketplace = root.join(".claude-plugin/marketplace.json");
+    plugin.join("VERSION").is_file()
         && root.join(".agents/plugins/marketplace.json").is_file()
-        && root.join(".claude-plugin/marketplace.json").is_file()
+        && manifest_version(&codex_manifest).as_deref() == Some(agent_bundle_version())
+        && manifest_version(&claude_manifest).as_deref() == Some(agent_bundle_version())
+        && marketplace_version(&marketplace).as_deref() == Some(agent_bundle_version())
 }
 
 fn materialize_catalog(
@@ -401,7 +502,7 @@ fn materialize_catalog(
     })?;
     let target = app_data
         .join("agent-integrations/catalogs")
-        .join(CURRENT_VERSION)
+        .join(agent_bundle_version())
         .join(integration_slug(id));
     copy_directory(&source.join("plugins"), &target.join("plugins"))?;
     copy_directory(&source.join(".agents"), &target.join(".agents"))?;
@@ -493,6 +594,42 @@ fn marketplace_add_args(id: AgentIntegrationId, catalog: OsString) -> Vec<OsStri
     vec!["plugin".into(), "marketplace".into(), "add".into(), catalog]
 }
 
+fn marketplace_remove_args() -> Vec<OsString> {
+    vec![
+        "plugin".into(),
+        "marketplace".into(),
+        "remove".into(),
+        MARKETPLACE_NAME.into(),
+    ]
+}
+
+fn reconnect_owned_marketplace(
+    executable: &Path,
+    id: AgentIntegrationId,
+    catalog: OsString,
+) -> Result<(), IntegrationError> {
+    // Only call this after finding an app-owned installation marker. A user-owned
+    // marketplace with the same name must never be removed automatically.
+    let _ = run_agent_command(executable, marketplace_remove_args());
+    if run_agent_command(executable, marketplace_add_args(id, catalog)) {
+        Ok(())
+    } else {
+        Err(IntegrationError {
+            code: "AGENT_MARKETPLACE_FAILED",
+            message: "AI 도구의 Env Manager marketplace를 연결하지 못했습니다.",
+        })
+    }
+}
+
+fn install_or_update(executable: &Path, id: AgentIntegrationId) -> bool {
+    run_agent_command(executable, install_args(id))
+        || run_agent_command(executable, update_args(id))
+}
+
+fn current_bundle_is_cached(id: AgentIntegrationId) -> bool {
+    cache_version(id).as_deref() == Some(agent_bundle_version())
+}
+
 fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
     let plugin = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
     match id {
@@ -533,13 +670,13 @@ fn persist_marker(app: &AppHandle, id: AgentIntegrationId) -> Result<(), Integra
     write_json(
         &directory.join(format!("{}.json", integration_slug(id))),
         &json!(InstallationMarker {
-            version: CURRENT_VERSION.to_owned(),
+            bundle_version: agent_bundle_version().to_owned(),
         }),
     )
 }
 
 fn installed_version(app: &AppHandle, id: AgentIntegrationId) -> Option<String> {
-    marker_version(app, id).or_else(|| cache_version(id))
+    cache_version(id).or_else(|| marker_version(app, id))
 }
 
 fn marker_version(app: &AppHandle, id: AgentIntegrationId) -> Option<String> {
@@ -552,7 +689,7 @@ fn marker_version(app: &AppHandle, id: AgentIntegrationId) -> Option<String> {
     let bytes = fs::read(path).ok()?;
     serde_json::from_slice::<InstallationMarker>(&bytes)
         .ok()
-        .map(|marker| marker.version)
+        .map(|marker| marker.bundle_version)
 }
 
 fn cache_version(id: AgentIntegrationId) -> Option<String> {
@@ -579,7 +716,7 @@ fn cache_version(id: AgentIntegrationId) -> Option<String> {
 
 fn newest_manifest_version(root: &Path, manifest: &str) -> Option<String> {
     let entries = fs::read_dir(root).ok()?;
-    let mut versions = entries
+    let versions = entries
         .filter_map(Result::ok)
         .filter(|entry| entry.path().join(manifest).is_file())
         .filter_map(|entry| {
@@ -591,8 +728,34 @@ fn newest_manifest_version(root: &Path, manifest: &str) -> Option<String> {
                 .map(str::to_owned)
         })
         .collect::<Vec<_>>();
-    versions.sort();
-    versions.pop()
+    versions.into_iter().max_by(
+        |left, right| match (Version::parse(left), Version::parse(right)) {
+            (Ok(left), Ok(right)) => left.cmp(&right),
+            _ => left.cmp(right),
+        },
+    )
+}
+
+fn manifest_version(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()?
+        .get("version")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+fn marketplace_version(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()?
+        .get("plugins")?
+        .as_array()?
+        .iter()
+        .find(|plugin| plugin.get("name").and_then(Value::as_str) == Some(PLUGIN_NAME))?
+        .get("version")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 fn integration_slug(id: AgentIntegrationId) -> &'static str {
@@ -625,5 +788,26 @@ mod tests {
             .parent()
             .expect("workspace root");
         assert!(catalog_is_valid(root));
+    }
+
+    #[test]
+    fn agent_bundle_version_is_independent_from_the_app_release() {
+        assert_eq!(agent_bundle_version(), "1.0.0");
+    }
+
+    #[test]
+    fn update_detection_uses_semantic_precedence_without_downgrading() {
+        assert!(is_update_available("0.5.0", "1.0.0"));
+        assert!(!is_update_available("1.0.0", "1.0.0"));
+        assert!(!is_update_available("1.1.0", "1.0.0"));
+        assert!(!is_update_available("1.0.0+codex.local", "1.0.0"));
+    }
+
+    #[test]
+    fn legacy_installation_markers_remain_readable() {
+        let marker = serde_json::from_str::<InstallationMarker>(r#"{"version":"0.5.0"}"#)
+            .expect("legacy marker");
+        assert_eq!(marker.bundle_version, "0.5.0");
+        assert!(is_legacy_bundle_version(&marker.bundle_version));
     }
 }

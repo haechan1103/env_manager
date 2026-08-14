@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import * as api from "../../lib/api";
-import type { ProjectProjection } from "../../lib/types";
+import type { OccurrenceProjection, ProjectProjection } from "../../lib/types";
 import { FileEditor } from "./FileEditor";
 
 vi.mock("../../lib/api", () => ({
@@ -52,6 +52,7 @@ describe("FileEditor", () => {
     );
 
     expect(screen.getByText("No variables yet. Add a new variable to this group.")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Jump to environment variable group" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "+ New group" }));
     await user.type(screen.getByLabelText("Group name"), "Database");
     await user.click(screen.getByRole("button", { name: "Create group" }));
@@ -62,4 +63,96 @@ describe("FileEditor", () => {
     });
     expect(refresh).toHaveBeenCalled();
   });
+
+  it("renames a file through the in-app dialog", async () => {
+    const user = userEvent.setup();
+    const renameFile = vi.fn();
+    render(
+      <FileEditor
+        projectId="demo"
+        projection={projection}
+        filePath=".env.local"
+        onRefresh={vi.fn(async () => undefined)}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+        onRenameFile={renameFile}
+      />,
+    );
+
+    expect(screen.queryByText("ENV FILE")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rename env file" }));
+    const input = screen.getByLabelText("New name");
+    expect(input).toHaveValue(".env.local");
+    await user.clear(input);
+    await user.type(input, "Local development");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(renameFile).toHaveBeenCalledWith(".env.local", "Local development");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows sticky group shortcuts only for files with at least ten variables", async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    const scrollBy = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    HTMLElement.prototype.scrollBy = scrollBy;
+    const clientWidth = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(200);
+    const scrollWidth = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(600);
+    const largeProjection: ProjectProjection = {
+      ...projection,
+      files: [{
+        ...projection.files[0]!,
+        groups: [
+          { name: "GPT", variables: Array.from({ length: 5 }, (_, index) => variable(`GPT_${index}`)) },
+          { name: "Database", variables: Array.from({ length: 5 }, (_, index) => variable(`DB_${index}`)) },
+        ],
+      }],
+    };
+
+    render(
+      <FileEditor
+        projectId="demo"
+        projection={largeProjection}
+        filePath=".env.local"
+        onRefresh={vi.fn(async () => undefined)}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+        onRenameFile={vi.fn()}
+      />,
+    );
+
+    const navigation = screen.getByRole("navigation", { name: "Jump to environment variable group" });
+    expect(navigation).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Database · 5" }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next groups" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Next groups" }));
+    expect(scrollBy).toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "All groups" }));
+    expect(navigation).toHaveClass("expanded");
+    expect(screen.queryByRole("button", { name: "Next groups" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse groups" }));
+    expect(navigation).not.toHaveClass("expanded");
+    expect(screen.getByRole("button", { name: "Next groups" })).toBeInTheDocument();
+
+    clientWidth.mockRestore();
+    scrollWidth.mockRestore();
+  });
 });
+
+function variable(key: string): OccurrenceProjection {
+  return {
+    key,
+    description: [],
+    valueState: "present",
+    displayValue: null,
+    codexAccess: "protected",
+    linkedCount: 1,
+    linkId: null,
+    linkedFiles: [],
+    duplicate: false,
+    clientExposure: null,
+  };
+}

@@ -55,11 +55,12 @@ export function ClassificationReview({ projectId, projection, onRefresh, onOpenF
   return (
     <section className="page-stack review-page">
       <div className="section-heading review-heading">
-        <div><p className="eyebrow">ACCESS REVIEW · NAMES ONLY</p><h2>{t("review.title")}</h2><p>{t("review.body")}</p></div>
+        <div><h2>{t("review.title")}</h2><p>{t("review.body")}</p></div>
         {visiblePending.length > 0 && <button className="secondary-button" disabled={busy !== null} onClick={() => void protectAll()}>{t("review.protectAll", { count: visiblePending.length })}</button>}
       </div>
       <section className="panel review-panel">
         <div className="panel-title"><h3>{t("review.needsDecision")}</h3><span>{visiblePending.length}</span></div>
+        {visiblePending.length > 0 && <p className="review-list-help">{t("review.ambiguousReason")}</p>}
         {pendingFiles.length > 1 && (
           <div className="review-file-tabs" role="tablist" aria-label={t("review.fileFilter")}>
             <button className={activeFile === null ? "active" : ""} role="tab" aria-label={t("review.fileTab", { name: t("review.allFiles"), count: pending.length })} aria-selected={activeFile === null} onClick={() => setSelectedFile(null)}>
@@ -74,7 +75,7 @@ export function ClassificationReview({ projectId, projection, onRefresh, onOpenF
         )}
         {visiblePending.length === 0 ? <div className="empty-inline"><span>✓</span><p>{t("review.empty")}</p></div> : visiblePending.map((item) => (
           <article className="review-item" key={item.key}>
-            <div><strong>{item.key}</strong><p>{t("review.ambiguousReason")}</p><div className="review-paths">{item.files.map((file) => <button key={file} onClick={() => onOpenFile(file)}>{file}</button>)}</div></div>
+            <div><strong>{item.key}</strong><div className="review-paths">{item.files.map((file) => <button key={file} onClick={() => onOpenFile(file)}>{file}</button>)}</div></div>
             <div className="review-actions">
               {item.clientExposed && <span className="client-warning-chip">{t("review.clientVisible")}</span>}
               <button disabled={busy !== null} onClick={() => void setAccess(item.key, "protected")}>{t("row.protected")}</button>

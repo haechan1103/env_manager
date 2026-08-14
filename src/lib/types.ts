@@ -2,7 +2,52 @@ export type CodexAccess = "read-write" | "protected" | "unclassified";
 export type ValueState = "empty" | "present";
 export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
 export type AgentProtection = "broker" | "guarded" | "inactive";
+export type AgentIntegrationBlocker = "tool-not-found" | "broker-unavailable" | "bundle-unavailable";
 export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
+export type DeploymentProviderId = "github-actions" | "cloudflare-workers";
+export type GitHubEntryKind = "secret" | "variable";
+
+export interface DeploymentProviderStatus {
+  id: DeploymentProviderId;
+  name: string;
+  available: boolean;
+  detail: string;
+}
+
+export interface GitHubRepositoryOptions {
+  repositories: string[];
+}
+
+export interface GitHubRepositoryContext {
+  repository: string | null;
+}
+
+export interface GitHubEnvironmentOptions {
+  repository: string;
+  environments: string[];
+}
+
+export interface CloudflareTargetContext {
+  worker: string | null;
+  environments: string[];
+  configPath: string | null;
+}
+
+export interface ProviderPushRequest {
+  provider: DeploymentProviderId;
+  file: string;
+  selections: Array<{ key: string; kind: GitHubEntryKind }>;
+  repository: string | null;
+  githubEnvironment: string | null;
+  worker: string | null;
+  cloudflareEnvironment: string | null;
+}
+
+export interface ProviderPushResult {
+  provider: DeploymentProviderId;
+  pushedCount: number;
+  failedKeys: string[];
+}
 
 export interface GitSafetyProjection {
   state: GitSafetyState;
@@ -29,11 +74,13 @@ export interface AgentIntegrationStatus {
   detected: boolean;
   installed: boolean;
   installedVersion: string | null;
+  legacyVersion: boolean;
   currentVersion: string;
   updateAvailable: boolean;
   protection: AgentProtection;
   detail: string;
   canInstall: boolean;
+  actionBlocker: AgentIntegrationBlocker | null;
 }
 
 export interface ProjectSummary {
@@ -82,6 +129,42 @@ export interface ExportResult {
   fileCount: number;
   encrypted: boolean;
   cancelled: boolean;
+}
+
+export interface ExportOccurrence {
+  file: string;
+  key: string;
+}
+
+export type TeamImportOccurrenceState = "new" | "unchanged" | "conflict";
+
+export interface TeamImportPreview {
+  files: Array<{
+    path: string;
+    occurrences: Array<{
+      id: string;
+      key: string;
+      state: TeamImportOccurrenceState;
+      linkId: string | null;
+    }>;
+  }>;
+  newCount: number;
+  unchangedCount: number;
+  conflictCount: number;
+}
+
+export interface TeamImportPlanProjection {
+  planId: string;
+  expiresInSeconds: number;
+  preview: TeamImportPreview;
+}
+
+export interface TeamImportSummary {
+  addedCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  keptLocalCount: number;
+  affectedFiles: string[];
 }
 
 export interface ProjectProjection {

@@ -33,6 +33,7 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: npm ci
+      - run: npm run validate:agent-bundle
       - run: npm run validate:release-version
 
       - name: Import Apple signing certificate

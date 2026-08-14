@@ -1,13 +1,17 @@
 mod commands;
 mod integrations;
+mod provider_push;
 mod runtime;
 
 use commands::{
-    add_variable, apply_gitignore_guard, apply_migration, copy_key, copy_value, create_group,
-    create_link, delete_variable, detach_link_member, export_env_files, install_agent_integration,
-    list_agent_activity, list_agent_integrations, list_projects, move_variable, plan_migration,
-    protect_variables, read_value, register_project, remove_project, rename_env_file, rename_group,
-    rename_project, save_description, save_value, scan_project, set_codex_access,
+    add_variable, apply_gitignore_guard, apply_migration, apply_team_import, copy_key, copy_value,
+    create_github_environment, create_group, create_link, delete_variable, detach_link_member,
+    detect_cloudflare_target, detect_github_repository, discard_team_import, export_env_files,
+    install_agent_integration, list_agent_activity, list_agent_integrations,
+    list_deployment_providers, list_github_environments, list_github_repositories, list_projects,
+    move_variable, plan_migration, plan_team_import, protect_variables, push_to_provider,
+    read_value, register_project, remove_project, rename_env_file, rename_group, rename_project,
+    save_description, save_value, scan_project, set_codex_access,
 };
 use runtime::AppRuntime;
 use tauri::Manager;
@@ -28,11 +32,21 @@ pub fn run() {
             list_projects,
             list_agent_integrations,
             install_agent_integration,
+            list_deployment_providers,
+            list_github_repositories,
+            detect_github_repository,
+            detect_cloudflare_target,
+            list_github_environments,
+            create_github_environment,
+            push_to_provider,
             register_project,
             remove_project,
             rename_project,
             rename_env_file,
             export_env_files,
+            plan_team_import,
+            apply_team_import,
+            discard_team_import,
             scan_project,
             apply_gitignore_guard,
             save_value,

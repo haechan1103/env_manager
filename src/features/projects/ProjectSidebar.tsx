@@ -1,3 +1,6 @@
+import { useState } from "react";
+
+import { RenameModal } from "../../components/RenameModal";
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
 import { supportedLocales, useI18n, type Locale } from "../../i18n";
 import { AppUpdater } from "../updater/AppUpdater";
@@ -33,10 +36,17 @@ export function ProjectSidebar({
   onRenameFile,
 }: Props) {
   const { locale, setLocale, t } = useI18n();
+  const [renameTarget, setRenameTarget] = useState<
+    | { kind: "project"; id: string; name: string }
+    | { kind: "file"; projectId: string; path: string; name: string }
+    | null
+  >(null);
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-mark">E</span>
+        <span className="brand-mark" aria-hidden="true">
+          <img src="/brand/env-manager-logo-v1.png" alt="" />
+        </span>
         <span>Env Manager</span>
       </div>
 
@@ -51,10 +61,7 @@ export function ProjectSidebar({
             key={project.id}
             className={project.id === selectedProjectId ? "project-item selected" : "project-item"}
             onClick={() => onSelectProject(project.id)}
-            onDoubleClick={() => {
-              const name = window.prompt(t("sidebar.projectNamePrompt"), project.name)?.trim();
-              if (name && name !== project.name) onRenameProject(project.id, name);
-            }}
+            onDoubleClick={() => setRenameTarget({ kind: "project", id: project.id, name: project.name })}
             title={t("sidebar.renameHint")}
           >
             <span className="project-glyph">{project.name.slice(0, 1).toUpperCase()}</span>
@@ -100,8 +107,9 @@ export function ProjectSidebar({
               className={view.kind === "file" && view.path === file.path ? "nav-item active" : "nav-item"}
               onClick={() => onSelectView({ kind: "file", path: file.path })}
               onDoubleClick={() => {
-                const name = window.prompt(t("sidebar.fileNamePrompt"), file.displayName)?.trim();
-                if (name && name !== file.displayName && selectedProjectId) onRenameFile(selectedProjectId, file.path, name);
+                if (selectedProjectId) {
+                  setRenameTarget({ kind: "file", projectId: selectedProjectId, path: file.path, name: file.displayName });
+                }
               }}
               title={`${file.displayName}\n${file.path}\n${t("sidebar.renameHint")}`}
             >
@@ -140,6 +148,17 @@ export function ProjectSidebar({
         </label>
         <AppUpdater />
       </div>
+      {renameTarget && (
+        <RenameModal
+          title={t(renameTarget.kind === "project" ? "sidebar.projectNamePrompt" : "sidebar.fileNamePrompt")}
+          currentName={renameTarget.name}
+          onClose={() => setRenameTarget(null)}
+          onRename={(name) => {
+            if (renameTarget.kind === "project") onRenameProject(renameTarget.id, name);
+            else onRenameFile(renameTarget.projectId, renameTarget.path, name);
+          }}
+        />
+      )}
     </aside>
   );
 }
