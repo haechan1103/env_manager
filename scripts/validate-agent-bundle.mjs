@@ -9,6 +9,7 @@ const claudeMarketplace = JSON.parse(await read(".claude-plugin/marketplace.json
 const mcp = JSON.parse(await read("plugins/env-manager/.mcp.json"));
 const hooks = JSON.parse(await read("plugins/env-manager/hooks/hooks.json"));
 const skill = await read("plugins/env-manager/skills/manage-project-env/SKILL.md");
+const normalizedSkill = skill.replace(/\r\n?/g, "\n");
 
 assert(codex.name === "env-manager", "Codex plugin name must be env-manager");
 assert(claude.name === "env-manager", "Claude plugin name must be env-manager");
@@ -18,7 +19,7 @@ assert(claude.version === version, "Claude plugin version must match the agent b
 assert(claudeMarketplace.plugins?.[0]?.version === version, "Claude marketplace version must match the agent bundle");
 assert(mcp.mcpServers?.["env-manager"]?.command === "env-manager-broker", "MCP must use the portable broker command");
 assert(Array.isArray(hooks.hooks?.PreToolUse), "PreToolUse Guard is required");
-assert(skill.startsWith("---\nname: manage-project-env\n"), "Skill frontmatter is missing");
+assert(normalizedSkill.startsWith("---\nname: manage-project-env\n"), "Skill frontmatter is missing");
 
 process.stdout.write(`Agent bundle ${version} is internally consistent and versioned independently from the app.\n`);
 
