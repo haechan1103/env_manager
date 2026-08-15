@@ -10,6 +10,7 @@ test("keeps project selection compact in the sidebar", async ({ page }) => {
 
   const dialog = page.getByRole("dialog", { name: "Switch project" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Switch project" })).toHaveCSS("color", "rgb(23, 32, 29)");
   await expect(dialog.getByText("/Users/demo/dev/sample-saas")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Add project" })).toBeVisible();
 });

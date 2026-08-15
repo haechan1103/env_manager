@@ -13,7 +13,7 @@ export interface AppUpdateInfo {
 let pendingUpdate: Update | null = null;
 
 export async function currentAppVersion(): Promise<string> {
-  return isTauriRuntime ? getVersion() : "0.5.4";
+  return isTauriRuntime ? getVersion() : "0.6.0";
 }
 
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {

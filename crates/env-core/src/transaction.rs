@@ -181,4 +181,24 @@ mod tests {
             crate::EnvErrorCode::FileChangedExternally
         );
     }
+
+    #[test]
+    fn replaces_an_existing_file_through_the_staged_commit_path() {
+        let project = SyntheticProject::new();
+        let path = project.write(".env.local", "PORT=fake_3000\r\n");
+        let original = fs::read(&path).expect("read original");
+
+        TransactionPlan::new(vec![PlannedFileChange {
+            relative_path: PathBuf::from(".env.local"),
+            expected_revision: FileRevision::from_bytes(&original),
+            proposed_bytes: b"PORT=fake_4000\r\n".to_vec(),
+        }])
+        .commit(project.root())
+        .expect("replace existing file");
+
+        assert_eq!(
+            fs::read(path).expect("read committed file"),
+            b"PORT=fake_4000\r\n"
+        );
+    }
 }

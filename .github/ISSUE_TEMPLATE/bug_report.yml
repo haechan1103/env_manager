@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Env Manager version
-      placeholder: v0.5.2
+      placeholder: v0.6.0
     validations:
       required: true
   - type: dropdown
@@ -20,6 +20,7 @@ body:
       options:
         - macOS Apple Silicon
         - macOS Intel
+        - Windows 10/11 x64
         - Source build
         - Other
     validations:

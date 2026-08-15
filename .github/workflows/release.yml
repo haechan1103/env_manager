@@ -52,6 +52,10 @@ jobs:
           rm certificate.p12
           echo "APPLE_SIGNING_IDENTITY=$OPTIONAL_APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
+      - name: Configure ad-hoc signing fallback
+        if: ${{ env.OPTIONAL_APPLE_SIGNING_IDENTITY == '' }}
+        run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+
       - name: Configure Apple notarization
         env:
           NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -73,16 +77,18 @@ jobs:
           tagName: v__VERSION__
           releaseName: Env Manager v__VERSION__
           releaseBody: |
-            Env Manager v__VERSION__ for macOS.
+            Env Manager v__VERSION__ for macOS and Windows.
 
+            - Windows 10/11 (x64): download the `x64-setup.exe` installer
             - Apple Silicon: download the aarch64 DMG
             - Intel Mac: download the x86_64 DMG
             - The app opens in English by default and also supports Korean.
 
             ---
 
-            Env Manager v__VERSION__ macOS 설치 파일입니다.
+            Env Manager v__VERSION__ Windows 및 macOS 설치 파일입니다.
 
+            - Windows 10/11(x64): `x64-setup.exe` 설치 파일
             - Apple Silicon: aarch64 DMG
             - Intel Mac: x86_64 DMG
             - 앱은 영어를 기본으로 열리며 한국어도 지원합니다.
@@ -90,4 +96,55 @@ jobs:
           prerelease: false
           releaseDraft: false
           retryAttempts: 2
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+          args: --target ${{ matrix.target }} --bundles app,dmg --config src-tauri/tauri.release.conf.json
+
+  windows:
+    runs-on: windows-latest
+    env:
+      ENV_MANAGER_TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-pc-windows-msvc
+      - run: npm ci
+      - run: npm run validate:agent-bundle
+      - run: npm run validate:release-version
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Env Manager v__VERSION__
+          releaseBody: |
+            Env Manager v__VERSION__ for macOS and Windows.
+
+            - Windows 10/11 (x64): download the `x64-setup.exe` installer
+            - Apple Silicon: download the aarch64 DMG
+            - Intel Mac: download the x86_64 DMG
+            - The app opens in English by default and also supports Korean.
+
+            ---
+
+            Env Manager v__VERSION__ Windows 및 macOS 설치 파일입니다.
+
+            - Windows 10/11(x64): `x64-setup.exe` 설치 파일
+            - Apple Silicon: aarch64 DMG
+            - Intel Mac: x86_64 DMG
+            - 앱은 영어를 기본으로 열리며 한국어도 지원합니다.
+          generateReleaseNotes: true
+          prerelease: false
+          releaseDraft: false
+          retryAttempts: 2
+          updaterJsonPreferNsis: true
+          args: --target x86_64-pc-windows-msvc --bundles nsis --config src-tauri/tauri.release.conf.json

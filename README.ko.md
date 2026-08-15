@@ -8,6 +8,7 @@
     <a href="https://github.com/haechan1103/env_manager/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/env_manager/ci.yml?branch=main&style=flat-square&label=CI" /></a>
     <a href="LICENSE"><img alt="MIT 라이선스" src="https://img.shields.io/github/license/haechan1103/env_manager?style=flat-square" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple" />
+    <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows" />
   </p>
 </div>
 
@@ -16,7 +17,7 @@
 Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 기존 `.env`, `.env.local`, `.env.development`, 하위 앱 env 파일을 한 화면에서 관리합니다. 프로젝트의 실행 방식은 바꾸지 않고 값도 별도 전용 vault로 옮기지 않습니다.
 
 <div align="center">
-  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>macOS용 다운로드</strong></a>
+  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>macOS·Windows용 다운로드</strong></a>
   ·
   <a href="#ai-코딩-에이전트-연결">AI 에이전트 연결</a>
   ·
@@ -131,12 +132,39 @@ GPT_API_KEY를 local과 development에서 연결해줘.
 
 ## 설치
 
-[GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest)에서 Mac에 맞는 DMG를 받으세요.
+[GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest)에서 컴퓨터에 맞는 설치 파일을 받으세요.
 
+- Windows 10/11 x64: `x64-setup.exe`
 - Apple Silicon(M1 이상): `aarch64` DMG
 - Intel Mac: `x86_64` DMG
 
-현재 공개 빌드는 ad-hoc 서명을 사용합니다. 첫 실행이 차단되면 Finder에서 Env Manager를 Control-클릭하고 **열기**를 선택하세요. Apple Developer ID 공증과 Windows 지원은 다음 단계입니다.
+### Windows 첫 실행
+
+현재 Windows 설치 파일은 아직 Authenticode 서명을 사용하지 않습니다.
+Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수
+있습니다. 공식 GitHub Release에서 받은 파일임을 확인한 경우에만
+**추가 정보 → 실행**을 선택하세요. 조직에서 관리하는 컴퓨터는 서명되지
+않은 앱 실행을 완전히 차단할 수도 있습니다. Windows 코드 서명은 예정되어
+있습니다.
+
+### macOS 첫 실행
+
+현재 공개 빌드는 ad-hoc 서명을 사용하며 아직 Apple 공증을 받지 않았습니다.
+따라서 이 저장소에서 받은 앱이어도 처음 실행할 때 macOS가
+**“Env Manager.app”을 열 수 없음** 경고를 표시할 수 있습니다.
+
+공식 GitHub Release에서 받은 파일임을 확인했고 실행하려는 경우:
+
+1. 경고 창에서 **휴지통으로 이동** 대신 **완료**를 누릅니다.
+2. **시스템 설정 → 개인정보 보호 및 보안**을 엽니다.
+3. 아래쪽 **보안** 영역에서 Env Manager의 **확인 없이 열기**를 누릅니다.
+4. 사용자 인증을 마친 뒤 마지막 확인 창에서 **열기**를 누릅니다.
+
+**확인 없이 열기**는 실행이 차단된 뒤 약 1시간 동안 표시됩니다. 다른
+경로에서 받은 파일에는 이 우회 절차를 사용하지 마세요. 자세한 내용은
+[확인되지 않은 개발자의 앱을 여는 Apple 공식 안내](https://support.apple.com/ko-kr/guide/mac-help/mh40616/mac)를 참고하세요.
+이 과정이 필요 없도록 Apple Developer ID 서명과 공증을 적용하는 작업은
+예정되어 있습니다.
 
 앱은 고정된 GitHub Releases 주소에서 서명된 앱 업데이트만 확인합니다. 업데이트 확인 중 프로젝트 경로, env 메타데이터, 값을 보내지 않습니다.
 
@@ -163,7 +191,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS 프로젝트입니다. `0.5.4`는 로컬 파일 편집, 연결 변수, 충돌 검토가 가능한 암호화 전달, GitHub/Cloudflare 전송, 간결한 프로젝트 전환, 보호된 AI 에이전트 연동, 영어·한국어 UI에 집중합니다. Windows 지원, macOS 공증 빌드, 더 많은 언어 지원은 다음 단계입니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.0`은 Windows 10/11 x64 NSIS 설치 파일, Windows용 Broker 포함, 네이티브 Windows 릴리스 검사와 Windows CLI 처리를 추가합니다. 기존의 로컬 파일 편집, 연결 변수, 충돌 검토가 가능한 암호화 전달, GitHub/Cloudflare 전송, 보호된 AI 에이전트 연동과 영어·한국어 UI도 그대로 지원합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
 
 ## 커뮤니티
 

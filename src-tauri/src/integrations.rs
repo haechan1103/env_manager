@@ -207,8 +207,7 @@ fn integration_name(id: AgentIntegrationId) -> &'static str {
 
 fn integration_executable(id: AgentIntegrationId) -> Option<PathBuf> {
     executable_candidates(id).into_iter().find(|executable| {
-        Command::new(executable)
-            .arg("--version")
+        agent_command(executable, &[OsString::from("--version")])
             .output()
             .is_ok_and(|output| output.status.success())
     })
@@ -234,13 +233,30 @@ fn executable_candidates(id: AgentIntegrationId) -> Vec<PathBuf> {
 }
 
 fn detect_vscode() -> bool {
-    find_executable("code").is_some()
-        || [
+    if find_executable("code").is_some() {
+        return true;
+    }
+    if cfg!(target_os = "macos") {
+        return [
             "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
             "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
         ]
         .iter()
-        .any(|path| Path::new(path).is_file())
+        .any(|path| Path::new(path).is_file());
+    }
+    if cfg!(windows)
+        && let Some(base) = BaseDirs::new()
+    {
+        return [
+            base.data_local_dir()
+                .join("Programs/Microsoft VS Code/bin/code.cmd"),
+            base.data_local_dir()
+                .join("Programs/Microsoft VS Code Insiders/bin/code-insiders.cmd"),
+        ]
+        .iter()
+        .any(|path| path.is_file());
+    }
+    false
 }
 
 fn find_executable(name: &str) -> Option<PathBuf> {
@@ -248,15 +264,15 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 }
 
 fn executable_candidates_named(name: &str) -> Vec<PathBuf> {
-    let file_name = if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_owned()
-    };
+    let file_names = executable_file_names(name, cfg!(windows));
     let mut candidates = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
-        .map(|directory| directory.join(&file_name))
+        .flat_map(|directory| {
+            file_names
+                .iter()
+                .map(move |file_name| directory.join(file_name))
+        })
         .filter(|candidate| candidate.is_file())
         .collect::<Vec<_>>();
 
@@ -268,21 +284,49 @@ fn executable_candidates_named(name: &str) -> Vec<PathBuf> {
             base.home_dir().join(".bun/bin"),
             base.home_dir().join("Library/pnpm"),
         ] {
-            let candidate = directory.join(&file_name);
-            if candidate.is_file() {
-                candidates.push(candidate);
+            for file_name in &file_names {
+                let candidate = directory.join(file_name);
+                if candidate.is_file() {
+                    candidates.push(candidate);
+                }
+            }
+        }
+        if cfg!(windows) {
+            for directory in [
+                base.data_dir().join("npm"),
+                base.data_local_dir().join("pnpm"),
+            ] {
+                for file_name in &file_names {
+                    let candidate = directory.join(file_name);
+                    if candidate.is_file() {
+                        candidates.push(candidate);
+                    }
+                }
             }
         }
     }
     if cfg!(target_os = "macos") {
         for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
-            let candidate = Path::new(directory).join(&file_name);
-            if candidate.is_file() {
-                candidates.push(candidate);
+            for file_name in &file_names {
+                let candidate = Path::new(directory).join(file_name);
+                if candidate.is_file() {
+                    candidates.push(candidate);
+                }
             }
         }
     }
     deduplicate_paths(candidates)
+}
+
+fn executable_file_names(name: &str, windows: bool) -> Vec<String> {
+    if windows {
+        ["exe", "cmd", "bat"]
+            .into_iter()
+            .map(|extension| format!("{name}.{extension}"))
+            .collect()
+    } else {
+        vec![name.to_owned()]
+    }
 }
 
 fn deduplicate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -338,7 +382,8 @@ fn ensure_current_broker(app: &AppHandle) -> Result<PathBuf, IntegrationError> {
         message: "broker 소스를 찾지 못했습니다. 앱을 최신 설치본으로 다시 빌드해주세요.",
     })?;
     let broker_crate = source.join("crates/env-broker");
-    let success = Command::new(cargo)
+    let mut command = background_command(cargo);
+    let success = command
         .args(["install", "--path"])
         .arg(&broker_crate)
         .args(["--locked", "--force"])
@@ -448,7 +493,7 @@ fn set_broker_permissions(_path: &Path) -> Result<(), IntegrationError> {
 }
 
 fn broker_version_matches(path: &Path) -> bool {
-    Command::new(path)
+    background_command(path)
         .arg("--version")
         .output()
         .ok()
@@ -651,11 +696,36 @@ fn update_args(id: AgentIntegrationId) -> Vec<OsString> {
 }
 
 fn run_agent_command(executable: &Path, args: Vec<OsString>) -> bool {
-    Command::new(executable)
-        .args(args)
+    agent_command(executable, &args)
         .status()
         .is_ok_and(|status| status.success())
 }
+
+fn agent_command(executable: &Path, args: &[OsString]) -> Command {
+    // Rust applies Windows batch-file escaping when the program itself is a
+    // `.cmd`/`.bat` path. Avoid constructing a `cmd.exe /C` command line here:
+    // catalog paths can contain shell metacharacters and must remain literal args.
+    let mut command = background_command(executable);
+    command.args(args);
+    command
+}
+
+fn background_command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(executable);
+    suppress_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn suppress_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console_window(_command: &mut Command) {}
 
 fn persist_marker(app: &AppHandle, id: AgentIntegrationId) -> Result<(), IntegrationError> {
     let app_data = app.path().app_data_dir().map_err(|_| IntegrationError {
@@ -809,5 +879,32 @@ mod tests {
             .expect("legacy marker");
         assert_eq!(marker.bundle_version, "0.5.0");
         assert!(is_legacy_bundle_version(&marker.bundle_version));
+    }
+
+    #[test]
+    fn windows_agent_cli_candidates_include_native_and_script_launchers() {
+        assert_eq!(
+            executable_file_names("codex", true),
+            vec!["codex.exe", "codex.cmd", "codex.bat"]
+        );
+        assert_eq!(executable_file_names("codex", false), vec!["codex"]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_cmd_agent_launcher_executes_with_literal_arguments() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let launcher = directory.path().join("fake-agent.cmd");
+        fs::write(
+            &launcher,
+            "@echo off\r\nif \"%~1\"==\"--version\" exit /b 0\r\nexit /b 1\r\n",
+        )
+        .expect("write launcher");
+
+        let status = agent_command(&launcher, &[OsString::from("--version")])
+            .status()
+            .expect("run launcher");
+
+        assert!(status.success());
     }
 }

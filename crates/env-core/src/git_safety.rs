@@ -117,7 +117,7 @@ struct GitInspector {
 
 impl GitInspector {
     fn open(root: &Path) -> GitOpenResult {
-        let repository = Command::new("git")
+        let repository = git_command()
             .args(["rev-parse", "--is-inside-work-tree"])
             .current_dir(root)
             .env("GIT_OPTIONAL_LOCKS", "0")
@@ -129,7 +129,7 @@ impl GitInspector {
             Err(_) => GitOpenResult::Unavailable,
             Ok(status) if !status.success() => GitOpenResult::NotRepository,
             Ok(_) => {
-                let tracked = Command::new("git")
+                let tracked = git_command()
                     .args(["ls-files", "--cached", "-z", "--", "."])
                     .current_dir(root)
                     .env("GIT_OPTIONAL_LOCKS", "0")
@@ -217,13 +217,13 @@ impl GitInspector {
         if paths.is_empty() {
             return Some(BTreeSet::new());
         }
-        let mut command = Command::new("git");
+        let mut command = git_command();
         command.args(["log", "--format=", "--name-only", "-z"]);
         if remotes_only {
             command.arg("--remotes");
         } else {
             command.args(["--branches", "--tags"]);
-            let has_head = Command::new("git")
+            let has_head = git_command()
                 .args(["rev-parse", "--verify", "HEAD"])
                 .current_dir(&self.root)
                 .env("GIT_OPTIONAL_LOCKS", "0")
@@ -262,7 +262,7 @@ impl GitInspector {
         if paths.is_empty() {
             return Some(BTreeSet::new());
         }
-        let mut child = Command::new("git")
+        let mut child = git_command()
             .args(["check-ignore", "--no-index", "-z", "--stdin"])
             .current_dir(&self.root)
             .env("GIT_OPTIONAL_LOCKS", "0")
@@ -292,6 +292,23 @@ impl GitInspector {
         )
     }
 }
+
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+    suppress_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn suppress_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console_window(_command: &mut Command) {}
 
 fn append_gitignore_patterns(root: &Path, patterns: &[String]) -> EnvResult<()> {
     let path = root.join(GITIGNORE_PATH);

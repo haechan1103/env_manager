@@ -2072,6 +2072,7 @@ select:focus-visible {
   width: min(500px, 100%);
   max-height: min(720px, calc(100vh - 60px));
   overflow: auto;
+  color: var(--ink);
   background: white;
   border: 1px solid #d9dfda;
   border-radius: 15px;

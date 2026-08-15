@@ -147,7 +147,7 @@ pub fn detect_github_repository(
     source_file: &str,
 ) -> Result<GitHubRepositoryContext, ProviderPushError> {
     let source_directory = source_directory(root, source_file)?;
-    let output = Command::new("git")
+    let output = background_command("git")
         .arg("-C")
         .arg(&source_directory)
         .args(["remote", "get-url", "origin"])
@@ -538,11 +538,10 @@ fn run_with_stdin(executable: &Path, root: &Path, args: &[OsString], stdin: &[u8
 }
 
 fn provider_command(executable: &Path, args: &[OsString]) -> Command {
-    if cfg!(windows)
-        && executable
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("cmd"))
-    {
+    let mut command = if cfg!(windows)
+        && executable.extension().is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+        }) {
         let mut command = Command::new("cmd.exe");
         command.arg("/D").arg("/S").arg("/C").arg(executable);
         command.args(args);
@@ -551,12 +550,31 @@ fn provider_command(executable: &Path, args: &[OsString]) -> Command {
         let mut command = Command::new(executable);
         command.args(args);
         command
-    }
+    };
+    suppress_console_window(&mut command);
+    command
 }
 
+fn background_command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(executable);
+    suppress_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn suppress_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console_window(_command: &mut Command) {}
+
 fn command_succeeds<'a>(executable: &Path, args: impl IntoIterator<Item = &'a str>) -> bool {
-    Command::new(executable)
-        .args(args)
+    let args = args.into_iter().map(OsString::from).collect::<Vec<_>>();
+    provider_command(executable, &args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -600,28 +618,44 @@ fn find_cli(name: &str, root: &Path) -> Option<PathBuf> {
             "wrangler"
         }));
     }
-    let executable = if cfg!(windows) {
-        format!("{name}.exe")
+    let executable_names = if cfg!(windows) {
+        vec![
+            format!("{name}.exe"),
+            format!("{name}.cmd"),
+            format!("{name}.bat"),
+        ]
     } else {
-        name.to_owned()
+        vec![name.to_owned()]
     };
     candidates.extend(
         std::env::var_os("PATH")
             .into_iter()
             .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
-            .map(|directory| directory.join(&executable)),
+            .flat_map(|directory| {
+                executable_names
+                    .iter()
+                    .map(move |executable| directory.join(executable))
+            }),
     );
     if let Some(base) = BaseDirs::new() {
-        candidates.push(base.home_dir().join(".local/bin").join(&executable));
-        candidates.push(base.home_dir().join(".cargo/bin").join(&executable));
+        for directory in [
+            base.home_dir().join(".local/bin"),
+            base.home_dir().join(".cargo/bin"),
+        ] {
+            for executable in &executable_names {
+                candidates.push(directory.join(executable));
+            }
+        }
         if name == "wrangler" && cfg!(windows) {
             candidates.push(base.home_dir().join("AppData/Roaming/npm/wrangler.cmd"));
         }
     }
     if !cfg!(windows) {
-        candidates.push(PathBuf::from("/opt/homebrew/bin").join(&executable));
-        candidates.push(PathBuf::from("/usr/local/bin").join(&executable));
-        candidates.push(PathBuf::from("/usr/bin").join(&executable));
+        for executable in &executable_names {
+            candidates.push(PathBuf::from("/opt/homebrew/bin").join(executable));
+            candidates.push(PathBuf::from("/usr/local/bin").join(executable));
+            candidates.push(PathBuf::from("/usr/bin").join(executable));
+        }
     }
     candidates.into_iter().find(|candidate| candidate.is_file())
 }
@@ -796,5 +830,24 @@ mod tests {
             String::from_utf8_lossy(&buffer),
             r#"{"API_KEY":"fake_secret_canary","PORT":"fake_8787"}"#
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_cmd_provider_launcher_receives_standard_input() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let launcher = directory.path().join("fake-provider.cmd");
+        std::fs::write(
+            &launcher,
+            "@echo off\r\nset /p payload=\r\nif \"%payload%\"==\"fake-provider-input\" exit /b 0\r\nexit /b 1\r\n",
+        )
+        .expect("write launcher");
+
+        assert!(run_with_stdin(
+            &launcher,
+            directory.path(),
+            &[],
+            b"fake-provider-input\n",
+        ));
     }
 }

@@ -8,6 +8,7 @@
     <a href="https://github.com/haechan1103/env_manager/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/env_manager/ci.yml?branch=main&style=flat-square&label=CI" /></a>
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/haechan1103/env_manager?style=flat-square" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple" />
+    <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows" />
   </p>
 </div>
 
@@ -16,7 +17,7 @@
 Env Manager is a local-first desktop app for environment variables. Register a project and manage its existing `.env`, `.env.local`, `.env.development`, and nested app env files from one UI—without changing how the project starts or moving values into a proprietary vault.
 
 <div align="center">
-  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS</strong></a>
+  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS or Windows</strong></a>
   ·
   <a href="#connect-your-ai-coding-agent">Connect an AI agent</a>
   ·
@@ -131,12 +132,37 @@ Normal structure inspection never returns values, including `read-write` values.
 
 ## Install
 
-Download the latest DMG from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
+Download the installer for your computer from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
 
+- Windows 10/11 x64: `x64-setup.exe`
 - Apple Silicon (M1 or newer): `aarch64` DMG
 - Intel Mac: `x86_64` DMG
 
-The current public build uses ad-hoc signing. If macOS blocks the first launch, Control-click Env Manager in Finder and choose **Open**. Apple Developer ID notarization and Windows support are planned.
+### Windows first launch
+
+The Windows installer is not yet Authenticode-signed. Microsoft Defender SmartScreen
+may show **Windows protected your PC**. Proceed only if the installer came from the
+official GitHub Release: choose **More info → Run anyway**. An organization-managed
+computer may block unsigned applications completely. Windows code signing is planned.
+
+### macOS first launch
+
+The current public build uses ad-hoc signing and is not yet notarized by Apple. macOS
+may therefore show **“Env Manager.app” Not Opened** on first launch even when the app
+was downloaded from this repository.
+
+If you trust the download from the official GitHub Release:
+
+1. Choose **Done** in the warning instead of **Move to Trash**.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to **Security** and choose **Open Anyway** for Env Manager.
+4. Authenticate when prompted, then choose **Open** in the final confirmation.
+
+The **Open Anyway** action is available for about one hour after a blocked launch.
+Do not bypass this protection for a copy obtained from any other source. See
+[Apple's guidance for opening an app from an unidentified developer](https://support.apple.com/guide/mac-help/mh40616/mac).
+Developer ID signing and notarization, which will remove this workaround from the
+normal installation flow, are planned.
 
 Env Manager checks the fixed GitHub Releases endpoint for signed app updates. It does not send project paths, env metadata, or values during an update check.
 
@@ -163,7 +189,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS project. Version `0.5.4` focuses on local file editing, linked values, conflict-aware encrypted handoff, GitHub/Cloudflare provider push, compact project switching, guarded AI-agent integrations, and English/Korean UI support. Windows support, notarized macOS builds, and additional languages are next-stage work.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.0` adds a Windows 10/11 x64 NSIS installer, a bundled Windows broker, native Windows release checks, and Windows CLI handling while retaining local file editing, linked values, encrypted handoff, provider push, guarded AI-agent integrations, and English/Korean UI support. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
 
 ## Community
 
