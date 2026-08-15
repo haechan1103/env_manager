@@ -66,9 +66,17 @@ jobs:
         run: |
           $installer = Get-ChildItem "target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not created" }
-          $installDir = Join-Path $env:RUNNER_TEMP "env-manager-windows-test"
-          & $installer.FullName /S "/D=$installDir"
-          if ($LASTEXITCODE -ne 0) { throw "NSIS installer failed" }
+
+          # GitHub's Windows Server runner does not include the desktop WebView2
+          # runtime. Mark it as present only for this ephemeral installer smoke
+          # test so the production installer can retain its normal bootstrapper.
+          $webviewKey = "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          New-Item -Path $webviewKey -Force | Out-Null
+          New-ItemProperty -Path $webviewKey -Name "pv" -Value "999.0.0.0" -PropertyType String -Force | Out-Null
+
+          $installDir = Join-Path $env:LOCALAPPDATA "Env Manager"
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "NSIS installer failed with exit code $($process.ExitCode)" }
           $app = Get-ChildItem $installDir -Recurse -Filter "Env Manager.exe" | Select-Object -First 1
           if (-not $app) { throw "Installed application executable was not found" }
           $broker = Get-ChildItem $installDir -Recurse -Filter "env-manager-broker.exe" | Select-Object -First 1
