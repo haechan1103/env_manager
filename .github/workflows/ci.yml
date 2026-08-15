@@ -77,7 +77,7 @@ jobs:
           $installDir = Join-Path $env:LOCALAPPDATA "Env Manager"
           $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "NSIS installer failed with exit code $($process.ExitCode)" }
-          $app = Get-ChildItem $installDir -Recurse -Filter "Env Manager.exe" | Select-Object -First 1
+          $app = Get-ChildItem $installDir -Recurse -Filter "env-manager-app.exe" | Select-Object -First 1
           if (-not $app) { throw "Installed application executable was not found" }
           $broker = Get-ChildItem $installDir -Recurse -Filter "env-manager-broker.exe" | Select-Object -First 1
           if (-not $broker) { throw "Installed broker sidecar was not found" }
