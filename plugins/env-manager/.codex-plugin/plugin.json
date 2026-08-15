@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Env Manager",
     "shortDescription": "Manage registered env files through a redacted local broker.",
-    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, and N-way variable links.",
+    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, N-way variable links, and opaque same-name value reuse across registered projects.",
     "developerName": "haechan1103",
     "category": "Productivity",
     "capabilities": [
@@ -31,13 +31,15 @@
       "Safe env file creation",
       "Group and variable structure",
       "N-way variable links",
+      "Opaque cross-project value reuse",
       "Multi-agent compatible workflow"
     ],
     "defaultPrompt": [
       "이 프로젝트 env 구조를 값 없이 점검해줘.",
       "GPT 그룹을 만들고 빈 환경변수를 추가해줘.",
       "기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘.",
-      "같은 변수를 local과 development에서 연결해줘."
+      "같은 변수를 local과 development에서 연결해줘.",
+      "다른 등록 프로젝트의 GEMINI_API_KEY를 값 노출 없이 이 프로젝트에 복사해줘."
     ],
     "brandColor": "#16765A"
   },

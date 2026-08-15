@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
@@ -84,6 +85,21 @@ pub struct LinkRequest {
     pub key: String,
     pub files: Vec<String>,
     pub source_file: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaqueValueCopyRequest {
+    pub source_file: String,
+    pub target_file: String,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedactedOccurrenceReference {
+    pub file: String,
+    pub value_state: RedactedValueState,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -193,26 +209,7 @@ impl ProjectService {
 
     pub fn save_value(&self, request: SaveValueRequest) -> EnvResult<MutationSummary> {
         validate_key(&request.key)?;
-        let manifest = ManifestStore::for_root(&self.root).load()?;
-        let targets = manifest
-            .links
-            .iter()
-            .find(|link| {
-                link.key == request.key
-                    && link
-                        .members
-                        .iter()
-                        .any(|member| member.file == request.file)
-            })
-            .map_or_else(
-                || vec![request.file.clone()],
-                |link| {
-                    link.members
-                        .iter()
-                        .map(|member| member.file.clone())
-                        .collect()
-                },
-            );
+        let targets = self.value_write_targets(&request.file, &request.key)?;
         let mut changes = Vec::with_capacity(targets.len());
         for target in &targets {
             let relative = PathBuf::from(target);
@@ -220,6 +217,86 @@ impl ProjectService {
             let proposed = loaded
                 .document
                 .replace_value(&request.key, &request.new_value)?;
+            changes.push(PlannedFileChange {
+                relative_path: relative,
+                expected_revision: loaded.revision,
+                proposed_bytes: proposed,
+            });
+        }
+        TransactionPlan::new(changes).commit(&self.root)?;
+        Ok(MutationSummary {
+            affected_files: targets,
+            keys: vec![request.key],
+        })
+    }
+
+    pub fn redacted_occurrences(&self, key: &str) -> EnvResult<Vec<RedactedOccurrenceReference>> {
+        validate_key(key)?;
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let mut occurrences = Vec::new();
+        for relative in self.discover(&manifest)? {
+            let loaded = self.load_document(&relative)?;
+            let matching = loaded
+                .document
+                .assignments()
+                .into_iter()
+                .filter(|assignment| assignment.key == key)
+                .collect::<Vec<_>>();
+            if matching.len() != 1 {
+                continue;
+            }
+            let value = Zeroizing::new(loaded.document.decoded_value(key)?);
+            occurrences.push(RedactedOccurrenceReference {
+                file: to_manifest_path(&relative),
+                value_state: if value.is_empty() {
+                    RedactedValueState::Empty
+                } else {
+                    RedactedValueState::Present
+                },
+            });
+        }
+        Ok(occurrences)
+    }
+
+    pub fn opaque_copy_impact(&self, file: &str, key: &str) -> EnvResult<Vec<String>> {
+        validate_key(key)?;
+        let targets = self.value_write_targets(file, key)?;
+        for target in &targets {
+            let loaded = self.load_managed_document(target)?;
+            loaded.document.assignment(key)?;
+        }
+        Ok(targets)
+    }
+
+    pub fn copy_value_from(
+        &self,
+        source: &ProjectService,
+        request: OpaqueValueCopyRequest,
+    ) -> EnvResult<MutationSummary> {
+        validate_key(&request.key)?;
+        if self.project_id == source.project_id {
+            return Err(EnvError::invalid(
+                "프로젝트 간 복사는 서로 다른 두 등록 프로젝트가 필요합니다.",
+            ));
+        }
+
+        let source_document = source.load_managed_document(&request.source_file)?;
+        let source_value = Zeroizing::new(source_document.document.decoded_value(&request.key)?);
+        if source_value.is_empty() {
+            return Err(EnvError::invalid(format!(
+                "{} 원본 값이 비어 있어 복사할 수 없습니다.",
+                request.key
+            )));
+        }
+
+        let targets = self.value_write_targets(&request.target_file, &request.key)?;
+        let mut changes = Vec::with_capacity(targets.len());
+        for target in &targets {
+            let relative = PathBuf::from(target);
+            let loaded = self.load_managed_document(target)?;
+            let proposed = loaded
+                .document
+                .replace_value(&request.key, source_value.as_str())?;
             changes.push(PlannedFileChange {
                 relative_path: relative,
                 expected_revision: loaded.revision,
@@ -803,6 +880,39 @@ impl ProjectService {
         Ok(LoadedDocument { document, revision })
     }
 
+    fn load_managed_document(&self, file: &str) -> EnvResult<LoadedDocument> {
+        let relative = PathBuf::from(file);
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        if !self
+            .discover(&manifest)?
+            .iter()
+            .any(|path| path == &relative)
+        {
+            return Err(EnvError::invalid(
+                "관리 중인 env 파일의 변수만 프로젝트 간 복사할 수 있습니다.",
+            ));
+        }
+        self.load_document(&relative)
+    }
+
+    fn value_write_targets(&self, file: &str, key: &str) -> EnvResult<Vec<String>> {
+        let manifest = ManifestStore::for_root(&self.root).load()?;
+        let targets = manifest
+            .links
+            .iter()
+            .find(|link| link.key == key && link.members.iter().any(|member| member.file == file))
+            .map_or_else(
+                || vec![file.to_owned()],
+                |link| {
+                    link.members
+                        .iter()
+                        .map(|member| member.file.clone())
+                        .collect()
+                },
+            );
+        Ok(targets)
+    }
+
     fn commit_one(
         &self,
         relative: PathBuf,
@@ -1267,6 +1377,63 @@ mod tests {
 
         assert_eq!(project.read(".env.local"), b"PORT=fake_4000\n");
         assert_eq!(project.read(".env.development"), b"PORT=fake_4000\n");
+    }
+
+    #[test]
+    fn copies_a_protected_value_between_projects_without_returning_it() {
+        let source = SyntheticProject::new();
+        let target = SyntheticProject::new();
+        let canary = "fake_CROSS_PROJECT_CANARY_41";
+        source.write(".env.local", &format!("GEMINI_API_KEY={canary}\n"));
+        target.write(".env.local", "GEMINI_API_KEY=\n");
+        target.write(".env.development", "GEMINI_API_KEY=\n");
+        let source_service = ProjectService::open(source.root()).expect("source service");
+        let target_service = ProjectService::open(target.root()).expect("target service");
+        source_service.initialize().expect("source initialize");
+        target_service.initialize().expect("target initialize");
+        target_service
+            .create_link(LinkRequest {
+                key: "GEMINI_API_KEY".to_owned(),
+                files: vec![".env.local".to_owned(), ".env.development".to_owned()],
+                source_file: None,
+            })
+            .expect("target link");
+
+        let candidates = source_service
+            .redacted_occurrences("GEMINI_API_KEY")
+            .expect("redacted candidates");
+        let serialized = serde_json::to_string(&candidates).expect("serialize candidates");
+        assert!(!serialized.contains(canary));
+        assert_eq!(candidates[0].value_state, RedactedValueState::Present);
+
+        let summary = target_service
+            .copy_value_from(
+                &source_service,
+                OpaqueValueCopyRequest {
+                    source_file: ".env.local".to_owned(),
+                    target_file: ".env.local".to_owned(),
+                    key: "GEMINI_API_KEY".to_owned(),
+                },
+            )
+            .expect("opaque copy");
+
+        assert_eq!(
+            summary.affected_files,
+            vec![".env.development".to_owned(), ".env.local".to_owned()]
+        );
+        assert_eq!(
+            target.read(".env.local"),
+            format!("GEMINI_API_KEY={canary}\n").as_bytes()
+        );
+        assert_eq!(
+            target.read(".env.development"),
+            format!("GEMINI_API_KEY={canary}\n").as_bytes()
+        );
+        assert!(
+            !serde_json::to_string(&summary)
+                .expect("serialize summary")
+                .contains(canary)
+        );
     }
 
     #[test]

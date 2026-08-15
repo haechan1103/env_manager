@@ -1,6 +1,6 @@
 ---
 name: manage-project-env
-description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, or detach a link. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, secrets, or Env Manager.
+description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, detach a link, or reuse a same-name value from another registered project without exposing it. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, cross-project key reuse, secrets, or Env Manager.
 ---
 
 # Manage Project Env
@@ -26,6 +26,24 @@ interpreter, or generic editing tools.
    as the authoritative file for conflicting link values.
 7. Report only names, relative paths, groups, link membership, policy, and sanitized
    result codes.
+
+## Reuse from another project
+
+- Call `find_reusable_variable_sources` only for a concrete variable name when the
+  user asks about reuse or when an empty requested variable makes a same-name source
+  recommendation directly useful.
+- Present candidate project names and relative files without claiming value equality.
+  If more than one candidate remains and the user did not identify one, ask which
+  source to use.
+- Do not copy from a recommendation alone. Once the user requests a concrete source
+  and target, call `plan_copy_variable_from_project`, verify both project identities,
+  files, the same key, and every affected target file, then apply the plan.
+- If the target occurrence does not exist, create its empty structure first with the
+  normal group/add-variable plans, inspect again, and only then create the copy plan.
+- Treat the operation as a one-time copy. Never describe it as a cross-project link,
+  inheritance, or synchronization. Later edits remain independent.
+- The source and target may stay `protected`; never downgrade policy or call
+  `read_allowed_value` for this operation.
 
 ## Access rules
 

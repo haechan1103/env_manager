@@ -20,6 +20,8 @@ assert(claudeMarketplace.plugins?.[0]?.version === version, "Claude marketplace 
 assert(mcp.mcpServers?.["env-manager"]?.command === "env-manager-broker", "MCP must use the portable broker command");
 assert(Array.isArray(hooks.hooks?.PreToolUse), "PreToolUse Guard is required");
 assert(normalizedSkill.startsWith("---\nname: manage-project-env\n"), "Skill frontmatter is missing");
+assert(normalizedSkill.includes("find_reusable_variable_sources"), "Skill must route redacted cross-project source discovery");
+assert(normalizedSkill.includes("plan_copy_variable_from_project"), "Skill must route opaque cross-project copy plans");
 
 process.stdout.write(`Agent bundle ${version} is internally consistent and versioned independently from the app.\n`);
 

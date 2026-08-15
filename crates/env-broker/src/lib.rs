@@ -9,7 +9,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use env_core::{
     AddVariableRequest, ClassificationSource, CodexAccess, CreateEnvFileRequest,
     CreateGroupRequest, EnvError, EnvErrorCode, LinkRequest, MigrationPlan, MoveVariableRequest,
-    ProjectService, RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
+    OpaqueValueCopyRequest, ProjectService, RedactedValueState, RenameGroupRequest,
+    SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -51,9 +52,20 @@ enum PlannedOperation {
     MoveVariable(MoveVariableRequest),
     UpdateDescription(SaveDescriptionRequest),
     Link(LinkRequest),
-    Detach { link_id: String, file: String },
-    Classification { key: String, access: CodexAccess },
+    Detach {
+        link_id: String,
+        file: String,
+    },
+    Classification {
+        key: String,
+        access: CodexAccess,
+    },
     Migration(MigrationPlan),
+    OpaqueProjectCopy {
+        source_root: PathBuf,
+        source_project_id: String,
+        request: OpaqueValueCopyRequest,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -73,6 +85,32 @@ struct PlanProjection {
 #[serde(rename_all = "camelCase")]
 struct InspectArgs {
     project_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FindReusableVariableArgs {
+    project_path: String,
+    key: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanOpaqueProjectCopyArgs {
+    project_path: String,
+    source_project_id: String,
+    source_file: String,
+    target_file: String,
+    key: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReusableVariableCandidate {
+    project_id: String,
+    project_name: String,
+    display_path: String,
+    files: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,6 +247,9 @@ impl Broker {
     pub fn call_tool(&self, name: &str, arguments: Value) -> Result<Value, EnvError> {
         match name {
             "inspect_project" => self.inspect(parse(arguments)?),
+            "find_reusable_variable_sources" => {
+                self.find_reusable_variable_sources(parse(arguments)?)
+            }
             "read_allowed_value" => self.read_allowed(parse(arguments)?),
             "plan_set_allowed_value" => self.plan_value(parse(arguments)?),
             "plan_create_env_file" => self.plan_create_env_file(parse(arguments)?),
@@ -221,6 +262,9 @@ impl Broker {
             "plan_detach" => self.plan_detach(parse(arguments)?),
             "plan_classification" => self.plan_classification(parse(arguments)?),
             "plan_migration" => self.plan_migration(parse(arguments)?),
+            "plan_copy_variable_from_project" => {
+                self.plan_copy_variable_from_project(parse(arguments)?)
+            }
             "apply_plan" => self.apply(parse(arguments)?),
             _ => Err(EnvError::invalid("지원하지 않는 Env Manager 도구입니다.")),
         }
@@ -239,6 +283,56 @@ impl Broker {
             "OK",
         );
         Ok(result)
+    }
+
+    fn find_reusable_variable_sources(
+        &self,
+        args: FindReusableVariableArgs,
+    ) -> Result<Value, EnvError> {
+        let target = self.open_registered(&args.project_path)?;
+        let mut candidates = Vec::new();
+        for registration in self.registered_projects()? {
+            let Ok(service) = ProjectService::open(&registration.root) else {
+                continue;
+            };
+            if service.project_id() == target.project_id()
+                || !service.root().join(env_core::MANIFEST_FILE_NAME).is_file()
+            {
+                continue;
+            }
+            let Ok(occurrences) = service.redacted_occurrences(&args.key) else {
+                continue;
+            };
+            let files = occurrences
+                .into_iter()
+                .filter(|occurrence| occurrence.value_state == RedactedValueState::Present)
+                .map(|occurrence| occurrence.file)
+                .collect::<Vec<_>>();
+            if files.is_empty() {
+                continue;
+            }
+            candidates.push(ReusableVariableCandidate {
+                project_id: service.project_id().to_owned(),
+                project_name: registration.name,
+                display_path: registration.display_path,
+                files,
+            });
+        }
+        candidates.sort_by(|left, right| {
+            left.project_name
+                .to_ascii_lowercase()
+                .cmp(&right.project_name.to_ascii_lowercase())
+                .then_with(|| left.project_id.cmp(&right.project_id))
+        });
+        audit(
+            target.project_id(),
+            "find_reusable_variable_sources",
+            &[],
+            std::slice::from_ref(&args.key),
+            "redacted-cross-project-search",
+            "OK",
+        );
+        Ok(json!({ "candidates": candidates }))
     }
 
     fn read_allowed(&self, args: ValueArgs) -> Result<Value, EnvError> {
@@ -466,6 +560,55 @@ impl Broker {
         )
     }
 
+    fn plan_copy_variable_from_project(
+        &self,
+        args: PlanOpaqueProjectCopyArgs,
+    ) -> Result<Value, EnvError> {
+        let target = self.open_registered(&args.project_path)?;
+        let source = self.open_registered_project_id(&args.source_project_id)?;
+        if source.project_id() == target.project_id() {
+            return Err(EnvError::invalid(
+                "같은 프로젝트 안에서는 기존 연결 또는 값 편집 기능을 사용해주세요.",
+            ));
+        }
+        let source_available =
+            source
+                .redacted_occurrences(&args.key)?
+                .into_iter()
+                .any(|occurrence| {
+                    occurrence.file == args.source_file
+                        && occurrence.value_state == RedactedValueState::Present
+                });
+        if !source_available {
+            return Err(EnvError::invalid(format!(
+                "선택한 원본에 값이 있는 {} 변수를 찾지 못했습니다.",
+                args.key
+            )));
+        }
+        let affected_files = target.opaque_copy_impact(&args.target_file, &args.key)?;
+        let request = OpaqueValueCopyRequest {
+            source_file: args.source_file,
+            target_file: args.target_file,
+            key: args.key.clone(),
+        };
+        self.store_plan(
+            &target,
+            PlannedOperation::OpaqueProjectCopy {
+                source_root: source.root().to_path_buf(),
+                source_project_id: source.project_id().to_owned(),
+                request,
+            },
+            format!(
+                "다른 등록 프로젝트의 {} 값을 실제 값 노출 없이 현재 프로젝트로 한 번 복사합니다.",
+                args.key
+            ),
+            affected_files,
+            vec![args.key],
+            "cross-project-value-copy",
+            None,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn store_plan(
         &self,
@@ -529,7 +672,7 @@ impl Broker {
             return Err(plan_expired());
         }
 
-        let service = ProjectService::open(&stored.root)?;
+        let service = self.open_registered_root(&stored.root)?;
         if service.project_id() != stored.project_id {
             return Err(EnvError::unregistered_project(&stored.project_id));
         }
@@ -578,6 +721,31 @@ impl Broker {
                 .set_codex_access_by(&key, access, ClassificationSource::Codex)
                 .map(|()| json!({ "affectedFiles": [], "keys": [key] })),
             PlannedOperation::Migration(plan) => serialize_result(service.apply_migration(plan)),
+            PlannedOperation::OpaqueProjectCopy {
+                source_root,
+                source_project_id,
+                request,
+            } => {
+                let source = self.open_registered_root(&source_root)?;
+                if source.project_id() != source_project_id {
+                    return Err(EnvError::unregistered_project(&source_project_id));
+                }
+                let source_file = request.source_file.clone();
+                let key = request.key.clone();
+                let copied = service.copy_value_from(&source, request);
+                let source_result_code = copied
+                    .as_ref()
+                    .map_or_else(|error| error.code().as_str(), |_| "OK");
+                audit(
+                    source.project_id(),
+                    "copy_variable_to_registered_project",
+                    std::slice::from_ref(&source_file),
+                    std::slice::from_ref(&key),
+                    "opaque-cross-project-source",
+                    source_result_code,
+                );
+                serialize_result(copied)
+            }
         };
         let result_code = result
             .as_ref()
@@ -598,12 +766,13 @@ impl Broker {
         let root = path
             .canonicalize()
             .map_err(|error| EnvError::io(path, error))?;
-        let registered_roots = self
-            .registered_roots_override
-            .clone()
-            .map_or_else(load_registered_roots, Ok)?;
-        let registered = registered_roots.into_iter().any(|candidate| {
+        self.open_registered_root(&root)
+    }
+
+    fn open_registered_root(&self, root: &Path) -> Result<ProjectService, EnvError> {
+        let registered = self.registered_projects()?.into_iter().any(|candidate| {
             candidate
+                .root
                 .canonicalize()
                 .is_ok_and(|candidate| candidate == root)
         });
@@ -616,6 +785,37 @@ impl Broker {
             return Err(EnvError::unregistered_project("manifest-missing"));
         }
         ProjectService::open(root)
+    }
+
+    fn open_registered_project_id(&self, project_id: &str) -> Result<ProjectService, EnvError> {
+        for registration in self.registered_projects()? {
+            let Ok(service) = ProjectService::open(&registration.root) else {
+                continue;
+            };
+            if service.project_id() == project_id
+                && service.root().join(env_core::MANIFEST_FILE_NAME).is_file()
+            {
+                return Ok(service);
+            }
+        }
+        Err(EnvError::unregistered_project(project_id))
+    }
+
+    fn registered_projects(&self) -> Result<Vec<RegisteredProject>, EnvError> {
+        if let Some(roots) = &self.registered_roots_override {
+            return Ok(roots
+                .iter()
+                .map(|root| RegisteredProject {
+                    name: root.file_name().map_or_else(
+                        || "Project".to_owned(),
+                        |name| name.to_string_lossy().into_owned(),
+                    ),
+                    display_path: root.to_string_lossy().into_owned(),
+                    root: root.clone(),
+                })
+                .collect());
+        }
+        load_registered_projects()
     }
 }
 
@@ -754,10 +954,20 @@ struct RegistryData {
 
 #[derive(Deserialize)]
 struct RegistryProject {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    display_path: Option<String>,
     root: PathBuf,
 }
 
-fn load_registered_roots() -> Result<Vec<PathBuf>, EnvError> {
+struct RegisteredProject {
+    name: String,
+    display_path: String,
+    root: PathBuf,
+}
+
+fn load_registered_projects() -> Result<Vec<RegisteredProject>, EnvError> {
     let path = if let Some(path) = std::env::var_os("ENV_MANAGER_REGISTRY_PATH") {
         PathBuf::from(path)
     } else {
@@ -773,7 +983,18 @@ fn load_registered_roots() -> Result<Vec<PathBuf>, EnvError> {
     Ok(registry
         .projects
         .into_iter()
-        .map(|project| project.root)
+        .map(|project| RegisteredProject {
+            name: project.name.unwrap_or_else(|| {
+                project.root.file_name().map_or_else(
+                    || "Project".to_owned(),
+                    |name| name.to_string_lossy().into_owned(),
+                )
+            }),
+            display_path: project
+                .display_path
+                .unwrap_or_else(|| project.root.to_string_lossy().into_owned()),
+            root: project.root,
+        })
         .collect())
 }
 
@@ -851,6 +1072,15 @@ pub fn tool_definitions() -> Value {
             "Return redacted env structure and value presence for a registered project.",
             json!({
                 "type": "object", "properties": { "projectPath": { "type": "string" } }, "required": ["projectPath"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "find_reusable_variable_sources",
+            "Find same-name variables with present values in other registered projects. Returns project and file metadata only, never values.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }, "key": { "type": "string" }
+                }, "required": ["projectPath", "key"], "additionalProperties": false
             })
         ),
         tool(
@@ -968,6 +1198,21 @@ pub fn tool_definitions() -> Value {
                 "type": "object", "properties": {
                     "projectPath": { "type": "string" }, "file": { "type": "string" }
                 }, "required": ["projectPath", "file"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_copy_variable_from_project",
+            "Plan a one-time opaque copy of one same-name value from another registered project. The value is handled only inside Rust and is never returned to the agent.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" },
+                    "sourceProjectId": { "type": "string" },
+                    "sourceFile": { "type": "string" },
+                    "targetFile": { "type": "string" },
+                    "key": { "type": "string" }
+                },
+                "required": ["projectPath", "sourceProjectId", "sourceFile", "targetFile", "key"],
+                "additionalProperties": false
             })
         ),
         tool(
@@ -1124,6 +1369,76 @@ mod tests {
             .expect_err("protected read must fail");
         assert_eq!(error.code(), EnvErrorCode::CodexAccessBlocked);
         assert!(!error.to_string().contains(CANARY));
+    }
+
+    #[test]
+    fn finds_and_copies_a_protected_value_across_registered_projects_opaquely() {
+        let source = SyntheticProject::new();
+        let target = SyntheticProject::new();
+        let cross_project_canary = "fake_CROSS_PROJECT_BROKER_CANARY_92";
+        source.write(
+            ".env.local",
+            &format!("GEMINI_API_KEY={cross_project_canary}\n"),
+        );
+        target.write(".env.local", "GEMINI_API_KEY=\n");
+        let source_service = ProjectService::open(source.root()).expect("source service");
+        let target_service = ProjectService::open(target.root()).expect("target service");
+        source_service.initialize().expect("source initialize");
+        target_service.initialize().expect("target initialize");
+        let broker = Broker::with_registered_roots(vec![
+            source.root().to_path_buf(),
+            target.root().to_path_buf(),
+        ]);
+
+        let candidates = broker
+            .call_tool(
+                "find_reusable_variable_sources",
+                json!({
+                    "projectPath": target.root().to_string_lossy(),
+                    "key": "GEMINI_API_KEY"
+                }),
+            )
+            .expect("candidate search");
+        let candidate_output = candidates.to_string();
+        assert!(candidate_output.contains(source_service.project_id()));
+        assert!(candidate_output.contains(".env.local"));
+        assert!(!candidate_output.contains(cross_project_canary));
+
+        let plan = broker
+            .call_tool(
+                "plan_copy_variable_from_project",
+                json!({
+                    "projectPath": target.root().to_string_lossy(),
+                    "sourceProjectId": source_service.project_id(),
+                    "sourceFile": ".env.local",
+                    "targetFile": ".env.local",
+                    "key": "GEMINI_API_KEY"
+                }),
+            )
+            .expect("opaque copy plan");
+        assert!(!plan.to_string().contains(cross_project_canary));
+        let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+        let result = broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("opaque copy apply");
+
+        assert!(!result.to_string().contains(cross_project_canary));
+        assert_eq!(
+            target.read(".env.local"),
+            format!("GEMINI_API_KEY={cross_project_canary}\n").as_bytes()
+        );
+        assert_eq!(
+            source_service
+                .codex_access("GEMINI_API_KEY")
+                .expect("source policy"),
+            CodexAccess::Protected
+        );
+        assert_eq!(
+            target_service
+                .codex_access("GEMINI_API_KEY")
+                .expect("target policy"),
+            CodexAccess::Protected
+        );
     }
 
     #[test]

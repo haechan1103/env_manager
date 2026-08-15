@@ -16,6 +16,8 @@
 | Detach one member | `plan_detach` → `apply_plan` |
 | Change explicitly requested access | `plan_classification` → `apply_plan` |
 | Normalize groups | `plan_migration` → `apply_plan` |
+| Find same-name sources in other projects | `find_reusable_variable_sources` |
+| One-time opaque project copy | `find_reusable_variable_sources` → `plan_copy_variable_from_project` → `apply_plan` |
 
 ## Failures
 
@@ -33,6 +35,9 @@
 - Invalid or ambiguous group target: inspect again. `기타` means the ungrouped area;
   create a new explicit group before moving to it. Never select among duplicate
   group names by position.
+- Missing or ambiguous project-copy source: search again by the exact key and ask the
+  user to select a candidate project/file. Never inspect the value, choose by file
+  environment, or turn the copy into a continuing link.
 
 ## Output allowlist
 
