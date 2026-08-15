@@ -7,6 +7,7 @@ import type {
   AgentIntegrationStatus,
   AgentActivityEvent,
   CodexAccess,
+  CloudflareAccessContext,
   CloudflareTargetContext,
   DeploymentProviderStatus,
   GitHubEnvironmentOptions,
@@ -27,6 +28,7 @@ import type {
 } from "./types";
 
 export const isTauriRuntime = "__TAURI_INTERNALS__" in window;
+const selectedProjectStorageKey = "env-manager.selected-project";
 
 export class ApiError extends Error {
   constructor(
@@ -60,6 +62,27 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   return new URLSearchParams(window.location.search).has("empty") ? [] : demoProjects;
 }
 
+export async function getLastSelectedProjectId(): Promise<string | null> {
+  if (isTauriRuntime) return call("get_last_selected_project_id");
+  try {
+    return window.localStorage.getItem(selectedProjectStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+export async function rememberSelectedProject(projectId: string | null): Promise<void> {
+  if (isTauriRuntime) {
+    return call("set_last_selected_project", { request: { projectId } });
+  }
+  try {
+    if (projectId) window.localStorage.setItem(selectedProjectStorageKey, projectId);
+    else window.localStorage.removeItem(selectedProjectStorageKey);
+  } catch {
+    // Selection remains active for this session when browser storage is unavailable.
+  }
+}
+
 export async function listAgentIntegrations(): Promise<AgentIntegrationStatus[]> {
   if (!isTauriRuntime) return demoAgentIntegrations;
   return call("list_agent_integrations");
@@ -70,8 +93,30 @@ export async function listDeploymentProviders(
 ): Promise<DeploymentProviderStatus[]> {
   if (!isTauriRuntime) {
     return [
-      { id: "github-actions", name: "GitHub Actions", available: true, detail: "GitHub CLI ready" },
-      { id: "cloudflare-workers", name: "Cloudflare Workers", available: true, detail: "Wrangler v4 ready" },
+      {
+        id: "github-actions",
+        name: "GitHub Actions",
+        available: true,
+        detail: "GitHub CLI ready",
+        adapter: {
+          cliVersion: "2.78.0",
+          profileId: "gh-secret-set-v1",
+          adapterVersion: "1.0.0",
+          adapterSource: "bundled",
+        },
+      },
+      {
+        id: "cloudflare-workers",
+        name: "Cloudflare Workers",
+        available: true,
+        detail: "Compatible Wrangler ready",
+        adapter: {
+          cliVersion: "4.115.0",
+          profileId: "wrangler-secret-bulk-v1",
+          adapterVersion: "1.0.0",
+          adapterSource: "bundled",
+        },
+      },
     ];
   }
   return call("list_deployment_providers", { request: { projectId } });
@@ -121,8 +166,31 @@ export async function detectCloudflareTarget(
   projectId: string,
   file: string,
 ): Promise<CloudflareTargetContext> {
-  if (!isTauriRuntime) return { worker: null, environments: [], configPath: null };
+  if (!isTauriRuntime) return { worker: null, environments: [], configPath: null, accountId: null, environmentAccountIds: {} };
   return call("detect_cloudflare_target", { request: { projectId, file } });
+}
+
+export async function inspectCloudflareAccess(
+  projectId: string,
+  file: string,
+  worker: string,
+  environment: string | null,
+): Promise<CloudflareAccessContext> {
+  if (!isTauriRuntime) {
+    return {
+      authState: "authenticated",
+      authType: "OAuth Token",
+      accountState: "matched",
+      accountId: "demo-account",
+      accountName: "Demo account",
+      accountCount: 1,
+      targetState: "accessible",
+      adapter: { cliVersion: "4.115.0", profileId: "wrangler-secret-bulk-v1", adapterVersion: "1.0.0", adapterSource: "bundled" },
+    };
+  }
+  return call("inspect_cloudflare_access", {
+    request: { projectId, file, worker, environment },
+  });
 }
 
 export async function pushToProvider(

@@ -4,6 +4,7 @@ import { Modal } from "../../components/Modal";
 import { localizeError, useI18n } from "../../i18n";
 import * as api from "../../lib/api";
 import type {
+  CloudflareAccessContext,
   DeploymentProviderId,
   DeploymentProviderStatus,
   GitHubEntryKind,
@@ -41,6 +42,9 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
   const [cloudflareEnvironments, setCloudflareEnvironments] = useState<string[]>([]);
   const [cloudflareConfigPath, setCloudflareConfigPath] = useState<string | null>(null);
   const [loadingCloudflareTarget, setLoadingCloudflareTarget] = useState(false);
+  const [cloudflareAccess, setCloudflareAccess] = useState<CloudflareAccessContext | null>(null);
+  const [loadingCloudflareAccess, setLoadingCloudflareAccess] = useState(false);
+  const [cloudflareAccessError, setCloudflareAccessError] = useState(false);
   const [selection, setSelection] = useState<Selection>({});
   const [busy, setBusy] = useState(false);
   const [uiReady, setUiReady] = useState(false);
@@ -82,6 +86,7 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
     if (!uiReady || provider !== "cloudflare-workers") return;
     let active = true;
     setLoadingCloudflareTarget(true);
+    setCloudflareAccess(null);
     void api.detectCloudflareTarget(projectId, file)
       .then((result) => {
         if (!active) return;
@@ -100,6 +105,50 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
       });
     return () => { active = false; };
   }, [file, projectId, provider, uiReady]);
+
+  useEffect(() => {
+    const cloudflareAvailable = providers.find((item) => item.id === "cloudflare-workers")?.available ?? false;
+    const normalizedWorker = worker.trim();
+    const normalizedEnvironment = cloudflareEnvironment.trim();
+    if (
+      !uiReady
+      || provider !== "cloudflare-workers"
+      || !cloudflareAvailable
+      || !/^[A-Za-z0-9._-]+$/.test(normalizedWorker)
+      || loadingCloudflareTarget
+    ) {
+      setCloudflareAccess(null);
+      setLoadingCloudflareAccess(false);
+      setCloudflareAccessError(false);
+      return;
+    }
+    let active = true;
+    setLoadingCloudflareAccess(true);
+    setCloudflareAccessError(false);
+    const timeout = window.setTimeout(() => {
+      void api.inspectCloudflareAccess(
+        projectId,
+        file,
+        normalizedWorker,
+        normalizedEnvironment || null,
+      )
+        .then((result) => {
+          if (active) setCloudflareAccess(result);
+        })
+        .catch(() => {
+          if (!active) return;
+          setCloudflareAccess(null);
+          setCloudflareAccessError(true);
+        })
+        .finally(() => {
+          if (active) setLoadingCloudflareAccess(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [cloudflareEnvironment, file, loadingCloudflareTarget, projectId, provider, providers, uiReady, worker]);
 
   const githubAvailable = providers.find((item) => item.id === "github-actions")?.available ?? false;
 
@@ -170,7 +219,12 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
     ? /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repository)
     : /^[A-Za-z0-9._-]+$/.test(worker);
   const githubEnvironmentReady = provider !== "github-actions" || githubEnvironment !== "__new__";
-  const valid = available && selected.length > 0 && targetValid && githubEnvironmentReady;
+  const cloudflareReady = provider !== "cloudflare-workers" || (
+    cloudflareAccess?.authState === "authenticated"
+    && cloudflareAccess.accountState !== "mismatch"
+    && cloudflareAccess.targetState === "accessible"
+  );
+  const valid = available && selected.length > 0 && targetValid && githubEnvironmentReady && cloudflareReady;
 
   const createEnvironment = async () => {
     const environment = newGithubEnvironment.trim();
@@ -235,7 +289,9 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
                 <strong>{id === "github-actions" ? "GitHub Actions" : "Cloudflare Workers"}</strong>
                 <small className={loadingProviders ? "provider-status-loading" : undefined}>
                   {loadingProviders && <span className="spinner" />}
-                  {loadingProviders ? t("push.checkingCli") : status?.available ? t("push.cliReady") : t("push.cliMissing")}
+                  {loadingProviders ? t("push.checkingCli") : status?.available ? (
+                    <><span>{t("push.cliReady")}</span>{status.adapter && ` · v${status.adapter.cliVersion}`}</>
+                  ) : t("push.cliMissing")}
                 </small>
               </span>
             </button>
@@ -343,6 +399,12 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
                 <small className="field-help">{t("push.cloudflareEnvironmentHelp", { count: cloudflareEnvironments.length })}</small>
               )}
             </label>
+            <CloudflareAccessStatus
+              access={cloudflareAccess}
+              loading={loadingCloudflareAccess}
+              failed={cloudflareAccessError}
+              t={t}
+            />
           </>
         )}
       </div>
@@ -408,5 +470,55 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         </button>
       </div>
     </Modal>
+  );
+}
+
+function CloudflareAccessStatus({
+  access,
+  loading,
+  failed,
+  t,
+}: {
+  access: CloudflareAccessContext | null;
+  loading: boolean;
+  failed: boolean;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  if (loading) {
+    return (
+      <div className="cloudflare-access-status checking" role="status">
+        <span className="spinner" />{t("push.cloudflareCheckingAccess")}
+      </div>
+    );
+  }
+  if (failed || access?.authState === "unavailable") {
+    return <div className="cloudflare-access-status error">{t("push.cloudflareAccessCheckFailed")}</div>;
+  }
+  if (!access) return null;
+  if (access.authState === "not-authenticated") {
+    return <div className="cloudflare-access-status error">{t("push.cloudflareNotAuthenticated")}</div>;
+  }
+  if (access.accountState === "mismatch") {
+    return (
+      <div className="cloudflare-access-status error">
+        {t("push.cloudflareAccountMismatch", { account: access.accountId ?? "-" })}
+      </div>
+    );
+  }
+  if (access.targetState !== "accessible") {
+    return <div className="cloudflare-access-status error">{t("push.cloudflareTargetUnavailable")}</div>;
+  }
+  const account = access.accountName
+    ? `${access.accountName}${access.accountId ? ` · ${access.accountId}` : ""}`
+    : access.accountId ?? t("push.cloudflareWranglerSelectedAccount");
+  return (
+    <div className="cloudflare-access-status ready">
+      <strong>{t("push.cloudflareAccessReady")}</strong>
+      <span>{account}</span>
+      {access.accountState === "ambiguous" && (
+        <small>{t("push.cloudflareAccountAmbiguous", { count: access.accountCount })}</small>
+      )}
+      {access.adapter.adapterSource === "local-repair" && <small>{t("push.localRepairAdapter")}</small>}
+    </div>
   );
 }

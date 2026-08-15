@@ -7,7 +7,7 @@ use env_core::{
     RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::runtime::{AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary};
@@ -68,6 +68,12 @@ pub struct ProjectRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SelectedProjectRequest {
+    project_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitHubRepositoryRequest {
     project_id: String,
     repository: String,
@@ -78,6 +84,15 @@ pub struct GitHubRepositoryRequest {
 pub struct CloudflareTargetRequest {
     project_id: String,
     file: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudflareAccessRequest {
+    project_id: String,
+    file: String,
+    worker: String,
+    environment: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -227,6 +242,21 @@ pub fn list_projects(runtime: State<'_, AppRuntime>) -> Vec<ProjectSummary> {
     runtime.list()
 }
 
+#[tauri::command]
+pub fn get_last_selected_project_id(runtime: State<'_, AppRuntime>) -> Option<String> {
+    runtime.last_selected_project_id()
+}
+
+#[tauri::command]
+pub fn set_last_selected_project(
+    request: SelectedProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<()> {
+    runtime
+        .remember_selected_project(request.project_id.as_deref())
+        .map_err(Into::into)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentIntegrationRequest {
@@ -241,11 +271,13 @@ pub fn list_agent_integrations(app: AppHandle) -> Vec<integrations::AgentIntegra
 #[tauri::command]
 pub async fn list_deployment_providers(
     request: ProjectRequest,
+    app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<Vec<provider_push::DeploymentProviderStatus>> {
     let service = runtime.service(&request.project_id)?;
     let root = service.root().to_path_buf();
-    tauri::async_runtime::spawn_blocking(move || provider_push::list(&root))
+    let app_data = provider_app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || provider_push::list(&root, &app_data))
         .await
         .map_err(|_| provider_task_interrupted())
 }
@@ -253,14 +285,18 @@ pub async fn list_deployment_providers(
 #[tauri::command]
 pub async fn list_github_repositories(
     request: ProjectRequest,
+    app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<provider_push::GitHubRepositoryOptions> {
     let service = runtime.service(&request.project_id)?;
     let root = service.root().to_path_buf();
-    tauri::async_runtime::spawn_blocking(move || provider_push::list_github_repositories(&root))
-        .await
-        .map_err(|_| provider_task_interrupted())?
-        .map_err(Into::into)
+    let app_data = provider_app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_push::list_github_repositories(&root, &app_data)
+    })
+    .await
+    .map_err(|_| provider_task_interrupted())?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -296,15 +332,40 @@ pub async fn detect_cloudflare_target(
 }
 
 #[tauri::command]
+pub async fn inspect_cloudflare_access(
+    request: CloudflareAccessRequest,
+    app: AppHandle,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::CloudflareAccessContext> {
+    let service = runtime.service(&request.project_id)?;
+    let root = service.root().to_path_buf();
+    let app_data = provider_app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_push::inspect_cloudflare_access(
+            &root,
+            &app_data,
+            &request.file,
+            &request.worker,
+            request.environment.as_deref(),
+        )
+    })
+    .await
+    .map_err(|_| provider_task_interrupted())?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn list_github_environments(
     request: GitHubRepositoryRequest,
+    app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<provider_push::GitHubEnvironmentOptions> {
     let service = runtime.service(&request.project_id)?;
     let root = service.root().to_path_buf();
+    let app_data = provider_app_data(&app)?;
     let repository = request.repository;
     tauri::async_runtime::spawn_blocking(move || {
-        provider_push::list_github_environments(&root, &repository)
+        provider_push::list_github_environments(&root, &app_data, &repository)
     })
     .await
     .map_err(|_| provider_task_interrupted())?
@@ -314,14 +375,16 @@ pub async fn list_github_environments(
 #[tauri::command]
 pub async fn create_github_environment(
     request: CreateGitHubEnvironmentRequest,
+    app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<provider_push::GitHubEnvironmentOptions> {
     let service = runtime.service(&request.project_id)?;
     let root = service.root().to_path_buf();
+    let app_data = provider_app_data(&app)?;
     let repository = request.repository;
     let environment = request.environment;
     tauri::async_runtime::spawn_blocking(move || {
-        provider_push::create_github_environment(&root, &repository, &environment)
+        provider_push::create_github_environment(&root, &app_data, &repository, &environment)
     })
     .await
     .map_err(|_| provider_task_interrupted())?
@@ -331,13 +394,24 @@ pub async fn create_github_environment(
 #[tauri::command]
 pub async fn push_to_provider(
     payload: ProjectMutation<ProviderPushRequest>,
+    app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<provider_push::ProviderPushResult> {
     let service = runtime.service(&payload.project_id)?;
-    tauri::async_runtime::spawn_blocking(move || provider_push::push(&service, payload.request))
-        .await
-        .map_err(|_| provider_task_interrupted())?
-        .map_err(Into::into)
+    let app_data = provider_app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_push::push(&service, &app_data, payload.request)
+    })
+    .await
+    .map_err(|_| provider_task_interrupted())?
+    .map_err(Into::into)
+}
+
+fn provider_app_data(app: &AppHandle) -> CommandResult<std::path::PathBuf> {
+    app.path().app_data_dir().map_err(|_| CommandError {
+        code: "PROVIDER_ADAPTER_STORAGE_UNAVAILABLE".to_owned(),
+        message: "Provider Adapter 저장 위치를 확인하지 못했습니다.".to_owned(),
+    })
 }
 
 #[tauri::command]

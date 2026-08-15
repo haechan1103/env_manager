@@ -6,12 +6,24 @@ export type AgentIntegrationBlocker = "tool-not-found" | "broker-unavailable" | 
 export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
 export type DeploymentProviderId = "github-actions" | "cloudflare-workers";
 export type GitHubEntryKind = "secret" | "variable";
+export type AdapterSource = "bundled" | "local-repair";
+export type CloudflareAuthState = "authenticated" | "not-authenticated" | "unavailable";
+export type CloudflareAccountState = "matched" | "mismatch" | "ambiguous" | "unconfigured" | "unchecked";
+export type CloudflareTargetState = "accessible" | "unavailable" | "unchecked";
+
+export interface AdapterStatus {
+  cliVersion: string;
+  profileId: string;
+  adapterVersion: string;
+  adapterSource: AdapterSource;
+}
 
 export interface DeploymentProviderStatus {
   id: DeploymentProviderId;
   name: string;
   available: boolean;
   detail: string;
+  adapter: AdapterStatus | null;
 }
 
 export interface GitHubRepositoryOptions {
@@ -31,6 +43,19 @@ export interface CloudflareTargetContext {
   worker: string | null;
   environments: string[];
   configPath: string | null;
+  accountId: string | null;
+  environmentAccountIds: Record<string, string>;
+}
+
+export interface CloudflareAccessContext {
+  authState: CloudflareAuthState;
+  authType: string | null;
+  accountState: CloudflareAccountState;
+  accountId: string | null;
+  accountName: string | null;
+  accountCount: number;
+  targetState: CloudflareTargetState;
+  adapter: AdapterStatus;
 }
 
 export interface ProviderPushRequest {

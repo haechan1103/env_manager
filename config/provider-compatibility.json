@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "catalogVersion": "2.0.0",
+  "providerProtocolVersion": "0.1.0",
+  "lastReviewed": "2026-08-15",
+  "providers": [
+    {
+      "id": "github-actions",
+      "displayName": "GitHub Actions",
+      "adapterVersion": "1.0.0",
+      "uiSupport": "implemented",
+      "agentSupport": "planned",
+      "transport": "cli",
+      "client": {
+        "name": "gh",
+        "runtimeProbe": "semantic-version",
+        "profiles": [
+          {
+            "id": "gh-secret-set-v1",
+            "strategy": "gh-secret-set-v1",
+            "versionRequirement": ">=0.0.0"
+          }
+        ]
+      },
+      "valueTransport": "stdin",
+      "capabilities": [
+        "repository-secret",
+        "repository-variable",
+        "environment-secret",
+        "environment-variable",
+        "repository-discovery",
+        "environment-discovery",
+        "environment-create"
+      ],
+      "officialDocs": [
+        "https://cli.github.com/manual/gh_secret_set",
+        "https://cli.github.com/manual/gh_variable_set",
+        "https://cli.github.com/manual/gh_api"
+      ]
+    },
+    {
+      "id": "cloudflare-workers",
+      "displayName": "Cloudflare Workers",
+      "adapterVersion": "1.0.0",
+      "uiSupport": "implemented",
+      "agentSupport": "planned",
+      "transport": "cli",
+      "client": {
+        "name": "wrangler",
+        "runtimeProbe": "semantic-version",
+        "profiles": [
+          {
+            "id": "wrangler-secret-bulk-v1",
+            "strategy": "wrangler-secret-bulk-v1",
+            "versionRequirement": ">=4.0.0,<5.0.0"
+          }
+        ]
+      },
+      "valueTransport": "stdin",
+      "capabilities": [
+        "worker-secret-immediate",
+        "worker-discovery",
+        "wrangler-environment-discovery"
+      ],
+      "officialDocs": [
+        "https://developers.cloudflare.com/workers/wrangler/commands/workers/",
+        "https://developers.cloudflare.com/workers/configuration/secrets/",
+        "https://developers.cloudflare.com/workers/wrangler/configuration/"
+      ]
+    },
+    {
+      "id": "aws-secrets-manager",
+      "displayName": "AWS Secrets Manager",
+      "adapterVersion": null,
+      "uiSupport": "planned",
+      "agentSupport": "planned",
+      "transport": "sdk",
+      "client": {
+        "name": "aws-sdk-rust-secretsmanager",
+        "runtimeProbe": "not-implemented",
+        "profiles": []
+      },
+      "valueTransport": "in-process-sdk",
+      "capabilities": [
+        "secret-create",
+        "secret-version-update",
+        "aws-profile",
+        "aws-region"
+      ],
+      "officialDocs": [
+        "https://docs.aws.amazon.com/cli/latest/reference/secretsmanager/put-secret-value.html",
+        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html"
+      ]
+    },
+    {
+      "id": "aws-ssm-parameter-store",
+      "displayName": "AWS Systems Manager Parameter Store",
+      "adapterVersion": null,
+      "uiSupport": "planned",
+      "agentSupport": "planned",
+      "transport": "sdk",
+      "client": {
+        "name": "aws-sdk-rust-ssm",
+        "runtimeProbe": "not-implemented",
+        "profiles": []
+      },
+      "valueTransport": "in-process-sdk",
+      "capabilities": [
+        "secure-string-create",
+        "secure-string-update",
+        "aws-profile",
+        "aws-region"
+      ],
+      "officialDocs": [
+        "https://docs.aws.amazon.com/cli/latest/reference/ssm/put-parameter.html",
+        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html"
+      ]
+    }
+  ]
+}

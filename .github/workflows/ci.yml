@@ -26,6 +26,7 @@ jobs:
       - run: npm run check
       - run: npm run validate:agent-bundle
       - run: npm run validate:release-version
+      - run: npm run validate:provider-catalog
       - run: cargo fmt --all -- --check
       - run: cargo test -p env-core -p env-broker -p env-test-support --locked
       - run: cargo clippy -p env-core -p env-broker -p env-test-support --all-targets --locked -- -D warnings

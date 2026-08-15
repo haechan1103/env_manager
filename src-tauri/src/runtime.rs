@@ -35,8 +35,12 @@ pub struct ProjectSummary {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RegistryData {
+    #[serde(default)]
     projects: Vec<ProjectRegistration>,
+    #[serde(default)]
+    last_selected_project_id: Option<String>,
 }
 
 pub struct AppRuntime {
@@ -130,6 +134,40 @@ impl AppRuntime {
             .iter()
             .map(ProjectSummary::from)
             .collect()
+    }
+
+    pub fn last_selected_project_id(&self) -> Option<String> {
+        let registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        registry
+            .last_selected_project_id
+            .as_ref()
+            .and_then(|selected| {
+                registry
+                    .projects
+                    .iter()
+                    .any(|project| project.id == *selected)
+                    .then(|| selected.clone())
+            })
+    }
+
+    pub fn remember_selected_project(&self, project_id: Option<&str>) -> EnvResult<()> {
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(project_id) = project_id
+            && !registry
+                .projects
+                .iter()
+                .any(|project| project.id == project_id)
+        {
+            return Err(EnvError::unregistered_project(project_id));
+        }
+        registry.last_selected_project_id = project_id.map(str::to_owned);
+        self.persist(&registry)
     }
 
     pub fn register(&self, root: &Path) -> EnvResult<ProjectSummary> {
@@ -230,6 +268,10 @@ impl AppRuntime {
             registry.projects.retain(|project| project.id != project_id);
             if before == registry.projects.len() {
                 return Err(EnvError::unregistered_project(project_id));
+            }
+            if registry.last_selected_project_id.as_deref() == Some(project_id) {
+                registry.last_selected_project_id =
+                    registry.projects.first().map(|project| project.id.clone());
             }
             self.persist(&registry)?;
         }
@@ -655,6 +697,57 @@ mod tests {
     use super::*;
 
     #[test]
+    fn persists_the_last_selected_project_and_falls_back_when_removed() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let first_root = tempfile::tempdir().expect("first project");
+        let second_root = tempfile::tempdir().expect("second project");
+        let first_service = ProjectService::open(first_root.path()).expect("first service");
+        let second_service = ProjectService::open(second_root.path()).expect("second service");
+        let first_id = first_service.project_id().to_owned();
+        let second_id = second_service.project_id().to_owned();
+        let registry_path = app_data.path().join("projects.json");
+        let registry = RegistryData {
+            projects: vec![
+                ProjectRegistration {
+                    id: first_id.clone(),
+                    name: "First".to_owned(),
+                    display_path: first_root.path().to_string_lossy().into_owned(),
+                    root: first_root.path().to_path_buf(),
+                    file_labels: BTreeMap::new(),
+                },
+                ProjectRegistration {
+                    id: second_id.clone(),
+                    name: "Surgery".to_owned(),
+                    display_path: second_root.path().to_string_lossy().into_owned(),
+                    root: second_root.path().to_path_buf(),
+                    file_labels: BTreeMap::new(),
+                },
+            ],
+            last_selected_project_id: None,
+        };
+        persist_registry(&registry_path, &registry).expect("persist registry");
+        let runtime = AppRuntime {
+            registry_path: registry_path.clone(),
+            audit_dir: app_data.path().join("agent-activity"),
+            registry: Mutex::new(registry),
+            watchers: Mutex::new(HashMap::new()),
+            migration_plans: Mutex::new(HashMap::new()),
+            team_import_plans: Mutex::new(HashMap::new()),
+            next_plan_id: AtomicU64::new(1),
+        };
+
+        runtime
+            .remember_selected_project(Some(&second_id))
+            .expect("remember selection");
+        assert_eq!(runtime.last_selected_project_id(), Some(second_id.clone()));
+        let saved = fs::read_to_string(&registry_path).expect("saved registry");
+        assert!(saved.contains(&format!("\"lastSelectedProjectId\": \"{second_id}\"")));
+
+        runtime.remove(&second_id).expect("remove selected project");
+        assert_eq!(runtime.last_selected_project_id(), Some(first_id));
+    }
+
+    #[test]
     fn migrates_legacy_file_labels_to_local_registry_before_removing_them() {
         let app_data = tempfile::tempdir().expect("app data");
         let project = tempfile::tempdir().expect("project");
@@ -679,6 +772,7 @@ mod tests {
                 root: project.path().to_path_buf(),
                 file_labels: BTreeMap::new(),
             }],
+            last_selected_project_id: None,
         };
 
         migrate_legacy_file_labels(&registry_path, &mut registry).expect("migration");

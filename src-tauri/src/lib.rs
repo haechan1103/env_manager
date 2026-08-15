@@ -1,5 +1,6 @@
 mod commands;
 mod integrations;
+mod provider_adapter;
 mod provider_push;
 mod runtime;
 
@@ -7,12 +8,13 @@ use commands::{
     add_variable, apply_gitignore_guard, apply_migration, apply_team_import, copy_key, copy_value,
     create_github_environment, create_group, create_link, delete_variable, detach_link_member,
     detect_cloudflare_target, detect_github_repository, discard_team_import, export_env_files,
-    install_agent_integration, list_agent_activity, list_agent_integrations,
-    list_deployment_providers, list_github_environments, list_github_repositories, list_projects,
-    move_variable, plan_migration, plan_team_import, protect_variables, push_to_provider,
-    read_value, register_project, remap_team_import_file, remove_project, rename_env_file,
-    rename_group, rename_project, reveal_team_import_conflict, save_description, save_value,
-    scan_project, set_codex_access,
+    get_last_selected_project_id, inspect_cloudflare_access, install_agent_integration,
+    list_agent_activity, list_agent_integrations, list_deployment_providers,
+    list_github_environments, list_github_repositories, list_projects, move_variable,
+    plan_migration, plan_team_import, protect_variables, push_to_provider, read_value,
+    register_project, remap_team_import_file, remove_project, rename_env_file, rename_group,
+    rename_project, reveal_team_import_conflict, save_description, save_value, scan_project,
+    set_codex_access, set_last_selected_project,
 };
 use runtime::AppRuntime;
 use tauri::Manager;
@@ -31,12 +33,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_projects,
+            get_last_selected_project_id,
+            set_last_selected_project,
             list_agent_integrations,
             install_agent_integration,
             list_deployment_providers,
             list_github_repositories,
             detect_github_repository,
             detect_cloudflare_target,
+            inspect_cloudflare_access,
             list_github_environments,
             create_github_environment,
             push_to_provider,

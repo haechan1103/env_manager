@@ -24,9 +24,12 @@ export function useEnvManager() {
     setLoading(true);
     setError(null);
     try {
-      const items = await api.listProjects();
+      const [items, rememberedProjectId] = await Promise.all([
+        api.listProjects(),
+        api.getLastSelectedProjectId(),
+      ]);
       setProjects(items);
-      setSelectedProjectId((current) => current ?? items[0]?.id ?? null);
+      setSelectedProjectId((current) => resolveSelectedProjectId(items, current, rememberedProjectId));
       const scans = await Promise.all(
         items.map(async (project) => [project.id, await api.scanProject(project.id)] as const),
       );
@@ -36,6 +39,13 @@ export function useEnvManager() {
     } finally {
       setLoading(false);
     }
+  }, [locale]);
+
+  const selectProject = useCallback((projectId: string | null) => {
+    setSelectedProjectId(projectId);
+    void api.rememberSelectedProject(projectId).catch((cause: unknown) => {
+      setError(localizeError(cause, locale, "error.loadProjects"));
+    });
   }, [locale]);
 
   useEffect(() => {
@@ -71,13 +81,13 @@ export function useEnvManager() {
         const remaining = current.filter((item) => item.id !== project.id);
         return [...remaining, project].sort((left, right) => left.name.localeCompare(right.name));
       });
-      setSelectedProjectId(project.id);
+      selectProject(project.id);
       await refreshProject(project.id);
       setNotice(t("notice.projectRegistered", { name: project.name }));
     } catch (cause) {
       setError(localizeError(cause, locale, "error.register"));
     }
-  }, [locale, refreshProject, t]);
+  }, [locale, refreshProject, selectProject, t]);
 
   const remove = useCallback(
     async (projectId: string) => {
@@ -89,16 +99,15 @@ export function useEnvManager() {
           delete next[projectId];
           return next;
         });
-        setSelectedProjectId((current) => {
-          if (current !== projectId) return current;
-          return projects.find((project) => project.id !== projectId)?.id ?? null;
-        });
+        if (selectedProjectId === projectId) {
+          selectProject(projects.find((project) => project.id !== projectId)?.id ?? null);
+        }
         setNotice(t("notice.projectRemoved"));
       } catch (cause) {
         setError(localizeError(cause, locale, "error.remove"));
       }
     },
-    [locale, projects, t],
+    [locale, projects, selectProject, selectedProjectId, t],
   );
 
   const renameProject = useCallback(async (projectId: string, name: string) => {
@@ -159,7 +168,7 @@ export function useEnvManager() {
     loading,
     error,
     notice,
-    selectProject: setSelectedProjectId,
+    selectProject,
     register,
     remove,
     renameProject,
@@ -171,4 +180,15 @@ export function useEnvManager() {
     showError: setError,
     showNotice: setNotice,
   };
+}
+
+export function resolveSelectedProjectId(
+  projects: ProjectSummary[],
+  currentProjectId: string | null,
+  rememberedProjectId: string | null,
+) {
+  const available = new Set(projects.map((project) => project.id));
+  if (currentProjectId && available.has(currentProjectId)) return currentProjectId;
+  if (rememberedProjectId && available.has(rememberedProjectId)) return rememberedProjectId;
+  return projects[0]?.id ?? null;
 }

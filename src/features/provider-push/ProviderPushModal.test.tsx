@@ -8,8 +8,8 @@ import { ProviderPushModal } from "./ProviderPushModal";
 
 vi.mock("../../lib/api", () => ({
   listDeploymentProviders: vi.fn(async () => [
-    { id: "github-actions", name: "GitHub Actions", available: true, detail: "ready" },
-    { id: "cloudflare-workers", name: "Cloudflare Workers", available: true, detail: "ready" },
+    { id: "github-actions", name: "GitHub Actions", available: true, detail: "ready", adapter: { cliVersion: "2.78.0", profileId: "gh-secret-set-v1", adapterVersion: "1.0.0", adapterSource: "bundled" } },
+    { id: "cloudflare-workers", name: "Cloudflare Workers", available: true, detail: "ready", adapter: { cliVersion: "4.115.0", profileId: "wrangler-secret-bulk-v1", adapterVersion: "1.0.0", adapterSource: "bundled" } },
   ]),
   listGitHubRepositories: vi.fn(async () => ({ repositories: ["owner/repository"] })),
   detectGitHubRepository: vi.fn(async () => ({ repository: null })),
@@ -25,6 +25,18 @@ vi.mock("../../lib/api", () => ({
     worker: "demo-worker",
     environments: ["staging", "production"],
     configPath: "wrangler.jsonc",
+    accountId: "demo-account",
+    environmentAccountIds: {},
+  })),
+  inspectCloudflareAccess: vi.fn(async () => ({
+    authState: "authenticated",
+    authType: "OAuth Token",
+    accountState: "matched",
+    accountId: "demo-account",
+    accountName: "Demo account",
+    accountCount: 1,
+    targetState: "accessible",
+    adapter: { cliVersion: "4.115.0", profileId: "wrangler-secret-bulk-v1", adapterVersion: "1.0.0", adapterSource: "bundled" },
   })),
   pushToProvider: vi.fn(async (_projectId: string, request: { provider: string; selections: unknown[] }) => ({
     provider: request.provider,
@@ -176,5 +188,41 @@ describe("ProviderPushModal", () => {
     expect(screen.getByText("Detected from wrangler.jsonc")).toBeInTheDocument();
     expect(screen.getAllByText("Worker Secret").length).toBeGreaterThan(0);
     expect(api.detectCloudflareTarget).toHaveBeenCalledWith("demo-project", demoProjection.files[0]?.path);
+    await waitFor(() => expect(api.inspectCloudflareAccess).toHaveBeenCalledWith(
+      "demo-project",
+      demoProjection.files[0]?.path,
+      "demo-worker",
+      null,
+    ));
+    expect(screen.getByText("Cloudflare target verified")).toBeInTheDocument();
+  });
+
+  it("explains a missing Wrangler login before any value can be pushed", async () => {
+    vi.mocked(api.inspectCloudflareAccess).mockResolvedValueOnce({
+      authState: "not-authenticated",
+      authType: null,
+      accountState: "unchecked",
+      accountId: "demo-account",
+      accountName: null,
+      accountCount: 0,
+      targetState: "unchecked",
+      adapter: { cliVersion: "4.115.0", profileId: "wrangler-secret-bulk-v1", adapterVersion: "1.0.0", adapterSource: "bundled" },
+    });
+    const user = userEvent.setup();
+    render(
+      <ProviderPushModal
+        projectId="demo-project"
+        projection={demoProjection}
+        onClose={vi.fn()}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Cloudflare Workers/ }));
+    expect(await screen.findByText(/Wrangler is not signed in/)).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole("checkbox").filter((item) => !item.hasAttribute("disabled"));
+    await user.click(checkboxes[0]!);
+    expect(screen.getByRole("button", { name: "Push 1" })).toBeDisabled();
   });
 });
