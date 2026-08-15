@@ -3,6 +3,11 @@ import { useState } from "react";
 import { RenameModal } from "../../components/RenameModal";
 import type { ProjectProjection, ProjectSummary } from "../../lib/types";
 import { supportedLocales, useI18n, type Locale } from "../../i18n";
+import {
+  supportedFontSizes,
+  useDisplayPreferences,
+  type FontSize,
+} from "../../preferences/DisplayPreferences";
 import { AppUpdater } from "../updater/AppUpdater";
 import { ProjectSwitcherModal } from "./ProjectSwitcherModal";
 
@@ -35,6 +40,7 @@ export function ProjectSidebar({
   onRenameFile,
 }: Props) {
   const { locale, setLocale, t } = useI18n();
+  const { fontSize, setFontSize } = useDisplayPreferences();
   const [switchingProject, setSwitchingProject] = useState(false);
   const [renameTarget, setRenameTarget] = useState<
     { kind: "file"; projectId: string; path: string; name: string }
@@ -125,18 +131,34 @@ export function ProjectSidebar({
             <span className="agent-nav-label">{t("sidebar.aiConnections")}</span>
           </button>
         </nav>
-        <label className="language-control">
-          <span>{t("language.label")}</span>
-          <select
-            value={locale}
-            aria-label={t("language.label")}
-            onChange={(event) => setLocale(event.target.value as Locale)}
-          >
-            {supportedLocales.map((option) => (
-              <option value={option.code} key={option.code}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+        <div className="sidebar-preferences">
+          <label className="sidebar-select-control language-control">
+            <span>{t("language.label")}</span>
+            <select
+              value={locale}
+              aria-label={t("language.label")}
+              onChange={(event) => setLocale(event.target.value as Locale)}
+            >
+              {supportedLocales.map((option) => (
+                <option value={option.code} key={option.code}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="sidebar-select-control font-size-control">
+            <span>{t("fontSize.label")}</span>
+            <select
+              value={fontSize}
+              aria-label={t("fontSize.label")}
+              onChange={(event) => setFontSize(event.target.value as FontSize)}
+            >
+              {supportedFontSizes.map((size) => (
+                <option value={size} key={size}>
+                  {t(fontSizeLabel(size))}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <AppUpdater />
       </div>
       {renameTarget && (
@@ -160,4 +182,14 @@ export function ProjectSidebar({
       )}
     </aside>
   );
+}
+
+function fontSizeLabel(fontSize: FontSize) {
+  const labels = {
+    small: "fontSize.small",
+    medium: "fontSize.medium",
+    large: "fontSize.large",
+    "extra-large": "fontSize.extraLarge",
+  } as const;
+  return labels[fontSize];
 }

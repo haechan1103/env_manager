@@ -18,6 +18,11 @@ type Values = Record<string, string | number>;
 
 const en = {
   "language.label": "Language",
+  "fontSize.label": "Text size",
+  "fontSize.small": "Small",
+  "fontSize.medium": "Medium",
+  "fontSize.large": "Large",
+  "fontSize.extraLarge": "Extra large",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.save": "Save",
@@ -444,6 +449,11 @@ export type TranslationKey = keyof typeof en;
 
 const ko: Record<TranslationKey, string> = {
   "language.label": "언어",
+  "fontSize.label": "글자 크기",
+  "fontSize.small": "작게",
+  "fontSize.medium": "보통",
+  "fontSize.large": "크게",
+  "fontSize.extraLarge": "매우 크게",
   "common.cancel": "취소",
   "common.close": "닫기",
   "common.save": "저장",

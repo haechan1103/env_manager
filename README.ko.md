@@ -191,7 +191,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.0`은 Windows 10/11 x64 NSIS 설치 파일, Windows용 Broker 포함, 네이티브 Windows 릴리스 검사와 Windows CLI 처리를 추가합니다. 기존의 로컬 파일 편집, 연결 변수, 충돌 검토가 가능한 암호화 전달, GitHub/Cloudflare 전송, 보호된 AI 에이전트 연동과 영어·한국어 UI도 그대로 지원합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.1`은 현재 크기를 가장 작은 단계로 두고, 네 단계의 글자 크기와 선택값 저장 기능을 추가합니다. Windows 10/11 x64 설치 파일, 로컬 파일 편집, 연결 변수, 충돌 검토가 가능한 암호화 전달, GitHub/Cloudflare 전송, 보호된 AI 에이전트 연동과 영어·한국어 UI도 그대로 지원합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
 
 ## 커뮤니티
 

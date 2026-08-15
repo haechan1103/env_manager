@@ -189,7 +189,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.0` adds a Windows 10/11 x64 NSIS installer, a bundled Windows broker, native Windows release checks, and Windows CLI handling while retaining local file editing, linked values, encrypted handoff, provider push, guarded AI-agent integrations, and English/Korean UI support. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.1` adds four persistent text-size levels while retaining the Windows 10/11 x64 installer, local file editing, linked values, encrypted handoff, provider push, guarded AI-agent integrations, and English/Korean UI support. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
 
 ## Community
 

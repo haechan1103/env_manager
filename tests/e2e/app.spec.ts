@@ -93,6 +93,47 @@ test("persists an explicit Korean language selection", async ({ page }) => {
   await expect(page.getByLabel("언어")).toHaveValue("ko");
 });
 
+test("offers four persistent text-size levels with the current size as small", async ({ page }) => {
+  await page.goto("/");
+
+  const control = page.getByLabel("Text size");
+  await expect(control).toHaveValue("small");
+  await expect(control.locator("option")).toHaveText(["Small", "Medium", "Large", "Extra large"]);
+
+  const smallFontSize = await page.locator(".brand").evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).fontSize),
+  );
+  await control.selectOption("extra-large");
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "extra-large");
+  const extraLargeFontSize = await page.locator(".brand").evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).fontSize),
+  );
+  expect(extraLargeFontSize).toBeGreaterThan(smallFontSize);
+  await page.screenshot({
+    path: "test-results/env-manager-extra-large-text.png",
+    fullPage: true,
+  });
+
+  await page.reload();
+  await expect(page.getByLabel("Text size")).toHaveValue("extra-large");
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "extra-large");
+
+  await page.setViewportSize({ width: 920, height: 620 });
+  const horizontalOverflow = await page.locator(".project-header").evaluate(
+    (element) => element.scrollWidth - element.clientWidth,
+  );
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  const finalHeaderAction = page.getByRole("button", { name: "Remove registration" });
+  await expect(finalHeaderAction).toBeVisible();
+  const finalHeaderActionBox = await finalHeaderAction.boundingBox();
+  expect(finalHeaderActionBox).not.toBeNull();
+  expect(finalHeaderActionBox!.x + finalHeaderActionBox!.width).toBeLessThanOrEqual(920);
+  await page.screenshot({
+    path: "test-results/env-manager-extra-large-text-min-window.png",
+    fullPage: true,
+  });
+});
+
 test("offers complete and variable-level env sharing", async ({ page }) => {
   await page.goto("/");
 
