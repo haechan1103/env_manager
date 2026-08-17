@@ -988,22 +988,29 @@ mod tests {
 
     #[test]
     fn connection_health_requires_broker_app_data_audit_and_host_identity() {
-        let broker = Path::new("/synthetic/env-manager-broker");
-        let app_data = Path::new("/synthetic/app-data");
+        let synthetic_root = PathBuf::from("synthetic");
+        let broker = synthetic_root.join("env-manager-broker");
+        let app_data = synthetic_root.join("app-data");
+        let broker_text = broker.to_string_lossy().into_owned();
+        let app_data_text = app_data.to_string_lossy().into_owned();
+        let audit_text = app_data
+            .join("agent-activity")
+            .to_string_lossy()
+            .into_owned();
         let hooks = json!({
             "hooks": {
                 "PreToolUse": [{
-                    "hooks": [{ "command": "\"/synthetic/env-manager-broker\" guard-hook" }]
+                    "hooks": [{ "command": format!("\"{broker_text}\" guard-hook") }]
                 }]
             }
         });
         let configured = json!({
             "mcpServers": {
                 "env-manager": {
-                    "command": "/synthetic/env-manager-broker",
+                    "command": broker_text,
                     "env": {
-                        "ENV_MANAGER_AUDIT_DIR": "/synthetic/app-data/agent-activity",
-                        "ENV_MANAGER_APP_DATA_DIR": "/synthetic/app-data",
+                        "ENV_MANAGER_AUDIT_DIR": audit_text,
+                        "ENV_MANAGER_APP_DATA_DIR": app_data_text,
                         "ENV_MANAGER_AGENT_HOST": "codex"
                     }
                 }
@@ -1012,9 +1019,9 @@ mod tests {
         let missing_audit = json!({
             "mcpServers": {
                 "env-manager": {
-                    "command": "/synthetic/env-manager-broker",
+                    "command": broker.to_string_lossy(),
                     "env": {
-                        "ENV_MANAGER_APP_DATA_DIR": "/synthetic/app-data",
+                        "ENV_MANAGER_APP_DATA_DIR": app_data.to_string_lossy(),
                         "ENV_MANAGER_AGENT_HOST": "codex"
                     }
                 }
@@ -1024,22 +1031,22 @@ mod tests {
         assert!(connection_files_are_current(
             &configured,
             &hooks,
-            broker,
-            app_data,
+            &broker,
+            &app_data,
             AgentIntegrationId::Codex,
         ));
         assert!(!connection_files_are_current(
             &missing_audit,
             &hooks,
-            broker,
-            app_data,
+            &broker,
+            &app_data,
             AgentIntegrationId::Codex,
         ));
         assert!(!connection_files_are_current(
             &configured,
             &hooks,
-            broker,
-            app_data,
+            &broker,
+            &app_data,
             AgentIntegrationId::ClaudeCode,
         ));
     }

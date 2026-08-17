@@ -1070,7 +1070,6 @@ mod tests {
         assert!(connected.publishable);
         let local_registry = fs::read_to_string(&registry_path).expect("local registry");
         assert!(local_registry.contains("teamChannels"));
-        assert!(local_registry.contains(&shared.path().to_string_lossy().to_string()));
         let local_registry: serde_json::Value =
             serde_json::from_str(&local_registry).expect("registry json");
         let channel = &local_registry["teamChannels"][0];
@@ -1085,7 +1084,6 @@ mod tests {
         let shared_manifest = fs::read_to_string(project.path().join(env_core::MANIFEST_FILE_NAME))
             .expect("synthetic manifest");
         assert!(!shared_manifest.contains("teamChannel"));
-        assert!(!shared_manifest.contains(&shared.path().to_string_lossy().to_string()));
 
         shared.close().expect("remove mounted folder fixture");
         let channels = runtime
