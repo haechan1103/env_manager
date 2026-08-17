@@ -29,13 +29,15 @@ describe("ClassificationReview", () => {
     expect(api.protectVariables).toHaveBeenCalledWith("demo-project", ["GPT_MODEL"]);
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /allow all/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText("The name alone is not enough to decide whether an AI tool may read its value.")).toHaveLength(1);
+    expect(screen.getAllByText("Unclassified values remain blocked. Allow one only when an AI tool genuinely needs its value.")).toHaveLength(1);
+    expect(screen.queryByText("GPT_API_KEY")).not.toBeInTheDocument();
   });
 
   it("filters pending variables by env file and scopes protect all to that file", async () => {
     const user = userEvent.setup();
     const projection = {
       ...demoProjection,
+      accessReviewCount: 2,
       classificationReview: [
         ...demoProjection.classificationReview,
         {
@@ -44,7 +46,8 @@ describe("ClassificationReview", () => {
           access: "unclassified" as const,
           classifiedBy: "heuristic" as const,
           suggestion: { access: "unclassified" as const, reason: "Ambiguous fixture name." },
-          clientExposed: false,
+          clientExposed: true,
+          reviewReasons: ["client-exposure-conflict" as const],
         },
       ],
     };
@@ -66,5 +69,32 @@ describe("ClassificationReview", () => {
     expect(screen.queryByText("GPT_MODEL")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Protect all 1" }));
     expect(api.protectVariables).toHaveBeenLastCalledWith("demo-project", ["MOBILE_REGION"]);
+  });
+
+  it("keeps ordinary unclassified variables out of the inbox until requested", async () => {
+    const user = userEvent.setup();
+    const projection = {
+      ...demoProjection,
+      accessReviewCount: 0,
+      classificationReview: demoProjection.classificationReview.map((item) => ({
+        ...item,
+        reviewReasons: [],
+      })),
+    };
+    render(
+      <ClassificationReview
+        projectId="demo-project"
+        projection={projection}
+        onRefresh={vi.fn(async () => undefined)}
+        onOpenFile={vi.fn()}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("No AI access decision needs attention right now.")).toBeInTheDocument();
+    expect(screen.queryByText("GPT_MODEL")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show all unclassified (1)" }));
+    expect(screen.getByText("GPT_MODEL")).toBeInTheDocument();
   });
 });

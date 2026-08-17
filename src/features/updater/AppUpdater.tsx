@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { localizeError, useI18n } from "../../i18n";
+import { APP_VERSION } from "../../lib/version";
 import {
   checkForAppUpdate,
   currentAppVersion,
@@ -25,7 +26,7 @@ export function localizedUpdateNotes(notes: string | null, locale: "en" | "ko") 
 
 export function AppUpdater() {
   const { locale, t } = useI18n();
-  const [version, setVersion] = useState("0.6.1");
+  const [version, setVersion] = useState(APP_VERSION);
   const [state, setState] = useState<UpdateState>("idle");
   const [update, setUpdate] = useState<AppUpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);

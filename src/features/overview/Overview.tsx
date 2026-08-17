@@ -23,7 +23,7 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpen
   const blockedPolicyCount = accessPolicies.filter((access) => access !== "read-write").length;
   const allowedPolicyCount = accessPolicies.filter((access) => access === "read-write").length;
   const gitAttentionCount = projection.gitSafety.state === "needs-attention" ? 1 : 0;
-  const actionCount = empty.length + projection.unclassifiedCount + projection.issueCount + gitAttentionCount + projection.clientExposureCount;
+  const actionCount = empty.length + projection.accessReviewCount + projection.issueCount + gitAttentionCount;
 
   return (
     <section className="page-stack">
@@ -60,35 +60,24 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpen
             <div className="issue-list">
               {empty.map((variable) => (
                 <button key={`${variable.file}:${variable.key}`} onClick={() => onOpenFile(variable.file)}>
-                  <span className="issue-icon amber">○</span>
-                  <span><strong>{variable.key}</strong><small>{variable.file} · {t("overview.valueRequired")}</small></span>
+                  <span className="overview-row-copy"><strong>{variable.key}</strong></span>
                   <span>→</span>
                 </button>
               ))}
-              {projection.unclassifiedCount > 0 && (
+              {projection.accessReviewCount > 0 && (
                 <button onClick={onOpenReview}>
-                  <span className="issue-icon violet">?</span>
-                  <span><strong>{t("overview.unclassified")}</strong><small>{t("overview.variablesToReview", { count: projection.unclassifiedCount })}</small></span>
+                  <span className="overview-row-copy"><strong>{t("overview.accessReview")}</strong><small>{t("overview.variablesToReview", { count: projection.accessReviewCount })}</small></span>
                   <span>→</span>
                 </button>
               )}
-              {variables.filter((variable) => variable.clientExposure).map((variable) => (
-                <button key={`exposure:${variable.file}:${variable.key}`} onClick={() => onOpenFile(variable.file)}>
-                  <span className="issue-icon red">!</span>
-                  <span><strong>{variable.key}</strong><small>{variable.file} · {t("overview.clientExposure")}</small></span>
-                  <span>→</span>
-                </button>
-              ))}
               {projection.issueCount > 0 && (
                 <div className="issue-row">
-                  <span className="issue-icon red">!</span>
-                  <span><strong>{t("overview.parseWarnings")}</strong><small>{t("overview.warningsPreserved", { count: projection.issueCount })}</small></span>
+                  <span className="overview-row-copy"><strong>{t("overview.parseWarnings")}</strong><small>{t("overview.warningsPreserved", { count: projection.issueCount })}</small></span>
                 </div>
               )}
               {gitAttentionCount > 0 && (
                 <div className="issue-row">
-                  <span className="issue-icon red">G</span>
-                  <span><strong>{t("overview.gitLeakRisk")}</strong><small>{t("overview.gitLeakRiskBody")}</small></span>
+                  <span className="overview-row-copy"><strong>{t("overview.gitLeakRisk")}</strong><small>{t("overview.gitLeakRiskBody")}</small></span>
                 </div>
               )}
             </div>
@@ -102,8 +91,7 @@ export function Overview({ projection, onOpenFile, onApplyGitignoreGuard, onOpen
               const count = file.groups.reduce((total, group) => total + group.variables.length, 0);
               return (
                 <button key={file.path} onClick={() => onOpenFile(file.path)}>
-                  <span className="file-icon">ENV</span>
-                  <span><strong>{file.path}</strong><small>{t("overview.fileSummary", { variables: count, groups: file.groups.length })}</small></span>
+                  <span className="overview-row-copy"><strong>{file.path}</strong><small>{t("overview.fileSummary", { variables: count, groups: file.groups.length })}</small></span>
                   <span>→</span>
                 </button>
               );

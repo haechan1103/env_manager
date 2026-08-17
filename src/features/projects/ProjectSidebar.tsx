@@ -80,8 +80,8 @@ export function ProjectSidebar({
             onClick={() => onSelectView({ kind: "overview" })}
           >
             <span>⌁</span> Overview
-            {(projection.issueCount > 0 || projection.unclassifiedCount > 0) && (
-              <b>{projection.issueCount + projection.unclassifiedCount}</b>
+            {(projection.issueCount > 0 || projection.accessReviewCount > 0) && (
+              <b>{projection.issueCount + projection.accessReviewCount}</b>
             )}
           </button>
           <button
@@ -89,7 +89,7 @@ export function ProjectSidebar({
             onClick={() => onSelectView({ kind: "review" })}
           >
             <span>◇</span> {t("sidebar.review")}
-            {projection.unclassifiedCount > 0 && <b>{projection.unclassifiedCount}</b>}
+            {projection.accessReviewCount > 0 && <b>{projection.accessReviewCount}</b>}
           </button>
           <button
             className={view.kind === "activity" ? "nav-item active" : "nav-item"}

@@ -31,8 +31,8 @@ Env Manager is a local-first desktop app for environment variables. Register a p
 | You are vibe-coding and an AI agent asks for API keys | Enter values in a masked desktop UI instead of pasting them into chat. The agent can still work with names, groups, and approved operations. |
 | A project has `.env.local`, `.env.development`, and multiple app env files | Discover and browse them together while preserving their real paths and source formatting. |
 | The same key must stay equal in two, three, or more files | Explicitly link those occurrences, then edit from any linked file and save once. |
-| A teammate needs only part of your local setup | Export all or selected variables as a passphrase-encrypted `age` package, then import and merge it into the receiver's project. |
-| Local values must become deployment secrets | Select only the required variables and push them to GitHub Actions or Cloudflare Workers through the official local CLI. |
+| A teammate needs only part of your local setup | Publish all or selected variables as a passphrase-encrypted package to a connected team folder, then review and merge it into the receiver's project. |
+| Local values must become deployment secrets | Select only the required variables and push them to GitHub Actions, Cloudflare Workers, AWS Secrets Manager, SSM Parameter Store, or a locally installed Provider Pack. |
 | Codex, Claude Code, or Copilot needs to update env structure | Connect the shared Agent Skill and redacted broker so protected values stay outside normal inspection responses. |
 
 ![Env Manager project overview with Git safety and AI access status](assets/screenshots/env-manager-overview.png)
@@ -52,16 +52,19 @@ Env Manager is a local-first desktop app for environment variables. Register a p
 
 ## Push selected variables to deployment providers
 
-Env Manager can send a selected subset of one managed env file to a deployment provider. It invokes an already installed official CLI and passes values through standard input; provider tokens and temporary env files are not stored by Env Manager.
+Env Manager can send a selected subset of one managed env file to a deployment provider. Official CLIs receive values through standard input, while AWS uses its SDK credential chain. Provider tokens and temporary env files are not stored by Env Manager.
 
 | Provider | Supported targets | Target discovery |
 | --- | --- | --- |
 | GitHub Actions | Repository or deployment Environment secrets and configuration variables | Detects the nearest Git worktree and GitHub `origin`, lists accessible repositories and Environments through `gh`, and can explicitly create an Environment. |
 | Cloudflare Workers | Worker secrets for the default Worker or a configured Wrangler environment | Detects the nearest `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`, including Worker name and configured `env.*` names. |
+| AWS Secrets Manager | One encrypted secret per selected variable | Uses the local AWS profile/SSO credential chain, verifies the account and Region with STS, and optionally validates a customer-managed symmetric KMS key. |
+| AWS SSM Parameter Store | One `SecureString` parameter per selected variable | Uses the same AWS preflight and optional KMS key, with a configurable path prefix. |
+| Personal Provider Pack | A target declared by a locally installed `provider.json` | Runs the declared non-shell executable directly and sends each value only through standard input. Packs are local and separately removable. |
 
 ![Push selected masked variables to a Cloudflare Worker through Wrangler](assets/screenshots/env-manager-cloudflare-push.png)
 
-This is an explicit, one-way push—not remote secret synchronization. Env Manager cannot read secret values back, compare local and remote values, or delete unselected remote entries. Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) first.
+This is an explicit, one-way push—not remote secret synchronization. Env Manager cannot read secret values back, compare local and remote values, or delete unselected remote entries. Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) first, or configure a local AWS profile/SSO session for AWS targets. Third-party Provider Packs are local trust decisions: review their executable and manifest before installing them.
 
 ## Share a full setup or only selected variables
 
@@ -69,6 +72,8 @@ This is an explicit, one-way push—not remote secret synchronization. Env Manag
 - **Encrypted export:** an `age`-compatible, passphrase-protected package with no plaintext intermediate archive.
 - **Full or partial scope:** share every managed file, selected files, or individual variables. Linked occurrences are selected together.
 - **Safe import:** add missing variables, keep unrelated receiver content, and resolve differing local values before applying.
+- **Folder Team Channels:** connect a mounted NAS or sync-client folder, publish a new immutable encrypted package, and review packages from teammates without configuring a vendor-specific integration.
+- Existing folder permissions stay authoritative. Env Manager reports read-only or unavailable folders and never changes ACLs, mounts, or storage accounts.
 - The passphrase is never saved or recoverable by Env Manager. Transfer the package and passphrase through separate trusted channels.
 
 ![Choose individual variables for a passphrase-encrypted Env Manager package](assets/screenshots/env-manager-encrypted-share.png)
@@ -114,7 +119,11 @@ Register the project in Env Manager first, start a new agent session, and ask na
 Inspect this project's env structure without reading values.
 Create a Database group and add an empty DATABASE_URL variable.
 Link GPT_API_KEY across local and development.
+Push the selected deployment keys to AWS Secrets Manager under my-service/staging without showing their values.
+List this project's team channels and encrypted packages without reading their contents.
 ```
+
+Agent-initiated deployment follows the same redacted flow as the app: list available providers, prepare a value-free plan, then apply it through the local broker. The agent does not invoke `gh`, Wrangler, AWS commands, or Personal Pack executables itself.
 
 The integration never registers arbitrary projects on its own. Only projects already registered in the desktop app are accepted by the broker.
 
@@ -189,7 +198,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.1` adds four persistent text-size levels while retaining the Windows 10/11 x64 installer, local file editing, linked values, encrypted handoff, provider push, guarded AI-agent integrations, and English/Korean UI support. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.2` adds Folder Team Channels, AWS encrypted-secret targets, user-installable Personal Provider Packs, and the same opaque provider-push workflow for supported AI agents. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
 
 ## Community
 

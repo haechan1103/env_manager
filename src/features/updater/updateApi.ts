@@ -3,6 +3,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
 import { isTauriRuntime } from "../../lib/api";
+import { APP_VERSION } from "../../lib/version";
 
 export interface AppUpdateInfo {
   currentVersion: string;
@@ -13,7 +14,7 @@ export interface AppUpdateInfo {
 let pendingUpdate: Update | null = null;
 
 export async function currentAppVersion(): Promise<string> {
-  return isTauriRuntime ? getVersion() : "0.6.1";
+  return isTauriRuntime ? getVersion() : APP_VERSION;
 }
 
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {

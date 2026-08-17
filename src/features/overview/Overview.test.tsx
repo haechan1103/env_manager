@@ -19,10 +19,13 @@ describe("Overview", () => {
 
     expect(screen.getByText("Action inbox")).toBeInTheDocument();
     expect(screen.getByText("NEXT_PUBLIC_APP_URL")).toBeInTheDocument();
-    expect(screen.getByText("Unclassified AI access")).toBeInTheDocument();
+    expect(screen.getByText("AI access review")).toBeInTheDocument();
     expect(screen.getByText("All managed env files are ignored")).toBeInTheDocument();
     expect(screen.getByText("3 values blocked")).toBeInTheDocument();
     expect(screen.queryByText("fake_preview_value")).not.toBeInTheDocument();
+    expect(document.querySelector(".issue-icon")).not.toBeInTheDocument();
+    expect(document.querySelector(".file-icon")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\.env\.local · Value required/)).not.toBeInTheDocument();
   });
 
   it("offers an explicit fix for env files missing Git ignore coverage", async () => {
@@ -52,6 +55,19 @@ describe("Overview", () => {
     expect(screen.getByText("apps/api/.env.development")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add exact .gitignore rules" }));
     expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it("does not count ordinary unclassified variables as inbox work", () => {
+    render(
+      <Overview
+        projection={{ ...demoProjection, accessReviewCount: 0 }}
+        onOpenFile={vi.fn()}
+        onApplyGitignoreGuard={vi.fn()}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("AI access review")).not.toBeInTheDocument();
   });
 
   it("localizes the action inbox title in Korean", () => {

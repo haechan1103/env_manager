@@ -16,6 +16,7 @@ const integrations: AgentIntegrationStatus[] = [
     legacyVersion: false,
     currentVersion: "1.0.0",
     updateAvailable: false,
+    needsRepair: false,
     protection: "broker",
     detail: "The redacted broker is connected.",
     canInstall: true,
@@ -30,6 +31,7 @@ const integrations: AgentIntegrationStatus[] = [
     legacyVersion: false,
     currentVersion: "1.0.0",
     updateAvailable: false,
+    needsRepair: false,
     protection: "inactive",
     detail: "The integration can be installed.",
     canInstall: true,
@@ -44,6 +46,7 @@ const integrations: AgentIntegrationStatus[] = [
     legacyVersion: false,
     currentVersion: "1.0.0",
     updateAvailable: false,
+    needsRepair: false,
     protection: "inactive",
     detail: "Install the tool to connect it.",
     canInstall: false,
@@ -99,5 +102,15 @@ describe("AgentIntegrations", () => {
     render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
 
     expect(await screen.findByText("0.5.0 (legacy app-linked) → 1.0.0")).toBeInTheDocument();
+  });
+
+  it("offers repair when the plugin version exists but its broker configuration is stale", async () => {
+    vi.mocked(api.listAgentIntegrations).mockResolvedValueOnce([
+      { ...integrations[0]!, needsRepair: true, protection: "inactive" },
+    ]);
+    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+
+    expect(await screen.findByText("Repair needed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair connection" })).toBeEnabled();
   });
 });

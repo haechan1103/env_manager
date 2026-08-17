@@ -9,6 +9,7 @@ import type {
   CodexAccess,
   CloudflareAccessContext,
   CloudflareTargetContext,
+  AwsAccessContext,
   DeploymentProviderStatus,
   GitHubEnvironmentOptions,
   GitHubRepositoryContext,
@@ -16,6 +17,8 @@ import type {
   GitignoreUpdateSummary,
   ExportResult,
   ExportOccurrence,
+  TeamChannel,
+  TeamChannelPublishSummary,
   TeamImportPlanProjection,
   TeamImportSummary,
   TeamImportValueSide,
@@ -25,6 +28,11 @@ import type {
   ProjectSummary,
   ProviderPushRequest,
   ProviderPushResult,
+  ProviderCompareRequest,
+  ProviderCompareResult,
+  ProviderPushReceipt,
+  PersonalProviderPackInfo,
+  RuntimeTarget,
 } from "./types";
 
 export const isTauriRuntime = "__TAURI_INTERNALS__" in window;
@@ -98,6 +106,9 @@ export async function listDeploymentProviders(
         name: "GitHub Actions",
         available: true,
         detail: "GitHub CLI ready",
+        source: "official",
+        version: null,
+        targetLabel: null,
         adapter: {
           cliVersion: "2.78.0",
           profileId: "gh-secret-set-v1",
@@ -110,6 +121,9 @@ export async function listDeploymentProviders(
         name: "Cloudflare Workers",
         available: true,
         detail: "Compatible Wrangler ready",
+        source: "official",
+        version: null,
+        targetLabel: null,
         adapter: {
           cliVersion: "4.115.0",
           profileId: "wrangler-secret-bulk-v1",
@@ -117,9 +131,50 @@ export async function listDeploymentProviders(
           adapterSource: "bundled",
         },
       },
+      {
+        id: "aws-secrets-manager",
+        name: "AWS Secrets Manager",
+        available: true,
+        detail: "Built-in AWS SDK",
+        source: "official",
+        version: "1.1.0",
+        targetLabel: "Secret path prefix",
+        adapter: null,
+      },
+      {
+        id: "aws-ssm-parameter-store",
+        name: "AWS SSM Parameter Store",
+        available: true,
+        detail: "Built-in AWS SDK · SecureString",
+        source: "official",
+        version: "1.1.0",
+        targetLabel: "Parameter path prefix",
+        adapter: null,
+      },
     ];
   }
   return call("list_deployment_providers", { request: { projectId } });
+}
+
+export async function chooseAndInstallPersonalProviderPack(
+  dialogTitle: string,
+): Promise<PersonalProviderPackInfo | null> {
+  if (!isTauriRuntime) return null;
+  const path = await open({
+    directory: false,
+    multiple: false,
+    title: dialogTitle,
+    filters: [{ name: "Env Manager Provider Pack", extensions: ["json"] }],
+  });
+  if (typeof path !== "string") return null;
+  return call("install_personal_provider_pack", {
+    request: { path, replace: true },
+  });
+}
+
+export async function removePersonalProviderPack(id: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("remove_personal_provider_pack", { request: { id } });
 }
 
 export async function listGitHubRepositories(
@@ -193,6 +248,22 @@ export async function inspectCloudflareAccess(
   });
 }
 
+export async function inspectAwsAccess(
+  profile: string | null,
+  region: string | null,
+): Promise<AwsAccessContext> {
+  if (!isTauriRuntime) {
+    return {
+      accountId: "123456789012",
+      principalArn: "arn:aws:iam::123456789012:user/demo",
+      region: region || "ap-northeast-2",
+      kmsAliases: ["alias/env-manager-demo"],
+      kmsAliasesAvailable: true,
+    };
+  }
+  return call("inspect_aws_access", { request: { profile, region } });
+}
+
 export async function pushToProvider(
   projectId: string,
   request: ProviderPushRequest,
@@ -207,6 +278,51 @@ export async function pushToProvider(
   return call("push_to_provider", { payload: { projectId, request } });
 }
 
+export async function compareProviderValues(
+  projectId: string,
+  request: ProviderCompareRequest,
+): Promise<ProviderCompareResult> {
+  if (!isTauriRuntime) {
+    return {
+      provider: request.provider,
+      target: `${request.awsRegion ?? "ap-northeast-2"}/${request.awsPathPrefix ?? ""}`.replace(/\/$/, ""),
+      items: request.keys.map((key, index) => ({
+        key,
+        remoteName: request.awsPathPrefix ? `${request.awsPathPrefix}/${key}` : key,
+        state: index === 0 ? "same" : "different",
+        resultCode: null,
+      })),
+    };
+  }
+  return call("compare_provider_values", { payload: { projectId, request } });
+}
+
+export async function listRuntimeTargets(projectId: string): Promise<RuntimeTarget[]> {
+  if (!isTauriRuntime) return [];
+  return call("list_runtime_targets", { request: { projectId } });
+}
+
+export async function saveRuntimeTarget(
+  projectId: string,
+  request: RuntimeTarget,
+): Promise<RuntimeTarget[]> {
+  if (!isTauriRuntime) return [request];
+  return call("save_runtime_target", { payload: { projectId, request } });
+}
+
+export async function removeRuntimeTarget(
+  projectId: string,
+  targetId: string,
+): Promise<RuntimeTarget[]> {
+  if (!isTauriRuntime) return [];
+  return call("remove_runtime_target", { request: { projectId, targetId } });
+}
+
+export async function listProviderPushReceipts(projectId: string): Promise<ProviderPushReceipt[]> {
+  if (!isTauriRuntime) return [];
+  return call("list_provider_push_receipts", { request: { projectId } });
+}
+
 export async function installAgentIntegration(
   id: AgentIntegrationId,
 ): Promise<AgentIntegrationStatus> {
@@ -218,6 +334,7 @@ export async function installAgentIntegration(
       installed: true,
       installedVersion: integration.currentVersion,
       updateAvailable: false,
+      needsRepair: false,
       protection: id === "codex" ? "broker" : "guarded",
     };
   }
@@ -265,6 +382,60 @@ export async function exportEnvFiles(
 ): Promise<ExportResult> {
   if (!isTauriRuntime) return { fileCount: demoProjection.files.length, encrypted: passphrase !== null, cancelled: false };
   return call("export_env_files", { request: { projectId, passphrase, selection, locale } });
+}
+
+export async function listTeamChannels(projectId: string): Promise<TeamChannel[]> {
+  if (!isTauriRuntime) return [];
+  return call("list_team_channels", { request: { projectId } });
+}
+
+export async function connectFolderTeamChannel(
+  projectId: string,
+  locale: "en" | "ko",
+): Promise<TeamChannel | null> {
+  if (!isTauriRuntime) {
+    return {
+      id: "demo-folder-channel",
+      name: "Team share",
+      readable: true,
+      publishable: true,
+      packages: [],
+    };
+  }
+  return call("connect_folder_team_channel", { request: { projectId, locale } });
+}
+
+export async function removeTeamChannel(projectId: string, channelId: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("remove_team_channel", { request: { projectId, channelId } });
+}
+
+export async function publishTeamChannel(
+  projectId: string,
+  channelId: string,
+  passphrase: string,
+  selection: ExportOccurrence[] | null,
+): Promise<TeamChannelPublishSummary> {
+  if (!isTauriRuntime) return { packageId: "demo-package", fileCount: demoProjection.files.length };
+  return call("publish_team_channel", {
+    request: { projectId, channelId, passphrase, selection },
+  });
+}
+
+export async function planTeamChannelImport(
+  projectId: string,
+  channelId: string,
+  packageId: string,
+  passphrase: string,
+): Promise<TeamImportPlanProjection> {
+  if (!isTauriRuntime) {
+    const plan = await planTeamImport(projectId, passphrase, "en");
+    if (!plan) throw new ApiError("UNAVAILABLE", "Demo import plan is unavailable");
+    return plan;
+  }
+  return call("plan_team_channel_import", {
+    request: { projectId, channelId, packageId, passphrase },
+  });
 }
 
 export async function planTeamImport(

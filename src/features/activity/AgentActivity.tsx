@@ -76,6 +76,7 @@ function categoryKey(category: AgentActivityEvent["category"]) {
   return ({
     "structure-inspection": "activity.category.structure",
     "value-read": "activity.category.read",
+    "provider-compare": "activity.category.providerCompare",
     "policy-change": "activity.category.policy",
     mutation: "activity.category.mutation",
   } as const)[category];

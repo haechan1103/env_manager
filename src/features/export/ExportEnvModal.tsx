@@ -11,11 +11,12 @@ interface Props {
   onClose: () => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  channelId?: string;
 }
 
 const occurrenceId = (file: string, key: string) => `${file}\0${key}`;
 
-export function ExportEnvModal({ projectId, projection, onClose, onError, onNotice }: Props) {
+export function ExportEnvModal({ projectId, projection, onClose, onError, onNotice, channelId }: Props) {
   const { locale, t } = useI18n();
   const [mode, setMode] = useState<"plain" | "encrypted">("encrypted");
   const [scope, setScope] = useState<"all" | "selected">("all");
@@ -65,15 +66,21 @@ export function ExportEnvModal({ projectId, projection, onClose, onError, onNoti
           .map((item) => ({ file: item.file, key: item.variable.key }));
     setBusy(true);
     try {
-      const result = await api.exportEnvFiles(
-        projectId,
-        mode === "encrypted" ? passphrase : null,
-        selection,
-        locale,
-      );
-      if (!result.cancelled) {
-        onNotice(t(result.encrypted ? "export.encryptedDone" : "export.plainDone", { count: result.fileCount }));
+      if (channelId) {
+        const result = await api.publishTeamChannel(projectId, channelId, passphrase, selection);
+        onNotice(t("teamChannel.published", { count: result.fileCount }));
         onClose();
+      } else {
+        const result = await api.exportEnvFiles(
+          projectId,
+          mode === "encrypted" ? passphrase : null,
+          selection,
+          locale,
+        );
+        if (!result.cancelled) {
+          onNotice(t(result.encrypted ? "export.encryptedDone" : "export.plainDone", { count: result.fileCount }));
+          onClose();
+        }
       }
     } catch (error) {
       onError(localizeError(error, locale, "export.error"));
@@ -85,15 +92,15 @@ export function ExportEnvModal({ projectId, projection, onClose, onError, onNoti
   };
 
   return (
-    <Modal title={t("export.title")} description={t("export.description")} onClose={onClose}>
-      <div className="export-options">
+    <Modal title={t(channelId ? "teamChannel.publishTitle" : "export.title")} description={t(channelId ? "teamChannel.publishDescription" : "export.description")} onClose={onClose}>
+      {!channelId && <div className="export-options">
         <button className={mode === "encrypted" ? "export-option selected" : "export-option"} onClick={() => setMode("encrypted")}>
           <span className="export-option-mark secure">AGE</span><span><strong>{t("export.encrypted")}</strong><small>{t("export.encryptedBody")}</small></span>
         </button>
         <button className={mode === "plain" ? "export-option selected" : "export-option"} onClick={() => setMode("plain")}>
           <span className="export-option-mark">ZIP</span><span><strong>{t("export.plain")}</strong><small>{t("export.plainBody")}</small></span>
         </button>
-      </div>
+      </div>}
       <div className="share-scope-options">
         <label><input type="radio" checked={scope === "all"} onChange={() => setScope("all")} /><span><strong>{t("export.scopeAll")}</strong><small>{t("export.scopeAllBody")}</small></span></label>
         <label><input type="radio" checked={scope === "selected"} onChange={() => setScope("selected")} /><span><strong>{t("export.scopeSelected")}</strong><small>{t("export.scopeSelectedBody")}</small></span></label>
@@ -121,15 +128,15 @@ export function ExportEnvModal({ projectId, projection, onClose, onError, onNoti
           })}
         </div>
       )}
-      {mode === "encrypted" && (
+      {(channelId || mode === "encrypted") && (
         <div className="modal-form export-password-fields">
           <label><span>{t("export.passphrase")}</span><input type="password" autoComplete="new-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} /></label>
           <label><span>{t("export.confirmPassphrase")}</span><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /></label>
           <p className={confirm && passphrase !== confirm ? "field-error" : "field-help"}>{confirm && passphrase !== confirm ? t("export.mismatch") : t("export.passphraseHelp")}</p>
         </div>
       )}
-      <div className="export-warning"><strong>{t("export.warningTitle")}</strong><p>{t(mode === "plain" ? "export.plainWarning" : "export.encryptedWarning")}</p></div>
-      <div className="modal-actions"><button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={!valid || busy} onClick={() => void submit()}>{busy ? t("export.exporting") : t("export.action")}</button></div>
+      <div className="export-warning"><strong>{t("export.warningTitle")}</strong><p>{t(channelId ? "teamChannel.publishWarning" : mode === "plain" ? "export.plainWarning" : "export.encryptedWarning")}</p></div>
+      <div className="modal-actions"><button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={!valid || busy} onClick={() => void submit()}>{busy ? t(channelId ? "teamChannel.publishing" : "export.exporting") : t(channelId ? "teamChannel.publish" : "export.action")}</button></div>
     </Modal>
   );
 }

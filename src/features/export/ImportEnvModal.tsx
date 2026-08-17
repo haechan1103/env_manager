@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  channelSource?: { channelId: string; packageId: string };
 }
 
 interface ConflictGroup {
@@ -64,7 +65,7 @@ function ImportTargetRow({ sourcePath, targetPath, usedTargets, busy, onRemap }:
   );
 }
 
-export function ImportEnvModal({ projectId, projection, onApplied, onClose, onError, onNotice }: Props) {
+export function ImportEnvModal({ projectId, projection, onApplied, onClose, onError, onNotice, channelSource }: Props) {
   const { locale, t } = useI18n();
   const [passphrase, setPassphrase] = useState("");
   const [plan, setPlan] = useState<TeamImportPlanProjection | null>(null);
@@ -113,7 +114,14 @@ export function ImportEnvModal({ projectId, projection, onApplied, onClose, onEr
     if (passphrase.length < 10) return;
     setBusy(true);
     try {
-      const result = await api.planTeamImport(projectId, passphrase, locale);
+      const result = channelSource
+        ? await api.planTeamChannelImport(
+            projectId,
+            channelSource.channelId,
+            channelSource.packageId,
+            passphrase,
+          )
+        : await api.planTeamImport(projectId, passphrase, locale);
       setPassphrase("");
       if (result) {
         setPlan(result);
@@ -175,7 +183,7 @@ export function ImportEnvModal({ projectId, projection, onApplied, onClose, onEr
   };
 
   return (
-    <Modal className="import-modal" title={t("import.title")} description={t("import.description")} onClose={onClose}>
+    <Modal className="import-modal" title={t(channelSource ? "teamChannel.importTitle" : "import.title")} description={t(channelSource ? "teamChannel.importDescription" : "import.description")} onClose={onClose}>
       {!plan ? (
         <>
           <div className="modal-form import-password-field">
@@ -183,7 +191,7 @@ export function ImportEnvModal({ projectId, projection, onApplied, onClose, onEr
             <p className="field-help">{t("import.passphraseHelp")}</p>
           </div>
           <div className="export-warning"><strong>{t("import.warningTitle")}</strong><p>{t("import.warningBody")}</p></div>
-          <div className="modal-actions"><button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={busy || passphrase.length < 10} onClick={() => void choose()}>{busy ? t("import.opening") : t("import.choose")}</button></div>
+          <div className="modal-actions"><button className="quiet-button" onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={busy || passphrase.length < 10} onClick={() => void choose()}>{busy ? t("import.opening") : t(channelSource ? "teamChannel.openPackage" : "import.choose")}</button></div>
         </>
       ) : (
         <>

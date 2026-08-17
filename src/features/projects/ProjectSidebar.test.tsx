@@ -9,6 +9,7 @@ const projection: ProjectProjection = {
   projectId: "demo",
   name: "demo",
   unclassifiedCount: 0,
+  accessReviewCount: 0,
   issueCount: 0,
   clientExposureCount: 0,
   classificationReview: [],

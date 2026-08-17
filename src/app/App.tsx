@@ -5,6 +5,7 @@ import { FileEditor } from "../features/file-editor/FileEditor";
 import { ExportEnvModal } from "../features/export/ExportEnvModal";
 import { ImportEnvModal } from "../features/export/ImportEnvModal";
 import { ProviderPushModal } from "../features/provider-push/ProviderPushModal";
+import { TeamChannelModal } from "../features/team-channel/TeamChannelModal";
 import { AgentActivity } from "../features/activity/AgentActivity";
 import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
@@ -27,11 +28,17 @@ export function App() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [channelPublishing, setChannelPublishing] = useState<string | null>(null);
+  const [channelImporting, setChannelImporting] = useState<{ channelId: string; packageId: string } | null>(null);
   const [renamingProject, setRenamingProject] = useState(false);
 
   useEffect(() => {
     setView({ kind: "overview" });
     setRenamingProject(false);
+    setSharing(false);
+    setChannelPublishing(null);
+    setChannelImporting(null);
   }, [manager.selectedProjectId]);
 
   useEffect(() => {
@@ -168,6 +175,7 @@ export function App() {
                 }}>{t("common.rename")}</button>
                 <button className="quiet-button" onClick={() => setExporting(true)}>{t("export.action")}</button>
                 <button className="quiet-button" onClick={() => setImporting(true)}>{t("import.headerAction")}</button>
+                <button className="quiet-button" onClick={() => setSharing(true)}>{t("teamChannel.headerAction")}</button>
                 <button className="quiet-button" onClick={() => setPushing(true)}>{t("push.headerAction")}</button>
                 <button className="quiet-button" onClick={() => void refresh()}>
                   {t("common.refresh")}
@@ -261,6 +269,43 @@ export function App() {
           projectId={manager.selectedProject.id}
           projection={manager.projection}
           onClose={() => setPushing(false)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+        />
+      )}
+      {sharing && manager.selectedProject && (
+        <TeamChannelModal
+          projectId={manager.selectedProject.id}
+          onClose={() => setSharing(false)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+          onPublish={(channelId) => {
+            setSharing(false);
+            setChannelPublishing(channelId);
+          }}
+          onImport={(channelId, packageId) => {
+            setSharing(false);
+            setChannelImporting({ channelId, packageId });
+          }}
+        />
+      )}
+      {channelPublishing && manager.selectedProject && manager.projection && (
+        <ExportEnvModal
+          projectId={manager.selectedProject.id}
+          projection={manager.projection}
+          channelId={channelPublishing}
+          onClose={() => setChannelPublishing(null)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+        />
+      )}
+      {channelImporting && manager.selectedProject && manager.projection && (
+        <ImportEnvModal
+          projectId={manager.selectedProject.id}
+          projection={manager.projection}
+          channelSource={channelImporting}
+          onApplied={() => manager.refreshProject(manager.selectedProject!.id).then(() => undefined)}
+          onClose={() => setChannelImporting(null)}
           onError={manager.showError}
           onNotice={manager.showNotice}
         />

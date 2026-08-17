@@ -4,9 +4,10 @@ export type AgentIntegrationId = "codex" | "claude-code" | "github-copilot";
 export type AgentProtection = "broker" | "guarded" | "inactive";
 export type AgentIntegrationBlocker = "tool-not-found" | "broker-unavailable" | "bundle-unavailable";
 export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
-export type DeploymentProviderId = "github-actions" | "cloudflare-workers";
+export type DeploymentProviderId = string;
 export type GitHubEntryKind = "secret" | "variable";
-export type AdapterSource = "bundled" | "local-repair";
+export type AdapterSource = "bundled" | "local-repair" | "personal";
+export type DeploymentProviderSource = "official" | "personal";
 export type CloudflareAuthState = "authenticated" | "not-authenticated" | "unavailable";
 export type CloudflareAccountState = "matched" | "mismatch" | "ambiguous" | "unconfigured" | "unchecked";
 export type CloudflareTargetState = "accessible" | "unavailable" | "unchecked";
@@ -23,6 +24,9 @@ export interface DeploymentProviderStatus {
   name: string;
   available: boolean;
   detail: string;
+  source: DeploymentProviderSource;
+  version: string | null;
+  targetLabel: string | null;
   adapter: AdapterStatus | null;
 }
 
@@ -58,6 +62,14 @@ export interface CloudflareAccessContext {
   adapter: AdapterStatus;
 }
 
+export interface AwsAccessContext {
+  accountId: string;
+  principalArn: string | null;
+  region: string;
+  kmsAliases: string[];
+  kmsAliasesAvailable: boolean;
+}
+
 export interface ProviderPushRequest {
   provider: DeploymentProviderId;
   file: string;
@@ -66,12 +78,83 @@ export interface ProviderPushRequest {
   githubEnvironment: string | null;
   worker: string | null;
   cloudflareEnvironment: string | null;
+  personalTarget: string | null;
+  awsProfile: string | null;
+  awsRegion: string | null;
+  awsPathPrefix: string | null;
+  awsKmsKeyId: string | null;
 }
 
 export interface ProviderPushResult {
   provider: DeploymentProviderId;
   pushedCount: number;
   failedKeys: string[];
+}
+
+export type ProviderComparisonState = "same" | "different" | "unset" | "unverifiable" | "error";
+
+export interface ProviderCompareRequest {
+  provider: DeploymentProviderId;
+  file: string;
+  keys: string[];
+  awsProfile: string | null;
+  awsRegion: string | null;
+  awsPathPrefix: string | null;
+  runtimeTargetId: string | null;
+}
+
+export type RuntimeTransport =
+  | { type: "ssh"; destination: string }
+  | {
+      type: "ecs";
+      cluster: string;
+      task: string;
+      container: string | null;
+      profile: string | null;
+      region: string | null;
+    };
+
+export interface RuntimeTarget {
+  id: string;
+  displayName: string;
+  sourceFile: string;
+  remoteTargetId: string;
+  recipient: string;
+  transport: RuntimeTransport;
+}
+
+export interface ProviderComparisonItem {
+  key: string;
+  remoteName: string;
+  state: ProviderComparisonState;
+  resultCode: string | null;
+}
+
+export interface ProviderCompareResult {
+  provider: DeploymentProviderId;
+  target: string;
+  items: ProviderComparisonItem[];
+}
+
+export interface ProviderPushReceipt {
+  timestampMs: number;
+  projectId: string;
+  provider: DeploymentProviderId;
+  sourceFile: string;
+  destination: string;
+  succeededKeys: string[];
+  failedKeys: string[];
+}
+
+export interface PersonalProviderPackInfo {
+  id: string;
+  displayName: string;
+  description: string;
+  version: string;
+  targetLabel: string | null;
+  available: boolean;
+  cliVersion: string | null;
+  profileId: string | null;
 }
 
 export interface GitSafetyProjection {
@@ -102,6 +185,7 @@ export interface AgentIntegrationStatus {
   legacyVersion: boolean;
   currentVersion: string;
   updateAvailable: boolean;
+  needsRepair: boolean;
   protection: AgentProtection;
   detail: string;
   canInstall: boolean;
@@ -128,6 +212,7 @@ export interface OccurrenceProjection {
 }
 
 export type ClassificationSource = "heuristic" | "user" | "codex";
+export type ClassificationReviewReason = "client-exposure-conflict" | "agent-access-request";
 
 export interface ClassificationReviewProjection {
   key: string;
@@ -136,6 +221,7 @@ export interface ClassificationReviewProjection {
   classifiedBy: ClassificationSource;
   suggestion: { access: CodexAccess; reason: string };
   clientExposed: boolean;
+  reviewReasons: ClassificationReviewReason[];
 }
 
 export interface GroupProjection {
@@ -159,6 +245,25 @@ export interface ExportResult {
 export interface ExportOccurrence {
   file: string;
   key: string;
+}
+
+export interface TeamChannelPackage {
+  id: string;
+  byteSize: number;
+  modifiedAtMs: number;
+}
+
+export interface TeamChannel {
+  id: string;
+  name: string;
+  readable: boolean;
+  publishable: boolean;
+  packages: TeamChannelPackage[];
+}
+
+export interface TeamChannelPublishSummary {
+  packageId: string;
+  fileCount: number;
 }
 
 export type TeamImportOccurrenceState = "new" | "unchanged" | "conflict";
@@ -203,6 +308,7 @@ export interface ProjectProjection {
   issueCount: number;
   gitSafety: GitSafetyProjection;
   classificationReview: ClassificationReviewProjection[];
+  accessReviewCount: number;
   clientExposureCount: number;
 }
 
@@ -210,7 +316,7 @@ export interface AgentActivityEvent {
   timestampMs: number;
   projectId: string;
   actor: string;
-  category: "structure-inspection" | "value-read" | "policy-change" | "mutation";
+  category: "structure-inspection" | "value-read" | "provider-compare" | "policy-change" | "mutation";
   operation: string;
   relativePaths: string[];
   variableNames: string[];

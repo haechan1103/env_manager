@@ -31,8 +31,8 @@ Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. �
 | 바이브코딩 중 AI가 API 키 입력을 요청할 때 | 채팅에 값을 붙여 넣지 않고 마스킹된 데스크톱 화면에서 직접 입력합니다. AI는 이름·그룹과 허용된 작업을 계속 다룰 수 있습니다. |
 | `.env.local`, `.env.development`, 여러 앱 env가 흩어져 있을 때 | 실제 경로와 원본 형식을 유지하면서 한곳에서 발견하고 이동합니다. |
 | 같은 키를 2개, 3개 이상의 파일에서 똑같이 유지해야 할 때 | 원하는 변수들만 명시적으로 연결하고 어느 파일에서든 한 번 수정해 함께 저장합니다. |
-| 팀원에게 로컬 설정의 일부만 전달해야 할 때 | 전체 또는 선택한 변수만 암호화된 `age` 파일로 내보내고, 받는 프로젝트에 병합합니다. |
-| 로컬 값을 배포 환경에 등록해야 할 때 | 필요한 변수만 골라 공식 로컬 CLI를 통해 GitHub Actions 또는 Cloudflare Workers로 올립니다. |
+| 팀원에게 로컬 설정의 일부만 전달해야 할 때 | 전체 또는 선택한 변수만 암호화해 연결한 팀 폴더에 새 패키지로 게시하고, 받는 프로젝트에서 검토 후 병합합니다. |
+| 로컬 값을 배포 환경에 등록해야 할 때 | 필요한 변수만 골라 GitHub Actions, Cloudflare Workers, AWS Secrets Manager, SSM Parameter Store 또는 직접 설치한 Provider Pack으로 올립니다. |
 | Codex·Claude Code·Copilot이 env 구조를 수정해야 할 때 | Agent Skill과 redacted broker를 연결해 보호된 값을 일반 조회 응답에서 제외합니다. |
 
 ![Git 보호와 AI 접근 상태를 보여주는 Env Manager 프로젝트 개요](assets/screenshots/env-manager-overview.png)
@@ -50,18 +50,21 @@ Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. �
 
 ![마스킹된 합성 값, 연결 파일, 그룹 빠른 이동을 보여주는 Env Manager 파일 편집기](assets/screenshots/env-manager-editor.png)
 
-## GitHub Actions와 Cloudflare로 선택 전송
+## 배포 서비스로 필요한 변수만 전송
 
-관리 중인 env 파일 하나에서 필요한 변수만 골라 배포 서비스로 보낼 수 있습니다. 이미 설치된 공식 CLI를 실행하고 값은 표준 입력으로 전달합니다. Env Manager가 서비스 토큰이나 임시 env 파일을 저장하지 않습니다.
+관리 중인 env 파일 하나에서 필요한 변수만 골라 배포 서비스로 보낼 수 있습니다. 공식 CLI에는 값을 표준 입력으로 전달하고, AWS는 SDK의 로컬 자격 증명 체인을 사용합니다. Env Manager가 서비스 토큰이나 임시 env 파일을 저장하지 않습니다.
 
 | 서비스 | 지원 대상 | 대상 찾기 |
 | --- | --- | --- |
 | GitHub Actions | 저장소 또는 배포 Environment의 Secret과 설정 Variable | 가장 가까운 Git worktree와 GitHub `origin`을 기본 감지하고, `gh`로 접근 가능한 저장소·Environment를 불러오며 필요한 Environment를 직접 생성할 수 있습니다. |
 | Cloudflare Workers | 기본 Worker 또는 Wrangler 환경의 Worker Secret | 가장 가까운 `wrangler.jsonc`, `wrangler.json`, `wrangler.toml`에서 Worker 이름과 설정된 `env.*` 환경을 감지합니다. |
+| AWS Secrets Manager | 선택한 변수마다 암호화된 Secret 하나 | 로컬 AWS Profile/SSO 자격 증명을 사용하고 STS로 계정·Region을 확인합니다. 고객 관리형 대칭 KMS 키도 선택할 수 있습니다. |
+| AWS SSM Parameter Store | 선택한 변수마다 `SecureString` Parameter 하나 | 같은 AWS 사전 검사를 거치며 경로 prefix와 선택적 KMS 키를 지원합니다. |
+| Personal Provider Pack | 로컬 `provider.json`이 선언한 대상 | 셸을 거치지 않고 선언된 실행 파일을 직접 실행하며 값은 표준 입력으로만 전달합니다. Pack은 이 컴퓨터에만 설치되고 앱에서 제거할 수 있습니다. |
 
 ![Wrangler를 통해 선택한 마스킹 변수를 Cloudflare Worker로 보내는 화면](assets/screenshots/env-manager-cloudflare-push.png)
 
-이 기능은 사용자가 직접 시작하는 **단방향 전송**입니다. 원격 Secret 값을 다시 읽거나 로컬 값과 같은지 비교하지 않으며, 선택하지 않은 원격 항목을 삭제하지도 않습니다. 먼저 [`gh`](https://cli.github.com/manual/gh_secret_set) 또는 [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk)를 설치하고 로그인해야 합니다.
+이 기능은 사용자가 직접 시작하는 **단방향 전송**입니다. 원격 Secret 값을 다시 읽거나 로컬 값과 같은지 비교하지 않으며, 선택하지 않은 원격 항목을 삭제하지도 않습니다. GitHub·Cloudflare는 [`gh`](https://cli.github.com/manual/gh_secret_set) 또는 [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk)를 설치하고 로그인해야 합니다. AWS 대상은 로컬 AWS Profile 또는 SSO 세션을 준비해야 합니다. 외부 Provider Pack은 설치 전 실행 파일과 manifest를 직접 확인하세요.
 
 ## 전체 또는 일부만 암호화해서 공유
 
@@ -69,6 +72,8 @@ Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. �
 - **암호화 내보내기:** 평문 중간 ZIP 없이 `age` 호환 암호화 파일을 만듭니다.
 - **전체·부분 선택:** 모든 관리 파일, 특정 파일, 개별 변수만 선택할 수 있으며 연결된 변수는 함께 선택됩니다.
 - **안전한 가져오기:** 없는 변수는 추가하고 받는 사람의 관련 없는 내용은 유지하며, 서로 다른 로컬 값은 적용 전에 선택합니다.
+- **Folder Team Channel:** 마운트한 NAS나 기존 동기화 앱의 폴더를 연결하고, 덮어쓰지 않는 새 암호화 패키지를 게시하거나 팀원이 올린 패키지를 검토합니다.
+- 기존 폴더 권한을 그대로 따릅니다. Env Manager는 읽기 전용·접근 불가 상태를 알려주며 ACL, 마운트, 저장소 계정을 직접 변경하지 않습니다.
 - 암호는 저장하거나 복구하지 않습니다. 파일과 암호는 서로 다른 신뢰할 수 있는 채널로 전달하세요.
 
 ![암호화된 Env Manager 공유 파일에 넣을 개별 변수를 선택하는 화면](assets/screenshots/env-manager-encrypted-share.png)
@@ -114,7 +119,11 @@ copilot plugin install env-manager@env-manager
 이 프로젝트 env 구조를 값 없이 점검해줘.
 Database 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
 GPT_API_KEY를 local과 development에서 연결해줘.
+선택한 배포 키를 값은 보지 말고 AWS Secrets Manager의 my-service/staging 아래에 올려줘.
+이 프로젝트의 팀 공유 채널과 암호화 패키지를 내용은 보지 말고 확인해줘.
 ```
+
+AI가 전송을 요청해도 앱과 같은 보호 흐름을 사용합니다. 사용 가능한 Provider를 확인하고, 값이 없는 계획을 만든 뒤 로컬 broker가 적용합니다. 에이전트가 `gh`, Wrangler, AWS 명령 또는 Personal Pack 실행 파일을 직접 호출하지 않습니다.
 
 연동 도구가 프로젝트를 임의로 등록하지는 않습니다. 데스크톱 앱에 이미 등록된 프로젝트만 broker가 허용합니다.
 
@@ -191,7 +200,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.1`은 현재 크기를 가장 작은 단계로 두고, 네 단계의 글자 크기와 선택값 저장 기능을 추가합니다. Windows 10/11 x64 설치 파일, 로컬 파일 편집, 연결 변수, 충돌 검토가 가능한 암호화 전달, GitHub/Cloudflare 전송, 보호된 AI 에이전트 연동과 영어·한국어 UI도 그대로 지원합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.2`는 Folder Team Channel, AWS 암호화 Secret 대상, 사용자가 설치하는 Personal Provider Pack, 지원 AI 에이전트의 값 비노출 전송 흐름을 추가합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
 
 ## 커뮤니티
 

@@ -67,20 +67,23 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
       <div className="integration-grid" aria-live="polite">
         {items.map((item) => {
           const busy = installing === item.id;
-          const actionNeeded = !item.installed || item.updateAvailable;
+          const actionNeeded = !item.installed || item.updateAvailable || item.needsRepair;
           const actionLabel = item.updateAvailable
             ? t("integration.update")
-            : item.installed
-              ? t("integration.installed")
-              : t("integration.install");
+            : item.needsRepair
+              ? t("integration.repair")
+              : item.installed
+                ? t("integration.installed")
+                : t("integration.install");
+          const connected = item.installed && !item.needsRepair;
           return (
-            <article className={`integration-card ${item.installed ? "connected" : ""}`} key={item.id}>
+            <article className={`integration-card ${connected ? "connected" : ""}`} key={item.id}>
               <header>
                 <span className={`integration-mark ${item.id}`}>{marks[item.id]}</span>
                 <div>
                   <h3>{item.name}</h3>
-                  <span className={`integration-state ${item.installed ? "installed" : item.detected ? "detected" : "missing"}`}>
-                    {item.installed ? t("integration.connected") : item.detected ? t("integration.detected") : t("integration.missing")}
+                  <span className={`integration-state ${connected ? "installed" : item.detected ? "detected" : "missing"}`}>
+                    {item.needsRepair ? t("integration.repairNeeded") : connected ? t("integration.connected") : item.detected ? t("integration.detected") : t("integration.missing")}
                   </span>
                 </div>
               </header>
@@ -104,7 +107,7 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
               </dl>
 
               <button
-                className={item.installed && !item.updateAvailable ? "quiet-button integration-action" : "primary-button integration-action"}
+                className={connected ? "quiet-button integration-action" : "primary-button integration-action"}
                 disabled={busy || !actionNeeded || !item.canInstall}
                 onClick={() => void install(item)}
               >
@@ -140,6 +143,7 @@ function integrationDetail(
   item: AgentIntegrationStatus,
   t: ReturnType<typeof useI18n>["t"],
 ) {
+  if (item.needsRepair) return t("integration.detailRepair");
   if (item.installed && item.id === "codex") return t("integration.detailCodex");
   if (item.installed) return t("integration.detailGuarded");
   if (item.id === "github-copilot" && item.detected && !item.canInstall) {
