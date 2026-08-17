@@ -10,8 +10,8 @@ use crate::provider_adapter::{self, AdapterStrategy, ResolvedAdapter};
 use super::cli::{background_command, provider_command, run_with_stdin};
 use super::error::{ProviderPushError, invalid_target};
 use super::model::{
-    DeploymentProviderId, GitHubEntryKind, GitHubEnvironmentOptions, GitHubRepositoryContext,
-    GitHubRepositoryOptions, ProviderPushRequest, ProviderPushResult,
+    GITHUB_ACTIONS_ID, GitHubEntryKind, GitHubEnvironmentOptions, GitHubRepositoryContext,
+    GitHubRepositoryOptions, OfficialProviderId, ProviderPushRequest, ProviderPushResult,
 };
 use super::validation::{
     optional_target, source_directory, validate_repository, validate_simple_target,
@@ -165,14 +165,14 @@ pub(super) fn push(
         }
     }
     Ok(ProviderPushResult {
-        provider: DeploymentProviderId::GithubActions,
+        provider: GITHUB_ACTIONS_ID.to_owned(),
         pushed_count,
         failed_keys,
     })
 }
 
 fn github_cli(root: &Path, app_data: &Path) -> Result<PathBuf, ProviderPushError> {
-    let adapter = provider_adapter::resolve(DeploymentProviderId::GithubActions, root, app_data)?;
+    let adapter = provider_adapter::resolve(OfficialProviderId::GithubActions, root, app_data)?;
     if adapter.strategy != AdapterStrategy::GhSecretSetV1 {
         return Err(ProviderPushError {
             code: "PROVIDER_ADAPTER_INVALID",

@@ -1,6 +1,6 @@
 ---
 name: manage-project-env
-description: Safely inspect and manage environment-variable files in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, create or rename groups, add or move variables, update descriptions, replace an allowed value, normalize existing group comments, link the same key across two or more env files, detach a link, or reuse a same-name value from another registered project without exposing it. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, cross-project key reuse, secrets, or Env Manager.
+description: Safely inspect, manage, deploy, compare, and coordinate encrypted sharing of environment variables in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, manage groups or variables, link occurrences, reuse a same-name value from another project, inspect Folder Team Channels, push selected variables to GitHub, Cloudflare, AWS, or a locally installed Personal Provider Pack, check whether selected AWS deployment values match without revealing them, or author a new stdin-only Provider Pack for an unsupported CLI. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, cross-project key reuse, encrypted team packages, NAS/shared folders, deployment secrets, provider CLIs, AWS Secrets Manager, SSM, KMS, remote value equality, or Env Manager.
 ---
 
 # Manage Project Env
@@ -54,6 +54,87 @@ interpreter, or generic editing tools.
   agent access change. Plan and apply it without another confirmation round trip.
 - Prefer `protected` for credential-like names and `unclassified` when uncertain.
 - A public/client prefix does not make a credential-looking key safe.
+
+## Push to a deployment provider
+
+- Call `list_deployment_providers` first. Work only with an `available` official or
+  locally installed provider returned by the Broker.
+- Require a concrete source file, variable names, provider, and destination. Ask one
+  concise question when repository, Worker, AWS Region/path, or Personal Pack target
+  is missing or ambiguous.
+- Call `plan_provider_push` with semantic fields only, verify its redacted paths,
+  names, destination, and impact, then call `apply_plan` immediately when it matches
+  the current request.
+- Keep every selection `secret` unless the user explicitly requests a GitHub
+  configuration Variable. Cloudflare, AWS, and Personal Packs accept secret entries
+  only.
+- For AWS, pass an optional profile, an explicit or locally configured Region, an
+  optional resource path prefix, and an optional symmetric KMS key alias/ARN. Treat
+  KMS as encryption configuration for Secrets Manager or SSM `SecureString`, not as
+  a separate env-value destination.
+- Never call `gh`, Wrangler, AWS CLI, a Personal Pack executable, raw HTTP, or shell
+  directly. Protected and unclassified values use the same opaque Broker plan and do
+  not require a policy downgrade.
+- Report attempted, succeeded, and failed names only. A completed push is not proof
+  of current equality and never implies continuing synchronization.
+
+## Check deployed values without revealing them
+
+- Use this workflow only when the user concretely asks whether selected deployed
+  values match. Call `list_deployment_providers`. For AWS, call
+  `compare_deployment_values` with the exact provider/profile/Region/path target. For
+  a registered Runtime, call `list_runtime_targets`, select its returned source file
+  and target ID, then compare with provider `remote-runtime`.
+- The comparison tool accepts names and occurrence metadata only. Never pass a
+  candidate value, hash, assignment, command, or SDK payload.
+- `protected` and `unclassified` variables may use this opaque comparison without a
+  policy downgrade. Do not call `read_allowed_value` first.
+- Return only `same`, `different`, `unset`, `unverifiable`, or `error` with variable
+  and remote-resource names. A last-push receipt is historical activity, not an
+  equality result.
+- GitHub and Cloudflare secret values are unreadable and therefore unverifiable.
+  Never substitute a last-push time, metadata match, or successful CLI exit for a
+  live equality claim.
+- SSH Runtime checks are allowed only through a target returned by
+  `list_runtime_targets`; the Broker encrypts the request and invokes the fixed
+  verifier. ECS remains unavailable until its compatible transport is reported.
+  Never run SSH, ECS Exec, shell `source`, SHA-256 commands, or arbitrary remote
+  scripts yourself.
+
+## Encrypted team folders
+
+- Call `list_team_channels` when the user asks which Folder Team Channels are
+  connected, whether one is readable, or which encrypted packages are available for
+  the current registered project.
+- Return only channel names/IDs, capability state, package IDs, sizes, and timestamps.
+  Never infer package contents or claim that one package is the canonical latest.
+- Never ask for or accept a sharing passphrase in chat or any Broker argument. The
+  passphrase-based publish, decrypt, conflict review, and apply flows are focused
+  actions in the Env Manager desktop app.
+- If the requested action needs package values, tell the user exactly which channel
+  and package to open in **Team sharing**. Do not read the shared folder with shell or
+  generic filesystem tools, even when its path is known outside the Broker.
+- Treat `readable: false` as an existing mount/sync/permission problem. Do not change
+  ACLs, mount storage, delete packages, or attempt a vendor-specific workaround.
+- The Broker leaves publish capability unchecked to keep inspection read-only. Tell
+  the user to open **Team sharing** for the desktop app's focused write-capability
+  probe. Do not promise that Env Manager can bypass the storage provider's
+  permissions.
+
+## Author a Personal Provider Pack
+
+Read [personal-provider-packs.md](references/personal-provider-packs.md) when the user
+asks to support an unsupported CLI or create a reusable local integration.
+
+- Verify the current official CLI documentation before choosing arguments or a
+  supported semantic-version range.
+- Create only the Pack source files requested by the user. Do not install, replace,
+  trust, or execute the Pack on the user's behalf.
+- Keep values out of the manifest and arguments. A Pack may interpolate `key` and one
+  declared target placeholder; the selected value always arrives through stdin.
+- Tell the user to install the generated `provider.json` from Env Manager. Once
+  installed, future provider requests use the semantic Broker workflow above rather
+  than reproducing CLI syntax in chat.
 
 ## Structural changes
 

@@ -18,6 +18,8 @@ age.workspace = true
 blake3.workspace = true
 directories.workspace = true
 env-core = { path = "../crates/env-core" }
+env-provider = { path = "../crates/env-provider" }
+env-team = { path = "../crates/env-team" }
 notify.workspace = true
 serde.workspace = true
 serde_json.workspace = true

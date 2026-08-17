@@ -10,7 +10,7 @@ use super::super::cli::provider_command;
 use super::super::error::ProviderPushError;
 use super::super::model::{
     CloudflareAccessContext, CloudflareAccountState, CloudflareAuthState, CloudflareTargetState,
-    DeploymentProviderId,
+    OfficialProviderId,
 };
 use super::super::validation::{optional_target, validate_simple_target};
 use super::config::detect_target;
@@ -49,8 +49,7 @@ pub(in crate::provider_push) fn inspect_with_adapter(
 ) -> Result<(CloudflareAccessContext, ResolvedAdapter), ProviderPushError> {
     validate_simple_target(worker)?;
     let environment = optional_target(environment)?;
-    let adapter =
-        provider_adapter::resolve(DeploymentProviderId::CloudflareWorkers, root, app_data)?;
+    let adapter = provider_adapter::resolve(OfficialProviderId::CloudflareWorkers, root, app_data)?;
     if adapter.strategy != AdapterStrategy::WranglerSecretBulkV1 {
         return Err(ProviderPushError {
             code: "PROVIDER_ADAPTER_INVALID",

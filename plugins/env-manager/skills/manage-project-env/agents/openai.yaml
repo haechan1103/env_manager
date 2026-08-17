@@ -1,12 +1,12 @@
 interface:
   display_name: "Manage Project Env"
-  short_description: "Safely manage registered project environment files"
-  default_prompt: "Use $manage-project-env to inspect and update this registered project environment configuration safely."
+  short_description: "Manage, share, deploy, and compare registered environment variables"
+  default_prompt: "Use $manage-project-env to inspect, update, share, deploy, or compare registered deployment and Runtime environment configuration safely."
 dependencies:
   tools:
     - type: "mcp"
       value: "env-manager"
-      description: "Redacted local broker for registered project env operations"
+      description: "Redacted local broker for registered env and provider operations"
       transport: "stdio"
 policy:
   allow_implicit_invocation: true

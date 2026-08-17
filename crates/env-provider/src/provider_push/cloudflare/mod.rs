@@ -13,7 +13,7 @@ use crate::provider_adapter::{AdapterStrategy, ResolvedAdapter};
 use super::cli::run_with_stdin;
 use super::error::{ProviderPushError, invalid_request, invalid_target};
 use super::model::{
-    DeploymentProviderId, GitHubEntryKind, ProviderPushRequest, ProviderPushResult,
+    CLOUDFLARE_WORKERS_ID, GitHubEntryKind, ProviderPushRequest, ProviderPushResult,
 };
 use super::validation::{optional_target, validate_simple_target};
 
@@ -70,7 +70,7 @@ pub(super) fn push(
         });
     }
     Ok(ProviderPushResult {
-        provider: DeploymentProviderId::CloudflareWorkers,
+        provider: CLOUDFLARE_WORKERS_ID.to_owned(),
         pushed_count: values.len(),
         failed_keys: Vec::new(),
     })

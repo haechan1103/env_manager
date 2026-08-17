@@ -13,7 +13,7 @@ mod service;
 mod team_import;
 mod transaction;
 
-pub use discovery::{DiscoveryOptions, discover_env_files};
+pub use discovery::{DiscoveryOptions, discover_env_files, is_env_candidate};
 pub use effective::{
     EffectiveContext, EffectiveOccurrence, EffectiveProjection, FrameworkKind, resolve_effective,
 };
@@ -29,12 +29,13 @@ pub use manifest::{
 };
 pub use migration::{MigrationPlan, MigrationPreview, MigrationSuggestion};
 pub use model::{
-    ClassificationReviewProjection, FileProjection, GroupProjection, OccurrenceProjection,
-    ProjectProjection, RedactedValueState,
+    ClassificationReviewProjection, ClassificationReviewReason, FileProjection, GroupProjection,
+    OccurrenceProjection, ProjectProjection, RedactedValueState,
 };
 pub use parser::{AssignmentRef, Document, NewlineStyle, Node, Span};
 pub use policy::{
-    ClassificationSuggestion, ClientExposureWarning, detect_client_exposure, suggest_access,
+    ClassificationSuggestion, ClientExposureWarning, default_access, detect_client_exposure,
+    suggest_access,
 };
 pub use provider_push::ProviderValue;
 pub use service::{

@@ -24,6 +24,24 @@ playwright-report/
 **/.env
 **/.env.*
 
+# Signing material and machine credentials never belong in the public repository.
+*.pem
+*.key
+*.agekey
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+id_rsa
+id_ed25519
+.netrc
+credentials.json
+service-account.json
+google-services.json
+GoogleService-Info.plist
+
 # Synthetic fixtures are explicitly allowlisted.
 !crates/env-test-support/fixtures/.env
 !crates/env-test-support/fixtures/.env.*

@@ -34,6 +34,7 @@ pub struct AgentIntegrationStatus {
     pub legacy_version: bool,
     pub current_version: &'static str,
     pub update_available: bool,
+    pub needs_repair: bool,
     pub protection: &'static str,
     pub detail: String,
     pub can_install: bool,
@@ -62,7 +63,7 @@ struct InstallationMarker {
 }
 
 pub fn list(app: &AppHandle) -> Vec<AgentIntegrationStatus> {
-    let broker_available = ensure_current_broker(app).is_ok();
+    let broker = ensure_current_broker(app).ok();
     let catalog_available = catalog_source(app).is_some();
     [
         AgentIntegrationId::Codex,
@@ -70,7 +71,7 @@ pub fn list(app: &AppHandle) -> Vec<AgentIntegrationStatus> {
         AgentIntegrationId::GithubCopilot,
     ]
     .into_iter()
-    .map(|id| status(app, id, broker_available, catalog_available))
+    .map(|id| status(app, id, broker.as_deref(), catalog_available))
     .collect()
 }
 
@@ -97,7 +98,13 @@ pub fn install(
         });
     }
 
-    if !current_bundle_is_cached(id) && marker_version(app, id).is_some() {
+    if !current_bundle_is_cached(id) || !connection_configuration_is_current(app, id, &broker) {
+        if marker_version(app, id).is_none() && !cached_bundle_is_official(id) {
+            return Err(IntegrationError {
+                code: "AGENT_MARKETPLACE_CONFLICT",
+                message: "같은 이름의 다른 Env Manager marketplace가 연결되어 있습니다. 해당 연결을 제거한 뒤 다시 시도해주세요.",
+            });
+        }
         reconnect_owned_marketplace(&executable, id, catalog.as_os_str().to_owned())?;
         if !install_or_update(&executable, id) {
             return Err(IntegrationError {
@@ -112,15 +119,21 @@ pub fn install(
             message: "AI 도구가 새 연동 번들을 적용하지 않았습니다. 기존 marketplace 연결을 확인해주세요.",
         });
     }
+    if !connection_configuration_is_current(app, id, &broker) {
+        return Err(IntegrationError {
+            code: "AGENT_CONFIGURATION_NOT_APPLIED",
+            message: "AI 도구가 Env Manager broker 설정을 적용하지 않았습니다. 기존 marketplace 연결을 확인해주세요.",
+        });
+    }
 
     persist_marker(app, id)?;
-    Ok(status(app, id, true, true))
+    Ok(status(app, id, Some(&broker), true))
 }
 
 fn status(
     app: &AppHandle,
     id: AgentIntegrationId,
-    broker_available: bool,
+    broker: Option<&Path>,
     catalog_available: bool,
 ) -> AgentIntegrationStatus {
     let cli_detected = integration_executable(id).is_some();
@@ -128,6 +141,8 @@ fn status(
     let detected = cli_detected || vscode_detected;
     let installed_version = installed_version(app, id);
     let installed = installed_version.is_some();
+    let needs_repair = installed
+        && broker.is_none_or(|broker| !connection_configuration_is_current(app, id, broker));
     let legacy_version = installed_version
         .as_deref()
         .is_some_and(is_legacy_bundle_version);
@@ -136,27 +151,37 @@ fn status(
         .is_some_and(|version| is_update_available(version, agent_bundle_version()));
     let action_blocker = if !cli_detected {
         Some(AgentIntegrationBlocker::ToolNotFound)
-    } else if !broker_available {
+    } else if broker.is_none() {
         Some(AgentIntegrationBlocker::BrokerUnavailable)
     } else if !catalog_available {
         Some(AgentIntegrationBlocker::BundleUnavailable)
     } else {
         None
     };
-    let (protection, detail) = match (id, installed, cli_detected, vscode_detected) {
-        (AgentIntegrationId::Codex, true, _, _) => (
+    let (protection, detail) = match (id, installed, needs_repair, cli_detected, vscode_detected) {
+        (_, true, true, _, _) => (
+            "inactive",
+            "플러그인은 있지만 broker 실행 경로나 감사 기록 설정이 현재 앱과 맞지 않아 복구가 필요합니다.".to_owned(),
+        ),
+        (AgentIntegrationId::Codex, true, false, _, _) => (
             "broker",
             "Redacted broker가 연결되어 있습니다. 직접 파일 차단 수준은 Codex 권한 프로필에 따라 달라집니다.".to_owned(),
         ),
-        (AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot, true, _, _) => (
+        (
+            AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot,
+            true,
+            false,
+            _,
+            _,
+        ) => (
             "guarded",
             "공통 Skill, MCP broker, 직접 env 접근 Guard가 연결되어 있습니다.".to_owned(),
         ),
-        (AgentIntegrationId::GithubCopilot, false, false, true) => (
+        (AgentIntegrationId::GithubCopilot, false, false, false, true) => (
             "inactive",
             "VS Code는 감지했지만 Copilot CLI가 필요합니다. CLI 설치 후 여기서 한 번에 연결할 수 있습니다.".to_owned(),
         ),
-        (_, false, true, _) => (
+        (_, false, false, true, _) => (
             "inactive",
             "도구를 감지했습니다. Env Manager 연동을 설치할 수 있습니다.".to_owned(),
         ),
@@ -175,6 +200,7 @@ fn status(
         legacy_version,
         current_version: agent_bundle_version(),
         update_available,
+        needs_repair,
         protection,
         detail,
         can_install: action_blocker.is_none(),
@@ -563,6 +589,7 @@ fn materialize_catalog(
         Value::String(broker.to_string_lossy().into_owned());
     mcp["mcpServers"]["env-manager"]["env"] = json!({
         "ENV_MANAGER_AUDIT_DIR": app_data.join("agent-activity").to_string_lossy(),
+        "ENV_MANAGER_APP_DATA_DIR": app_data.to_string_lossy(),
         "ENV_MANAGER_AGENT_HOST": integration_slug(id),
     });
     write_json(&mcp_path, &mcp)?;
@@ -653,8 +680,8 @@ fn reconnect_owned_marketplace(
     id: AgentIntegrationId,
     catalog: OsString,
 ) -> Result<(), IntegrationError> {
-    // Only call this after finding an app-owned installation marker. A user-owned
-    // marketplace with the same name must never be removed automatically.
+    // Call only after finding an app-owned marker or validating the cached bundle as
+    // this project's official plugin. An unrelated marketplace is never removed.
     let _ = run_agent_command(executable, marketplace_remove_args());
     if run_agent_command(executable, marketplace_add_args(id, catalog)) {
         Ok(())
@@ -673,6 +700,69 @@ fn install_or_update(executable: &Path, id: AgentIntegrationId) -> bool {
 
 fn current_bundle_is_cached(id: AgentIntegrationId) -> bool {
     cache_version(id).as_deref() == Some(agent_bundle_version())
+}
+
+fn connection_configuration_is_current(
+    app: &AppHandle,
+    id: AgentIntegrationId,
+    broker: &Path,
+) -> bool {
+    let Some((version, root)) = cached_bundle(id) else {
+        return false;
+    };
+    if version != agent_bundle_version() {
+        return false;
+    }
+    let Ok(app_data) = app.path().app_data_dir() else {
+        return false;
+    };
+    let Ok(mcp) = read_json(&root.join(".mcp.json")) else {
+        return false;
+    };
+    let Ok(hooks) = read_json(&root.join("hooks/hooks.json")) else {
+        return false;
+    };
+    connection_files_are_current(&mcp, &hooks, broker, &app_data, id)
+}
+
+fn connection_files_are_current(
+    mcp: &Value,
+    hooks: &Value,
+    broker: &Path,
+    app_data: &Path,
+    id: AgentIntegrationId,
+) -> bool {
+    let server = &mcp["mcpServers"]["env-manager"];
+    let expected_audit = app_data
+        .join("agent-activity")
+        .to_string_lossy()
+        .into_owned();
+    let expected_app_data = app_data.to_string_lossy().into_owned();
+    let expected_broker = broker.to_string_lossy();
+    let expected_hook = format!("\"{expected_broker}\" guard-hook");
+    server["command"].as_str() == Some(expected_broker.as_ref())
+        && server["env"]["ENV_MANAGER_AUDIT_DIR"].as_str() == Some(expected_audit.as_str())
+        && server["env"]["ENV_MANAGER_APP_DATA_DIR"].as_str() == Some(expected_app_data.as_str())
+        && server["env"]["ENV_MANAGER_AGENT_HOST"].as_str() == Some(integration_slug(id))
+        && hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"].as_str()
+            == Some(expected_hook.as_str())
+}
+
+fn cached_bundle_is_official(id: AgentIntegrationId) -> bool {
+    let Some((_, root)) = cached_bundle(id) else {
+        return false;
+    };
+    let manifest_name = match id {
+        AgentIntegrationId::Codex => ".codex-plugin/plugin.json",
+        AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot => {
+            ".claude-plugin/plugin.json"
+        }
+    };
+    let Ok(manifest) = read_json(&root.join(manifest_name)) else {
+        return false;
+    };
+    manifest["name"].as_str() == Some(PLUGIN_NAME)
+        && manifest["repository"].as_str() == Some("https://github.com/haechan1103/env_manager")
 }
 
 fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
@@ -763,6 +853,10 @@ fn marker_version(app: &AppHandle, id: AgentIntegrationId) -> Option<String> {
 }
 
 fn cache_version(id: AgentIntegrationId) -> Option<String> {
+    cached_bundle(id).map(|(version, _)| version)
+}
+
+fn cached_bundle(id: AgentIntegrationId) -> Option<(String, PathBuf)> {
     let base = BaseDirs::new()?;
     let (root, manifest) = match id {
         AgentIntegrationId::Codex => (
@@ -781,29 +875,30 @@ fn cache_version(id: AgentIntegrationId) -> Option<String> {
             ".claude-plugin/plugin.json",
         ),
     };
-    newest_manifest_version(&root, manifest)
+    newest_manifest_bundle(&root, manifest)
 }
 
-fn newest_manifest_version(root: &Path, manifest: &str) -> Option<String> {
+fn newest_manifest_bundle(root: &Path, manifest: &str) -> Option<(String, PathBuf)> {
     let entries = fs::read_dir(root).ok()?;
     let versions = entries
         .filter_map(Result::ok)
         .filter(|entry| entry.path().join(manifest).is_file())
         .filter_map(|entry| {
             let bytes = fs::read(entry.path().join(manifest)).ok()?;
-            serde_json::from_slice::<Value>(&bytes)
+            let version = serde_json::from_slice::<Value>(&bytes)
                 .ok()?
                 .get("version")?
                 .as_str()
-                .map(str::to_owned)
+                .map(str::to_owned)?;
+            Some((version, entry.path()))
         })
         .collect::<Vec<_>>();
-    versions.into_iter().max_by(
-        |left, right| match (Version::parse(left), Version::parse(right)) {
+    versions.into_iter().max_by(|(left, _), (right, _)| {
+        match (Version::parse(left), Version::parse(right)) {
             (Ok(left), Ok(right)) => left.cmp(&right),
             _ => left.cmp(right),
-        },
-    )
+        }
+    })
 }
 
 fn manifest_version(path: &Path) -> Option<String> {
@@ -862,7 +957,8 @@ mod tests {
 
     #[test]
     fn agent_bundle_version_is_independent_from_the_app_release() {
-        assert_eq!(agent_bundle_version(), "1.1.0");
+        assert_eq!(agent_bundle_version(), "1.5.0");
+        assert_ne!(agent_bundle_version(), env!("CARGO_PKG_VERSION"));
     }
 
     #[test]
@@ -888,6 +984,64 @@ mod tests {
             vec!["codex.exe", "codex.cmd", "codex.bat"]
         );
         assert_eq!(executable_file_names("codex", false), vec!["codex"]);
+    }
+
+    #[test]
+    fn connection_health_requires_broker_app_data_audit_and_host_identity() {
+        let broker = Path::new("/synthetic/env-manager-broker");
+        let app_data = Path::new("/synthetic/app-data");
+        let hooks = json!({
+            "hooks": {
+                "PreToolUse": [{
+                    "hooks": [{ "command": "\"/synthetic/env-manager-broker\" guard-hook" }]
+                }]
+            }
+        });
+        let configured = json!({
+            "mcpServers": {
+                "env-manager": {
+                    "command": "/synthetic/env-manager-broker",
+                    "env": {
+                        "ENV_MANAGER_AUDIT_DIR": "/synthetic/app-data/agent-activity",
+                        "ENV_MANAGER_APP_DATA_DIR": "/synthetic/app-data",
+                        "ENV_MANAGER_AGENT_HOST": "codex"
+                    }
+                }
+            }
+        });
+        let missing_audit = json!({
+            "mcpServers": {
+                "env-manager": {
+                    "command": "/synthetic/env-manager-broker",
+                    "env": {
+                        "ENV_MANAGER_APP_DATA_DIR": "/synthetic/app-data",
+                        "ENV_MANAGER_AGENT_HOST": "codex"
+                    }
+                }
+            }
+        });
+
+        assert!(connection_files_are_current(
+            &configured,
+            &hooks,
+            broker,
+            app_data,
+            AgentIntegrationId::Codex,
+        ));
+        assert!(!connection_files_are_current(
+            &missing_audit,
+            &hooks,
+            broker,
+            app_data,
+            AgentIntegrationId::Codex,
+        ));
+        assert!(!connection_files_are_current(
+            &configured,
+            &hooks,
+            broker,
+            app_data,
+            AgentIntegrationId::ClaudeCode,
+        ));
     }
 
     #[cfg(windows)]

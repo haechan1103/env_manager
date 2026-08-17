@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2.0.0",
-  "providerProtocolVersion": "0.1.0",
-  "lastReviewed": "2026-08-15",
+  "catalogVersion": "3.2.0",
+  "providerProtocolVersion": "0.4.0",
+  "lastReviewed": "2026-08-17",
   "providers": [
     {
       "id": "github-actions",
       "displayName": "GitHub Actions",
       "adapterVersion": "1.0.0",
       "uiSupport": "implemented",
-      "agentSupport": "planned",
+      "agentSupport": "implemented",
       "transport": "cli",
       "client": {
         "name": "gh",
@@ -43,7 +43,7 @@
       "displayName": "Cloudflare Workers",
       "adapterVersion": "1.0.0",
       "uiSupport": "implemented",
-      "agentSupport": "planned",
+      "agentSupport": "implemented",
       "transport": "cli",
       "client": {
         "name": "wrangler",
@@ -71,13 +71,13 @@
     {
       "id": "aws-secrets-manager",
       "displayName": "AWS Secrets Manager",
-      "adapterVersion": null,
-      "uiSupport": "planned",
-      "agentSupport": "planned",
+      "adapterVersion": "1.1.0",
+      "uiSupport": "implemented",
+      "agentSupport": "implemented",
       "transport": "sdk",
       "client": {
         "name": "aws-sdk-rust-secretsmanager",
-        "runtimeProbe": "not-implemented",
+        "runtimeProbe": "sdk-config-chain",
         "profiles": []
       },
       "valueTransport": "in-process-sdk",
@@ -85,23 +85,29 @@
         "secret-create",
         "secret-version-update",
         "aws-profile",
-        "aws-region"
+        "aws-region",
+        "sts-preflight",
+        "kms-key-select",
+        "kms-alias-discovery",
+        "secret-value-compare"
       ],
       "officialDocs": [
         "https://docs.aws.amazon.com/cli/latest/reference/secretsmanager/put-secret-value.html",
-        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html"
+        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html",
+        "https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html",
+        "https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html"
       ]
     },
     {
       "id": "aws-ssm-parameter-store",
       "displayName": "AWS Systems Manager Parameter Store",
-      "adapterVersion": null,
-      "uiSupport": "planned",
-      "agentSupport": "planned",
+      "adapterVersion": "1.1.0",
+      "uiSupport": "implemented",
+      "agentSupport": "implemented",
       "transport": "sdk",
       "client": {
         "name": "aws-sdk-rust-ssm",
-        "runtimeProbe": "not-implemented",
+        "runtimeProbe": "sdk-config-chain",
         "profiles": []
       },
       "valueTransport": "in-process-sdk",
@@ -109,11 +115,41 @@
         "secure-string-create",
         "secure-string-update",
         "aws-profile",
-        "aws-region"
+        "aws-region",
+        "sts-preflight",
+        "kms-key-select",
+        "kms-alias-discovery",
+        "secure-string-value-compare"
       ],
       "officialDocs": [
         "https://docs.aws.amazon.com/cli/latest/reference/ssm/put-parameter.html",
-        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html"
+        "https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html",
+        "https://docs.aws.amazon.com/systems-manager/latest/userguide/secure-string-parameter-kms-encryption.html",
+        "https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameter.html"
+      ]
+    },
+    {
+      "id": "remote-runtime",
+      "displayName": "Remote Runtime",
+      "adapterVersion": "1.0.0",
+      "uiSupport": "implemented",
+      "agentSupport": "implemented",
+      "transport": "remote-verifier",
+      "client": {
+        "name": "env-manager-remote-verifier",
+        "runtimeProbe": "fixed-protocol",
+        "profiles": []
+      },
+      "valueTransport": "age-stdin",
+      "capabilities": [
+        "ssh-runtime-compare",
+        "server-target-allowlist",
+        "request-freshness",
+        "request-replay-protection"
+      ],
+      "officialDocs": [
+        "https://man.openbsd.org/ssh",
+        "https://age-encryption.org/v1"
       ]
     }
   ]

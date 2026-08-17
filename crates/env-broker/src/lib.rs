@@ -12,6 +12,7 @@ use env_core::{
     OpaqueValueCopyRequest, ProjectService, RedactedValueState, RenameGroupRequest,
     SaveDescriptionRequest, SaveValueRequest,
 };
+use env_provider::provider_push::{ProviderCompareRequest, ProviderPushRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -21,6 +22,10 @@ pub struct Broker {
     plans: Mutex<HashMap<String, StoredPlan>>,
     next_plan_id: AtomicU64,
     registered_roots_override: Option<Vec<PathBuf>>,
+    provider_app_data_override: Option<PathBuf>,
+    agent_host: Mutex<Option<&'static str>>,
+    #[cfg(test)]
+    _test_app_data: Option<tempfile::TempDir>,
 }
 
 impl Default for Broker {
@@ -29,6 +34,15 @@ impl Default for Broker {
             plans: Mutex::new(HashMap::new()),
             next_plan_id: AtomicU64::new(1),
             registered_roots_override: None,
+            provider_app_data_override: None,
+            agent_host: Mutex::new(
+                std::env::var("ENV_MANAGER_AGENT_HOST")
+                    .ok()
+                    .as_deref()
+                    .and_then(normalize_agent_host),
+            ),
+            #[cfg(test)]
+            _test_app_data: None,
         }
     }
 }
@@ -66,6 +80,7 @@ enum PlannedOperation {
         source_project_id: String,
         request: OpaqueValueCopyRequest,
     },
+    ProviderPush(ProviderPushRequest),
 }
 
 #[derive(Debug, Serialize)]
@@ -217,6 +232,60 @@ struct PlanMigrationArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ListProvidersArgs {
+    project_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ListTeamChannelsArgs {
+    project_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrokerTeamChannelProjection {
+    id: String,
+    name: String,
+    readable: bool,
+    publishable: Option<bool>,
+    packages: Vec<env_team::TeamChannelPackage>,
+    requires_human_passphrase: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanProviderPushArgs {
+    project_path: String,
+    provider: String,
+    file: String,
+    selections: Vec<env_provider::provider_push::ProviderSelection>,
+    repository: Option<String>,
+    github_environment: Option<String>,
+    worker: Option<String>,
+    cloudflare_environment: Option<String>,
+    personal_target: Option<String>,
+    aws_profile: Option<String>,
+    aws_region: Option<String>,
+    aws_path_prefix: Option<String>,
+    aws_kms_key_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CompareDeploymentValuesArgs {
+    project_path: String,
+    provider: String,
+    file: String,
+    keys: Vec<String>,
+    aws_profile: Option<String>,
+    aws_region: Option<String>,
+    aws_path_prefix: Option<String>,
+    runtime_target_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ApplyArgs {
     plan_id: String,
 }
@@ -237,9 +306,23 @@ struct AuditEvent<'a> {
 }
 
 impl Broker {
+    #[cfg(test)]
     pub fn with_registered_roots(roots: Vec<PathBuf>) -> Self {
+        let test_app_data = tempfile::tempdir().expect("broker test app data");
+        let provider_app_data_override = Some(test_app_data.path().to_path_buf());
         Self {
             registered_roots_override: Some(roots),
+            provider_app_data_override,
+            _test_app_data: Some(test_app_data),
+            ..Self::default()
+        }
+    }
+
+    #[cfg(test)]
+    fn with_registered_roots_and_app_data(roots: Vec<PathBuf>, app_data: PathBuf) -> Self {
+        Self {
+            registered_roots_override: Some(roots),
+            provider_app_data_override: Some(app_data),
             ..Self::default()
         }
     }
@@ -265,8 +348,28 @@ impl Broker {
             "plan_copy_variable_from_project" => {
                 self.plan_copy_variable_from_project(parse(arguments)?)
             }
+            "list_deployment_providers" => self.list_deployment_providers(parse(arguments)?),
+            "list_runtime_targets" => self.list_runtime_targets(parse(arguments)?),
+            "list_team_channels" => self.list_team_channels(parse(arguments)?),
+            "compare_deployment_values" => self.compare_deployment_values(parse(arguments)?),
+            "plan_provider_push" => self.plan_provider_push(parse(arguments)?),
             "apply_plan" => self.apply(parse(arguments)?),
             _ => Err(EnvError::invalid("지원하지 않는 Env Manager 도구입니다.")),
+        }
+    }
+
+    /// Records the MCP client identity when a host-specific environment override was
+    /// not supplied. Only known host names are accepted into audit metadata.
+    pub fn identify_client(&self, client_name: &str) {
+        let Some(agent_host) = normalize_agent_host(client_name) else {
+            return;
+        };
+        let mut current = self
+            .agent_host
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if current.is_none() {
+            *current = Some(agent_host);
         }
     }
 
@@ -274,7 +377,7 @@ impl Broker {
         let service = self.open_registered(&args.project_path)?;
         let projection = service.scan()?;
         let result = serde_json::to_value(projection).map_err(EnvError::serialization)?;
-        audit(
+        self.audit(
             service.project_id(),
             "inspect_project",
             &[],
@@ -324,7 +427,7 @@ impl Broker {
                 .cmp(&right.project_name.to_ascii_lowercase())
                 .then_with(|| left.project_id.cmp(&right.project_id))
         });
-        audit(
+        self.audit(
             target.project_id(),
             "find_reusable_variable_sources",
             &[],
@@ -341,7 +444,7 @@ impl Broker {
         let code = value
             .as_ref()
             .map_or_else(|error| error.code().as_str(), |_| "OK");
-        audit(
+        self.audit(
             service.project_id(),
             "read_allowed_value",
             std::slice::from_ref(&args.file),
@@ -356,7 +459,7 @@ impl Broker {
         let service = self.open_registered(&args.project_path)?;
         if service.codex_access(&args.key)? != CodexAccess::ReadWrite {
             let error = EnvError::access_blocked(&args.key);
-            audit(
+            self.audit(
                 service.project_id(),
                 "plan_set_allowed_value",
                 std::slice::from_ref(&args.file),
@@ -609,6 +712,174 @@ impl Broker {
         )
     }
 
+    fn list_deployment_providers(&self, args: ListProvidersArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let app_data = self.provider_app_data()?;
+        let providers = env_provider::provider_push::list(service.root(), &app_data);
+        self.audit(
+            service.project_id(),
+            "list_deployment_providers",
+            &[],
+            &[],
+            "redacted-provider-metadata",
+            "OK",
+        );
+        serde_json::to_value(providers).map_err(EnvError::serialization)
+    }
+
+    fn list_runtime_targets(&self, args: ListProvidersArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let targets = env_provider::runtime_target::list(service.root())
+            .map_err(provider_error)?
+            .into_iter()
+            .map(|target| {
+                json!({
+                    "id": target.id,
+                    "displayName": target.display_name,
+                    "sourceFile": target.source_file,
+                    "transport": target.transport_label(),
+                })
+            })
+            .collect::<Vec<_>>();
+        self.audit(
+            service.project_id(),
+            "list_runtime_targets",
+            &[],
+            &[],
+            "redacted-runtime-target-metadata",
+            "OK",
+        );
+        Ok(Value::Array(targets))
+    }
+
+    fn list_team_channels(&self, args: ListTeamChannelsArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let registry = load_registry_data(&self.provider_app_data()?.join("projects.json"))?;
+        let channels = registry
+            .team_channels
+            .into_iter()
+            .filter(|channel| channel.project_id == service.project_id())
+            .map(|channel| {
+                let transport = match env_team::open_transport(&channel.transport) {
+                    Ok(transport) => transport,
+                    Err(error) if error.code() == EnvErrorCode::Io => {
+                        return Ok(BrokerTeamChannelProjection {
+                            id: channel.id,
+                            name: channel.name,
+                            readable: false,
+                            publishable: None,
+                            packages: Vec::new(),
+                            requires_human_passphrase: true,
+                        });
+                    }
+                    Err(error) => return Err(error),
+                };
+                let capabilities = transport.inspect(env_team::CapabilityProbe::ReadOnly)?;
+                let packages = if capabilities.readable {
+                    transport.list_packages()?
+                } else {
+                    Vec::new()
+                };
+                Ok(BrokerTeamChannelProjection {
+                    id: channel.id,
+                    name: channel.name,
+                    readable: capabilities.readable,
+                    publishable: capabilities.publishable,
+                    packages,
+                    requires_human_passphrase: true,
+                })
+            })
+            .collect::<Result<Vec<_>, EnvError>>()?;
+        self.audit(
+            service.project_id(),
+            "list_team_channels",
+            &[],
+            &[],
+            "redacted-channel-metadata",
+            "OK",
+        );
+        serde_json::to_value(channels).map_err(EnvError::serialization)
+    }
+
+    fn plan_provider_push(&self, args: PlanProviderPushArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        if args.selections.is_empty() || args.selections.len() > 100 {
+            return Err(EnvError::invalid("전송할 변수를 1개 이상 선택해주세요."));
+        }
+        let keys = args
+            .selections
+            .iter()
+            .map(|selection| selection.key.clone())
+            .collect::<Vec<_>>();
+        let unique = keys.iter().collect::<std::collections::BTreeSet<_>>();
+        if unique.len() != keys.len() {
+            return Err(EnvError::invalid("같은 변수를 중복 선택할 수 없습니다."));
+        }
+        let request = ProviderPushRequest {
+            provider: args.provider.clone(),
+            file: args.file.clone(),
+            selections: args.selections,
+            repository: args.repository,
+            github_environment: args.github_environment,
+            worker: args.worker,
+            cloudflare_environment: args.cloudflare_environment,
+            personal_target: args.personal_target,
+            aws_profile: args.aws_profile,
+            aws_region: args.aws_region,
+            aws_path_prefix: args.aws_path_prefix,
+            aws_kms_key_id: args.aws_kms_key_id,
+        };
+        self.store_plan(
+            &service,
+            PlannedOperation::ProviderPush(request),
+            format!(
+                "{}의 환경변수 {}개를 {} Provider로 값 노출 없이 전송합니다.",
+                args.file,
+                keys.len(),
+                args.provider
+            ),
+            vec![args.file],
+            keys,
+            "opaque-provider-push",
+            None,
+        )
+    }
+
+    fn compare_deployment_values(
+        &self,
+        args: CompareDeploymentValuesArgs,
+    ) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let file = args.file.clone();
+        let keys = args.keys.clone();
+        let comparison = env_provider::provider_push::compare(
+            &service,
+            ProviderCompareRequest {
+                provider: args.provider,
+                file: args.file,
+                keys: args.keys,
+                aws_profile: args.aws_profile,
+                aws_region: args.aws_region,
+                aws_path_prefix: args.aws_path_prefix,
+                runtime_target_id: args.runtime_target_id,
+            },
+        )
+        .map_err(provider_error);
+        let result_code = comparison
+            .as_ref()
+            .map_or_else(|error| error.code().as_str(), |_| "OK");
+        self.audit(
+            service.project_id(),
+            "compare_deployment_values",
+            std::slice::from_ref(&file),
+            &keys,
+            "opaque-provider-compare",
+            result_code,
+        );
+        let comparison = comparison?;
+        serde_json::to_value(comparison).map_err(EnvError::serialization)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn store_plan(
         &self,
@@ -650,7 +921,7 @@ impl Broker {
                     risk,
                 },
             );
-        audit(
+        self.audit(
             service.project_id(),
             "create_plan",
             &affected_files,
@@ -683,7 +954,7 @@ impl Broker {
             PlannedOperation::SetAllowedValue(request) => {
                 if service.codex_access(&request.key)? != CodexAccess::ReadWrite {
                     let error = EnvError::access_blocked(&request.key);
-                    audit(
+                    self.audit(
                         service.project_id(),
                         "apply_plan",
                         &affected_files,
@@ -736,7 +1007,7 @@ impl Broker {
                 let source_result_code = copied
                     .as_ref()
                     .map_or_else(|error| error.code().as_str(), |_| "OK");
-                audit(
+                self.audit(
                     source.project_id(),
                     "copy_variable_to_registered_project",
                     std::slice::from_ref(&source_file),
@@ -746,11 +1017,19 @@ impl Broker {
                 );
                 serialize_result(copied)
             }
+            PlannedOperation::ProviderPush(request) => {
+                let app_data = self.provider_app_data()?;
+                env_provider::provider_push::push(&service, &app_data, request)
+                    .map_err(provider_error)
+                    .and_then(|result| {
+                        serde_json::to_value(result).map_err(EnvError::serialization)
+                    })
+            }
         };
         let result_code = result
             .as_ref()
             .map_or_else(|error| error.code().as_str(), |_| "OK");
-        audit(
+        self.audit(
             service.project_id(),
             "apply_plan",
             &affected_files,
@@ -816,6 +1095,73 @@ impl Broker {
                 .collect());
         }
         load_registered_projects()
+    }
+
+    fn provider_app_data(&self) -> Result<PathBuf, EnvError> {
+        if let Some(path) = &self.provider_app_data_override {
+            return Ok(path.clone());
+        }
+        provider_app_data()
+    }
+
+    fn audit(
+        &self,
+        project_id: &str,
+        operation: &str,
+        relative_paths: &[String],
+        variable_names: &[String],
+        policy_decision: &str,
+        result_code: &str,
+    ) {
+        let actor = self
+            .agent_host
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or("unknown-agent")
+            .to_owned();
+        let event = AuditEvent {
+            timestamp_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_millis() as u64),
+            project_id,
+            actor,
+            category: audit_category(operation, policy_decision),
+            operation,
+            relative_paths,
+            variable_names,
+            policy_decision,
+            outcome: if result_code == "OK" {
+                "allowed"
+            } else if result_code == "CODEX_ACCESS_BLOCKED" {
+                "blocked"
+            } else {
+                "failed"
+            },
+            result_code,
+        };
+        let directory = std::env::var_os("ENV_MANAGER_AUDIT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| {
+                self.provider_app_data()
+                    .ok()
+                    .map(|path| path.join("agent-activity"))
+            })
+            .unwrap_or_else(|| std::env::temp_dir().join("env-manager-audit"));
+        if fs::create_dir_all(&directory).is_err() {
+            return;
+        }
+        let path = directory.join(format!("{project_id}.jsonl"));
+        if fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 2 * 1024 * 1024) {
+            let previous = directory.join(format!("{project_id}.previous.jsonl"));
+            let _ = fs::remove_file(&previous);
+            let _ = fs::rename(&path, previous);
+        }
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+            return;
+        };
+        if serde_json::to_writer(&mut file, &event).is_ok() {
+            let _ = file.write_all(b"\n");
+        }
     }
 }
 
@@ -947,12 +1293,17 @@ fn is_env_boundary_after(character: Option<char>) -> bool {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RegistryData {
     #[serde(default)]
     projects: Vec<RegistryProject>,
+    #[serde(default)]
+    #[serde(deserialize_with = "env_team::deserialize_team_channel_registrations")]
+    team_channels: Vec<env_team::TeamChannelRegistration>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RegistryProject {
     #[serde(default)]
     name: Option<String>,
@@ -977,9 +1328,7 @@ fn load_registered_projects() -> Result<Vec<RegisteredProject>, EnvError> {
             .join("dev.hgc.env-manager")
             .join("projects.json")
     };
-    let bytes = fs::read(&path).map_err(|error| EnvError::io(&path, error))?;
-    let registry =
-        serde_json::from_slice::<RegistryData>(&bytes).map_err(EnvError::serialization)?;
+    let registry = load_registry_data(&path)?;
     Ok(registry
         .projects
         .into_iter()
@@ -998,70 +1347,55 @@ fn load_registered_projects() -> Result<Vec<RegisteredProject>, EnvError> {
         .collect())
 }
 
+fn load_registry_data(path: &Path) -> Result<RegistryData, EnvError> {
+    let bytes = fs::read(path).map_err(|error| EnvError::io(path, error))?;
+    serde_json::from_slice::<RegistryData>(&bytes).map_err(EnvError::serialization)
+}
+
 fn plan_expired() -> EnvError {
     EnvError::new(EnvErrorCode::PlanExpired, "계획이 없거나 만료되었습니다.")
 }
 
-fn audit(
-    project_id: &str,
-    operation: &str,
-    relative_paths: &[String],
-    variable_names: &[String],
-    policy_decision: &str,
-    result_code: &str,
-) {
-    let event = AuditEvent {
-        timestamp_ms: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis() as u64),
-        project_id,
-        actor: std::env::var("ENV_MANAGER_AGENT_HOST")
-            .ok()
-            .filter(|actor| matches!(actor.as_str(), "codex" | "claude-code" | "github-copilot"))
-            .unwrap_or_else(|| "unknown-agent".to_owned()),
-        category: audit_category(operation, policy_decision),
-        operation,
-        relative_paths,
-        variable_names,
-        policy_decision,
-        outcome: if result_code == "OK" {
-            "allowed"
-        } else if result_code == "CODEX_ACCESS_BLOCKED" {
-            "blocked"
-        } else {
-            "failed"
-        },
-        result_code,
-    };
-    let directory = std::env::var_os("ENV_MANAGER_AUDIT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("env-manager-audit"));
-    if fs::create_dir_all(&directory).is_err() {
-        return;
+fn provider_app_data() -> Result<PathBuf, EnvError> {
+    if let Some(path) = std::env::var_os("ENV_MANAGER_APP_DATA_DIR") {
+        return Ok(PathBuf::from(path));
     }
-    let path = directory.join(format!("{project_id}.jsonl"));
-    if fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 2 * 1024 * 1024) {
-        let previous = directory.join(format!("{project_id}.previous.jsonl"));
-        let _ = fs::remove_file(&previous);
-        let _ = fs::rename(&path, previous);
-    }
-    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
-        return;
-    };
-    if serde_json::to_writer(&mut file, &event).is_ok() {
-        let _ = file.write_all(b"\n");
-    }
+    let base = directories::BaseDirs::new()
+        .ok_or_else(|| EnvError::invalid("앱 데이터 경로를 확인하지 못했습니다."))?;
+    Ok(base.data_dir().join("dev.hgc.env-manager"))
+}
+
+fn provider_error(error: env_provider::provider_push::ProviderPushError) -> EnvError {
+    EnvError::invalid(format!("{}: {}", error.code, error.message))
 }
 
 fn audit_category(operation: &str, policy_decision: &str) -> &'static str {
-    if operation == "inspect_project" {
+    if matches!(
+        operation,
+        "inspect_project" | "list_team_channels" | "list_runtime_targets"
+    ) {
         "structure-inspection"
     } else if operation == "read_allowed_value" {
         "value-read"
+    } else if operation == "compare_deployment_values" {
+        "provider-compare"
     } else if policy_decision == "policy-change" || policy_decision == "protection-downgrade" {
         "policy-change"
     } else {
         "mutation"
+    }
+}
+
+fn normalize_agent_host(client_name: &str) -> Option<&'static str> {
+    let normalized = client_name.to_ascii_lowercase();
+    if normalized.contains("codex") {
+        Some("codex")
+    } else if normalized.contains("claude") {
+        Some("claude-code")
+    } else if normalized.contains("copilot") {
+        Some("github-copilot")
+    } else {
+        None
     }
 }
 
@@ -1216,6 +1550,90 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "list_deployment_providers",
+            "List official and locally installed providers with availability and version metadata. Never returns values or commands.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }
+                }, "required": ["projectPath"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "list_runtime_targets",
+            "List registered fixed-verifier Runtime targets for a project. Returns target IDs, display names, source files, and transport labels only; never returns recipients, destinations, remote paths, values, or commands.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }
+                }, "required": ["projectPath"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "list_team_channels",
+            "List connected Folder Team Channels and encrypted-package metadata for a registered project. Never returns folder paths, values, passphrases, or decrypted content. Passphrase publish/import remains a desktop action.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }
+                }, "required": ["projectPath"], "additionalProperties": false
+            })
+        ),
+        tool(
+            "compare_deployment_values",
+            "Compare selected managed values with a supported deployment target. Returns equality states only; never accepts or returns candidate values, hashes, or provider output.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "provider": { "type": "string" },
+                    "file": { "type": "string" },
+                    "keys": {
+                        "type": "array", "minItems": 1, "maxItems": 100,
+                        "items": { "type": "string" }
+                    },
+                    "awsProfile": { "type": ["string", "null"] },
+                    "awsRegion": { "type": ["string", "null"] },
+                    "awsPathPrefix": { "type": ["string", "null"] }
+                    ,"runtimeTargetId": { "type": ["string", "null"] }
+                },
+                "required": ["projectPath", "provider", "file", "keys"],
+                "additionalProperties": false
+            })
+        ),
+        tool(
+            "plan_provider_push",
+            "Create a redacted one-way provider push plan. Values remain inside Rust and are resolved only when apply_plan is called.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "provider": { "type": "string" },
+                    "file": { "type": "string" },
+                    "selections": {
+                        "type": "array", "minItems": 1, "maxItems": 100,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": { "type": "string" },
+                                "kind": { "type": "string", "enum": ["secret", "variable"] }
+                            },
+                            "required": ["key", "kind"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "repository": { "type": ["string", "null"] },
+                    "githubEnvironment": { "type": ["string", "null"] },
+                    "worker": { "type": ["string", "null"] },
+                    "cloudflareEnvironment": { "type": ["string", "null"] },
+                    "personalTarget": { "type": ["string", "null"] }
+                    ,"awsProfile": { "type": ["string", "null"] }
+                    ,"awsRegion": { "type": ["string", "null"] }
+                    ,"awsPathPrefix": { "type": ["string", "null"] }
+                    ,"awsKmsKeyId": { "type": ["string", "null"] }
+                },
+                "required": ["projectPath", "provider", "file", "selections"],
+                "additionalProperties": false
+            })
+        ),
+        tool(
             "apply_plan",
             "Apply one unexpired redacted plan authorized by the current user request.",
             json!({
@@ -1247,7 +1665,63 @@ mod tests {
         );
         let service = ProjectService::open(project.root()).expect("service");
         service.initialize().expect("initialize");
+        service
+            .set_codex_access("PORT", CodexAccess::ReadWrite)
+            .expect("explicitly allow synthetic runtime setting");
         (project, service)
+    }
+
+    #[test]
+    fn team_channel_listing_returns_ciphertext_metadata_only() {
+        let (project, service) = registered_project();
+        let app_data = tempfile::tempdir().expect("app data");
+        let shared = tempfile::tempdir().expect("shared folder");
+        let channel = env_team::connect_folder_transport(shared.path(), "Synthetic team")
+            .expect("connect synthetic channel");
+        let env_team::TeamChannelTransportConfig::Folder { channel_id, .. } = &channel.transport;
+        let transport = env_team::open_transport(&channel.transport).expect("transport");
+        let package = transport
+            .publish(&mut std::io::Cursor::new(
+                b"fake ciphertext without env values",
+            ))
+            .expect("synthetic ciphertext");
+        let package_id = package.id;
+        fs::write(
+            app_data.path().join("projects.json"),
+            serde_json::to_vec(&json!({
+                "projects": [{
+                    "name": "Synthetic project",
+                    "displayPath": project.root().to_string_lossy(),
+                    "root": project.root(),
+                }],
+                "teamChannels": [{
+                    "id": "folder_local_12345678",
+                    "projectId": service.project_id(),
+                    "channelId": channel_id,
+                    "name": "Synthetic team",
+                    "root": shared.path(),
+                }]
+            }))
+            .expect("registry json"),
+        )
+        .expect("registry");
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![project.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+
+        let result = broker
+            .call_tool(
+                "list_team_channels",
+                json!({ "projectPath": project.root().to_string_lossy() }),
+            )
+            .expect("list channels");
+        let output = result.to_string();
+        assert!(output.contains(&package_id), "{output}");
+        assert!(output.contains("requiresHumanPassphrase"));
+        assert!(!output.contains(CANARY));
+        assert!(!output.contains(&shared.path().to_string_lossy().to_string()));
+        assert!(!output.contains("passphrase\":"));
     }
 
     #[test]
@@ -1273,6 +1747,50 @@ mod tests {
         for forbidden_field in ["value", "valueFragment", "replacement", "valueHash"] {
             assert!(!serialized.contains(&format!("\"{forbidden_field}\"")));
         }
+    }
+
+    #[test]
+    fn audit_uses_app_data_without_plugin_environment_and_identifies_mcp_client() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let project = SyntheticProject::new();
+        project.write(".env.local", "CLIENT_MODE=fake_client_value\n");
+        let service = ProjectService::open(project.root()).expect("project service");
+        service.initialize().expect("initialize project");
+        let project_id = service.project_id().to_owned();
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![project.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+        broker.identify_client("codex-mcp-client");
+
+        broker
+            .call_tool(
+                "inspect_project",
+                json!({ "projectPath": project.root().to_string_lossy() }),
+            )
+            .expect("inspect through broker");
+
+        let audit = fs::read_to_string(
+            app_data
+                .path()
+                .join("agent-activity")
+                .join(format!("{project_id}.jsonl")),
+        )
+        .expect("app-owned audit log");
+        assert!(audit.contains(r#""actor":"codex""#));
+        assert!(audit.contains(r#""operation":"inspect_project""#));
+        assert!(!audit.contains("fake_client_value"));
+    }
+
+    #[test]
+    fn unknown_mcp_client_names_stay_unattributed() {
+        assert_eq!(normalize_agent_host("Codex Desktop"), Some("codex"));
+        assert_eq!(normalize_agent_host("claude-code"), Some("claude-code"));
+        assert_eq!(
+            normalize_agent_host("GitHub Copilot"),
+            Some("github-copilot")
+        );
+        assert_eq!(normalize_agent_host("custom-agent"), None);
     }
 
     #[test]
@@ -1733,6 +2251,147 @@ mod tests {
                 .windows(25)
                 .any(|bytes| bytes == b"fake_must_not_be_accepted")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn personal_provider_push_keeps_the_value_out_of_agent_arguments_and_results() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (project, _) = registered_project();
+        let app_data = tempfile::tempdir().expect("app data");
+        let pack_source = tempfile::tempdir().expect("pack source");
+        let runner_dir = tempfile::tempdir().expect("runner");
+        let executable = runner_dir.path().join("fake-provider");
+        let args_capture = runner_dir.path().join("args.txt");
+        let stdin_capture = runner_dir.path().join("stdin.txt");
+        fs::write(
+            &executable,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '1.2.3\\n'; exit 0; fi\nargs_file=$1\nstdin_file=$2\nshift 2\nprintf '%s\\n' \"$@\" > \"$args_file\"\ncat > \"$stdin_file\"\n",
+        )
+        .expect("runner");
+        let mut permissions = fs::metadata(&executable).expect("metadata").permissions();
+        permissions.set_mode(0o700);
+        fs::set_permissions(&executable, permissions).expect("permissions");
+        fs::write(
+            pack_source.path().join("provider.json"),
+            serde_json::to_vec_pretty(&json!({
+                "schemaVersion": 1,
+                "id": "local.test.capture",
+                "displayName": "Capture Provider",
+                "description": "Synthetic provider",
+                "version": "1.0.0",
+                "providerProtocolVersion": "0.2.0",
+                "valueTransport": "stdin",
+                "target": { "label": "Application", "placeholder": "target" },
+                "cli": {
+                    "executableCandidates": [executable.to_string_lossy()],
+                    "versionArgs": ["--version"],
+                    "profiles": [{
+                        "id": "capture-v1",
+                        "versionRequirement": ">=1.0.0,<2.0.0",
+                        "pushArgs": [
+                            args_capture.to_string_lossy(),
+                            stdin_capture.to_string_lossy(),
+                            "push", "{key}", "--app", "{target}"
+                        ]
+                    }]
+                }
+            }))
+            .expect("manifest"),
+        )
+        .expect("write manifest");
+        env_provider::personal_provider::install(pack_source.path(), app_data.path(), false)
+            .expect("install pack");
+
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![project.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+        let plan = broker
+            .call_tool(
+                "plan_provider_push",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "provider": "local.test.capture",
+                    "file": ".env.local",
+                    "selections": [{ "key": "GPT_API_KEY", "kind": "secret" }],
+                    "personalTarget": "fake-app"
+                }),
+            )
+            .expect("provider plan");
+        assert!(!plan.to_string().contains(CANARY));
+        let plan_id = plan.get("planId").and_then(Value::as_str).expect("plan id");
+        let result = broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("provider apply");
+        assert!(!result.to_string().contains(CANARY));
+        assert_eq!(fs::read_to_string(stdin_capture).expect("stdin"), CANARY);
+        let arguments = fs::read_to_string(args_capture).expect("args");
+        assert!(arguments.contains("GPT_API_KEY"));
+        assert!(arguments.contains("fake-app"));
+        assert!(!arguments.contains(CANARY));
+    }
+
+    #[test]
+    fn provider_compare_returns_only_redacted_state_for_protected_values() {
+        let (project, service) = registered_project();
+        let broker = Broker::with_registered_roots(vec![service.root().to_path_buf()]);
+        let result = broker
+            .call_tool(
+                "compare_deployment_values",
+                json!({
+                    "projectPath": project.root(),
+                    "provider": "github-actions",
+                    "file": ".env.local",
+                    "keys": ["GPT_API_KEY"]
+                }),
+            )
+            .expect("redacted provider comparison");
+
+        assert_eq!(result["items"][0]["state"], "unverifiable");
+        assert!(!result.to_string().contains(CANARY));
+        assert_eq!(
+            service
+                .codex_access("GPT_API_KEY")
+                .expect("protected access"),
+            CodexAccess::Protected
+        );
+    }
+
+    #[test]
+    fn runtime_target_listing_omits_destination_recipient_and_remote_path() {
+        let (project, service) = registered_project();
+        let identity = age::x25519::Identity::generate();
+        env_provider::runtime_target::save(
+            service.root(),
+            env_provider::runtime_target::RuntimeTarget {
+                id: "mobile-ok-dev".to_owned(),
+                display_name: "mobile-ok · dev".to_owned(),
+                source_file: ".env.local".to_owned(),
+                remote_target_id: "server-mobile-ok-dev".to_owned(),
+                recipient: identity.to_public().to_string(),
+                transport: env_provider::runtime_target::RuntimeTransport::Ssh {
+                    destination: "deploy@private.example.test".to_owned(),
+                },
+            },
+        )
+        .expect("save target fixture");
+        let broker = Broker::with_registered_roots(vec![service.root().to_path_buf()]);
+        let result = broker
+            .call_tool(
+                "list_runtime_targets",
+                json!({ "projectPath": project.root() }),
+            )
+            .expect("list runtime targets");
+
+        assert_eq!(result[0]["id"], "mobile-ok-dev");
+        assert_eq!(result[0]["sourceFile"], ".env.local");
+        assert_eq!(result[0]["transport"], "SSH");
+        let serialized = result.to_string();
+        assert!(!serialized.contains("private.example.test"));
+        assert!(!serialized.contains("age1"));
+        assert!(!serialized.contains("server-mobile-ok-dev"));
     }
 
     #[test]

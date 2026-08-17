@@ -4,12 +4,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::provider_adapter::AdapterStatus;
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum DeploymentProviderId {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OfficialProviderId {
     GithubActions,
     CloudflareWorkers,
+    AwsSecretsManager,
+    AwsSsmParameterStore,
 }
+
+pub const GITHUB_ACTIONS_ID: &str = "github-actions";
+pub const CLOUDFLARE_WORKERS_ID: &str = "cloudflare-workers";
+pub const AWS_SECRETS_MANAGER_ID: &str = "aws-secrets-manager";
+pub const AWS_SSM_PARAMETER_STORE_ID: &str = "aws-ssm-parameter-store";
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -18,33 +24,87 @@ pub enum GitHubEntryKind {
     Variable,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSelection {
     pub key: String,
     pub kind: GitHubEntryKind,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderPushRequest {
-    pub provider: DeploymentProviderId,
+    pub provider: String,
     pub file: String,
     pub selections: Vec<ProviderSelection>,
     pub repository: Option<String>,
     pub github_environment: Option<String>,
     pub worker: Option<String>,
     pub cloudflare_environment: Option<String>,
+    pub personal_target: Option<String>,
+    pub aws_profile: Option<String>,
+    pub aws_region: Option<String>,
+    pub aws_path_prefix: Option<String>,
+    pub aws_kms_key_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCompareRequest {
+    pub provider: String,
+    pub file: String,
+    pub keys: Vec<String>,
+    pub aws_profile: Option<String>,
+    pub aws_region: Option<String>,
+    pub aws_path_prefix: Option<String>,
+    pub runtime_target_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderComparisonState {
+    Same,
+    Different,
+    Unset,
+    Unverifiable,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderComparisonItem {
+    pub key: String,
+    pub remote_name: String,
+    pub state: ProviderComparisonState,
+    pub result_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCompareResult {
+    pub provider: String,
+    pub target: String,
+    pub items: Vec<ProviderComparisonItem>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentProviderStatus {
-    pub id: DeploymentProviderId,
-    pub name: &'static str,
+    pub id: String,
+    pub name: String,
     pub available: bool,
-    pub detail: &'static str,
+    pub detail: String,
+    pub source: DeploymentProviderSource,
+    pub version: Option<String>,
+    pub target_label: Option<String>,
     pub adapter: Option<AdapterStatus>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeploymentProviderSource {
+    Official,
+    Personal,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,7 +178,7 @@ pub struct CloudflareAccessContext {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderPushResult {
-    pub provider: DeploymentProviderId,
+    pub provider: String,
     pub pushed_count: usize,
     pub failed_keys: Vec<String>,
 }

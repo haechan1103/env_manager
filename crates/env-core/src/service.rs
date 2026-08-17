@@ -10,11 +10,11 @@ use crate::discovery::is_env_candidate;
 use crate::discovery::to_manifest_path;
 use crate::manifest::MANIFEST_FILE_NAME;
 use crate::{
-    ClassificationReviewProjection, ClassificationSource, CodexAccess, DiscoveryOptions, Document,
-    EnvError, EnvResult, FileProjection, FileRevision, GroupProjection, LinkGroup, LinkMember,
-    Manifest, ManifestStore, Node, OccurrenceProjection, PlannedFileChange, ProjectProjection,
-    ProviderValue, RedactedValueState, TransactionPlan, VariablePolicy, detect_client_exposure,
-    discover_env_files, suggest_access,
+    ClassificationReviewProjection, ClassificationReviewReason, ClassificationSource, CodexAccess,
+    DiscoveryOptions, Document, EnvError, EnvResult, FileProjection, FileRevision, GroupProjection,
+    LinkGroup, LinkMember, Manifest, ManifestStore, Node, OccurrenceProjection, PlannedFileChange,
+    ProjectProjection, ProviderValue, RedactedValueState, TransactionPlan, VariablePolicy,
+    default_access, detect_client_exposure, discover_env_files, suggest_access,
 };
 
 #[derive(Deserialize)]
@@ -155,14 +155,19 @@ impl ProjectService {
         for relative in &files {
             let loaded = self.load_document(relative)?;
             for assignment in loaded.document.assignments() {
-                if manifest.variables.contains_key(assignment.key) {
+                if let Some(policy) = manifest.variables.get_mut(assignment.key) {
+                    if policy.classified_by == ClassificationSource::Heuristic
+                        && policy.codex_access == CodexAccess::ReadWrite
+                    {
+                        policy.codex_access = CodexAccess::Unclassified;
+                        changed = true;
+                    }
                     continue;
                 }
-                let suggestion = suggest_access(assignment.key);
                 manifest.variables.insert(
                     assignment.key.to_owned(),
                     VariablePolicy {
-                        codex_access: suggestion.access,
+                        codex_access: default_access(assignment.key),
                         classified_by: ClassificationSource::Heuristic,
                     },
                 );
@@ -804,17 +809,29 @@ impl ProjectService {
             .into_iter()
             .map(|(key, (files, client_exposed))| {
                 let policy = manifest.variables.get(&key);
+                let classified_by =
+                    policy.map_or(ClassificationSource::Heuristic, |item| item.classified_by);
+                let review_reasons =
+                    if client_exposed && classified_by == ClassificationSource::Heuristic {
+                        vec![ClassificationReviewReason::ClientExposureConflict]
+                    } else {
+                        Vec::new()
+                    };
                 ClassificationReviewProjection {
                     suggestion: suggest_access(&key),
                     access: policy.map_or(CodexAccess::Unclassified, |item| item.codex_access),
-                    classified_by: policy
-                        .map_or(ClassificationSource::Heuristic, |item| item.classified_by),
+                    classified_by,
                     key,
                     files: files.into_iter().collect(),
                     client_exposed,
+                    review_reasons,
                 }
             })
             .collect::<Vec<_>>();
+        let access_review_count = classification_review
+            .iter()
+            .filter(|item| !item.review_reasons.is_empty())
+            .count();
         let client_exposure_count = projections
             .iter()
             .flat_map(|file| file.groups.iter())
@@ -832,6 +849,7 @@ impl ProjectService {
             issue_count,
             git_safety,
             classification_review,
+            access_review_count,
             client_exposure_count,
         })
     }
@@ -933,11 +951,10 @@ impl ProjectService {
         if manifest.variables.contains_key(key) {
             return Ok(());
         }
-        let suggestion = suggest_access(key);
         manifest.variables.insert(
             key.to_owned(),
             VariablePolicy {
-                codex_access: suggestion.access,
+                codex_access: default_access(key),
                 classified_by: ClassificationSource::Heuristic,
             },
         );
@@ -1289,9 +1306,68 @@ mod tests {
         assert_eq!(projection.files.len(), 1);
         let variables = &projection.files[0].groups[0].variables;
         assert_eq!(variables[0].codex_access, CodexAccess::Protected);
-        assert_eq!(variables[1].codex_access, CodexAccess::ReadWrite);
+        assert_eq!(variables[1].codex_access, CodexAccess::Unclassified);
         assert_eq!(variables[2].codex_access, CodexAccess::Unclassified);
+        assert_eq!(projection.unclassified_count, 2);
+        assert_eq!(projection.access_review_count, 0);
         assert!(variables.iter().all(|item| item.display_value.is_none()));
+    }
+
+    #[test]
+    fn initialization_revokes_only_legacy_heuristic_allows() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", "PORT=fake_3000\nHOST=fake_localhost\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        let store = ManifestStore::for_root(project.root());
+        let mut manifest = store.load().expect("manifest");
+        manifest.variables.insert(
+            "PORT".to_owned(),
+            VariablePolicy {
+                codex_access: CodexAccess::ReadWrite,
+                classified_by: ClassificationSource::Heuristic,
+            },
+        );
+        manifest.variables.insert(
+            "HOST".to_owned(),
+            VariablePolicy {
+                codex_access: CodexAccess::ReadWrite,
+                classified_by: ClassificationSource::User,
+            },
+        );
+        store.save(&manifest).expect("seed manifest");
+
+        let projection = service.initialize().expect("initialize");
+        let policies = ManifestStore::for_root(project.root())
+            .load()
+            .expect("migrated manifest");
+
+        assert_eq!(policies.access_for("PORT"), CodexAccess::Unclassified);
+        assert_eq!(policies.access_for("HOST"), CodexAccess::ReadWrite);
+        assert_eq!(projection.unclassified_count, 1);
+    }
+
+    #[test]
+    fn public_secret_name_is_the_only_name_based_access_review_exception() {
+        let project = SyntheticProject::new();
+        project.write(
+            ".env.local",
+            "NEXT_PUBLIC_API_KEY=fake_secret\nAPI_KEY=fake_secret\nCUSTOM_MODE=fake_value\n",
+        );
+        let service = ProjectService::open(project.root()).expect("service");
+
+        let projection = service.initialize().expect("initialize");
+        let requiring_review = projection
+            .classification_review
+            .iter()
+            .filter(|item| !item.review_reasons.is_empty())
+            .collect::<Vec<_>>();
+
+        assert_eq!(projection.access_review_count, 1);
+        assert_eq!(requiring_review[0].key, "NEXT_PUBLIC_API_KEY");
+        assert_eq!(
+            requiring_review[0].review_reasons,
+            vec![ClassificationReviewReason::ClientExposureConflict]
+        );
     }
 
     #[test]
@@ -1444,6 +1520,7 @@ mod tests {
             "API_KEY=fake_provider_secret\nAPI_HOST=fake_api_host\nEMPTY=\n",
         );
         project.write("notes.env", "OTHER=fake_other\n");
+        project.write("notes.txt", "UNMANAGED=fake_unmanaged\n");
         let service = ProjectService::open(project.root()).expect("service");
         service.initialize().expect("initialize");
 
@@ -1470,9 +1547,16 @@ mod tests {
                 )
                 .is_err()
         );
-        assert!(
+        assert_eq!(
             service
                 .provider_values("notes.env", &["OTHER".to_owned()])
+                .expect("suffix env value")[0]
+                .key(),
+            "OTHER"
+        );
+        assert!(
+            service
+                .provider_values("notes.txt", &["UNMANAGED".to_owned()])
                 .is_err()
         );
     }

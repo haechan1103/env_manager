@@ -1,0 +1,19 @@
+[package]
+name = "env-remote-verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+age.workspace = true
+env-core = { path = "../env-core" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[[bin]]
+name = "env-manager-remote-verifier"
+path = "src/main.rs"

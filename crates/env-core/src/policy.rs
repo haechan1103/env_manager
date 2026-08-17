@@ -100,6 +100,14 @@ pub fn suggest_access(key: &str) -> ClassificationSuggestion {
     }
 }
 
+/// Name heuristics may tighten access automatically, but never grant value access.
+pub fn default_access(key: &str) -> CodexAccess {
+    match suggest_access(key).access {
+        CodexAccess::Protected => CodexAccess::Protected,
+        CodexAccess::ReadWrite | CodexAccess::Unclassified => CodexAccess::Unclassified,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,6 +122,12 @@ mod tests {
     fn unknown_name_stays_unclassified() {
         let suggestion = suggest_access("CUSTOM_MODE");
         assert_eq!(suggestion.access, CodexAccess::Unclassified);
+    }
+
+    #[test]
+    fn safe_name_is_recommended_but_not_automatically_allowed() {
+        assert_eq!(suggest_access("PORT").access, CodexAccess::ReadWrite);
+        assert_eq!(default_access("PORT"), CodexAccess::Unclassified);
     }
 
     #[test]

@@ -9,11 +9,11 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 
 use crate::provider_push::cli::{find_cli, provider_command};
-use crate::provider_push::{DeploymentProviderId, ProviderPushError};
+use crate::provider_push::{OfficialProviderId, ProviderPushError};
 
 const BUNDLED_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../config/provider-compatibility.json"
+    "/../../config/provider-compatibility.json"
 ));
 const MAX_VERSION_OUTPUT: usize = 64 * 1024;
 const MAX_LOCAL_REPAIR_SIZE: u64 = 64 * 1024;
@@ -23,6 +23,7 @@ const MAX_LOCAL_REPAIR_SIZE: u64 = 64 * 1024;
 pub enum AdapterSource {
     Bundled,
     LocalRepair,
+    Personal,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -133,7 +134,7 @@ struct FileFingerprint {
 static VERSION_CACHE: OnceLock<Mutex<HashMap<ProbeCacheKey, Version>>> = OnceLock::new();
 
 pub fn resolve(
-    provider: DeploymentProviderId,
+    provider: OfficialProviderId,
     project_root: &Path,
     app_data: &Path,
 ) -> Result<ResolvedAdapter, ProviderPushError> {
@@ -336,10 +337,12 @@ fn modified_nanos(metadata: &Metadata) -> u128 {
         .map_or(0, |duration| duration.as_nanos())
 }
 
-fn provider_id(provider: DeploymentProviderId) -> &'static str {
+fn provider_id(provider: OfficialProviderId) -> &'static str {
     match provider {
-        DeploymentProviderId::GithubActions => "github-actions",
-        DeploymentProviderId::CloudflareWorkers => "cloudflare-workers",
+        OfficialProviderId::GithubActions => "github-actions",
+        OfficialProviderId::CloudflareWorkers => "cloudflare-workers",
+        OfficialProviderId::AwsSecretsManager => "aws-secrets-manager",
+        OfficialProviderId::AwsSsmParameterStore => "aws-ssm-parameter-store",
     }
 }
 
@@ -427,19 +430,22 @@ mod tests {
         let directory = tempfile::tempdir().expect("tempdir");
         let local = directory.path().join("provider-adapters/local");
         std::fs::create_dir_all(&local).expect("directory");
+        let catalog = parse_catalog().expect("catalog");
         std::fs::write(
             local.join("cloudflare-workers.json"),
-            r#"{
+            format!(
+                r#"{{
               "schemaVersion": 1,
               "providerId": "cloudflare-workers",
-              "baseCatalogVersion": "2.0.0",
+              "baseCatalogVersion": "{}",
               "baseAdapterVersion": "1.0.0",
               "profileId": "wrangler-secret-bulk-v1",
               "clientVersionRequirement": ">=5.0.0,<6.0.0"
-            }"#,
+            }}"#,
+                catalog.catalog_version
+            ),
         )
         .expect("repair");
-        let catalog = parse_catalog().expect("catalog");
         let provider = catalog
             .providers
             .iter()

@@ -6,7 +6,7 @@ Env Manager edits environment files that may contain credentials. Please treat e
 
 | Version | Security updates |
 | --- | --- |
-| Latest `0.3.x` release | Supported |
+| Latest `0.6.x` release | Supported |
 | Earlier releases | Upgrade before reporting |
 
 ## Report a vulnerability privately
@@ -24,6 +24,22 @@ Never attach a real `.env` file, API key, database URL, access token, or private
 
 You should receive an acknowledgement within 7 days. We will confirm impact, coordinate a fix and release, and credit the reporter unless anonymity is requested.
 
+## Public repository boundary
+
+The application, Rust crates, broker, agent plugin, build workflows, and security
+checks are intentionally public. Public source makes the value-redaction and local
+processing claims independently reviewable.
+
+The repository must never contain real env files, signing private keys, Apple
+certificates, updater private keys, provider credentials, user project data, or local
+application state. Those belong in GitHub Actions secrets, the developer operating
+system's credential store, or disposable local build state as appropriate.
+
+`npm run validate:public-boundary` checks tracked files and non-ignored files that
+could be committed before builds and releases. It rejects sensitive filenames and
+high-confidence credential signatures without printing matching content. GitHub
+Secret Scanning and push protection remain an independent server-side layer.
+
 ## Security boundary
 
 Env Manager is a local file manager, not a secret vault or operating-system sandbox.
@@ -35,12 +51,20 @@ Env Manager is a local file manager, not a secret vault or operating-system sand
 - A `read-write` value can be returned only through an explicit value operation.
 - Claude Code and GitHub Copilot integrations install a direct `.env*` access guard, but tool prompts and hooks are not an OS-level isolation boundary.
 - Codex direct-file protection depends on the host's permissions and sandbox configuration.
-- Provider push runs only after a user clicks **Push variables**. Selected values are
-  sent to the displayed GitHub Actions or Cloudflare Workers target through the
-  installed official CLI's standard input; they are never placed in command
-  arguments or a temporary env file.
-- Env Manager does not store `gh`/Wrangler credentials, fetch remote secret values,
-  or continuously synchronize a provider. Provider authentication remains owned by
-  the official CLI.
+- Provider push runs only after a user or an explicitly requested agent plan starts
+  it. Selected values are sent to the displayed GitHub Actions, Cloudflare Workers,
+  AWS Secrets Manager, SSM Parameter Store, or locally installed Personal Provider
+  Pack target. They are never placed in command arguments or a temporary env file.
+- Env Manager does not store provider credentials, fetch remote secret values, or
+  continuously synchronize a provider. Authentication remains owned by the official
+  CLI, the AWS SDK credential chain, or the locally trusted Pack executable.
+- Folder Team Channels write only passphrase-encrypted packages to a folder already
+  mounted or synchronized by the operating system. Env Manager does not store the
+  passphrase, change folder permissions, mount a NAS, delete shared packages, or
+  claim that another device has received them. Anyone with folder read access can
+  copy the ciphertext, so send the passphrase through a separate trusted channel.
+- Agent tools may list value-free channel and encrypted-package metadata. Package
+  publish, passphrase entry, decrypt, conflict review, and apply remain focused
+  desktop actions.
 
 Use a dedicated production secret manager and appropriate operating-system permissions for high-value credentials.

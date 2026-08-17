@@ -1,21 +1,21 @@
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use env_core::{
     AddVariableRequest, CodexAccess, CreateGroupRequest, DeleteVariableRequest, EnvError,
     GitignoreUpdateSummary, LinkRequest, MoveVariableRequest, MutationSummary, ProjectProjection,
     RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
 };
+use env_provider::provider_push::{self, ProviderCompareRequest, ProviderPushRequest};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::runtime::{AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary};
-use crate::{
-    integrations,
-    integrations::AgentIntegrationId,
-    provider_push::{self, ProviderPushRequest},
+use crate::runtime::{
+    AgentActivityEvent, AppRuntime, MigrationPlanProjection, ProjectSummary, ProviderPushReceipt,
+    TeamChannelProjection,
 };
+use crate::{integrations, integrations::AgentIntegrationId};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +93,20 @@ pub struct CloudflareAccessRequest {
     file: String,
     worker: String,
     environment: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AwsAccessRequest {
+    profile: Option<String>,
+    region: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveRuntimeTargetRequest {
+    project_id: String,
+    target_id: String,
 }
 
 #[derive(Deserialize)]
@@ -206,6 +220,38 @@ pub struct TeamImportRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TeamChannelRequest {
+    project_id: String,
+    channel_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectFolderTeamChannelRequest {
+    project_id: String,
+    locale: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishTeamChannelRequest {
+    project_id: String,
+    channel_id: String,
+    passphrase: String,
+    selection: Option<Vec<env_core::ExportOccurrence>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanTeamChannelImportRequest {
+    project_id: String,
+    channel_id: String,
+    package_id: String,
+    passphrase: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyTeamImportRequest {
     project_id: String,
     plan_id: String,
@@ -263,9 +309,41 @@ pub struct AgentIntegrationRequest {
     id: AgentIntegrationId,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallPersonalProviderRequest {
+    path: String,
+    replace: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemovePersonalProviderRequest {
+    id: String,
+}
+
 #[tauri::command]
 pub fn list_agent_integrations(app: AppHandle) -> Vec<integrations::AgentIntegrationStatus> {
     integrations::list(&app)
+}
+
+#[tauri::command]
+pub fn install_personal_provider_pack(
+    request: InstallPersonalProviderRequest,
+    app: AppHandle,
+) -> CommandResult<env_provider::personal_provider::PersonalProviderPackInfo> {
+    let app_data = provider_app_data(&app)?;
+    env_provider::personal_provider::install(Path::new(&request.path), &app_data, request.replace)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn remove_personal_provider_pack(
+    request: RemovePersonalProviderRequest,
+    app: AppHandle,
+) -> CommandResult<()> {
+    let app_data = provider_app_data(&app)?;
+    env_provider::personal_provider::remove(&request.id, &app_data).map_err(Into::into)
 }
 
 #[tauri::command]
@@ -355,6 +433,18 @@ pub async fn inspect_cloudflare_access(
 }
 
 #[tauri::command]
+pub async fn inspect_aws_access(
+    request: AwsAccessRequest,
+) -> CommandResult<provider_push::AwsAccessContext> {
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_push::inspect_aws_access(request.profile.as_deref(), request.region.as_deref())
+    })
+    .await
+    .map_err(|_| provider_task_interrupted())?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn list_github_environments(
     request: GitHubRepositoryRequest,
     app: AppHandle,
@@ -397,14 +487,67 @@ pub async fn push_to_provider(
     app: AppHandle,
     runtime: State<'_, AppRuntime>,
 ) -> CommandResult<provider_push::ProviderPushResult> {
-    let service = runtime.service(&payload.project_id)?;
+    let project_id = payload.project_id;
+    let service = runtime.service(&project_id)?;
     let app_data = provider_app_data(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let receipt_request = payload.request.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         provider_push::push(&service, &app_data, payload.request)
     })
     .await
     .map_err(|_| provider_task_interrupted())?
-    .map_err(Into::into)
+    .map_err(CommandError::from)?;
+    runtime.record_provider_push(provider_push_receipt(project_id, &receipt_request, &result))?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn list_provider_push_receipts(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<ProviderPushReceipt>> {
+    runtime
+        .provider_push_receipts(&request.project_id)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn compare_provider_values(
+    payload: ProjectMutation<ProviderCompareRequest>,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::ProviderCompareResult> {
+    let service = runtime.service(&payload.project_id)?;
+    tauri::async_runtime::spawn_blocking(move || provider_push::compare(&service, payload.request))
+        .await
+        .map_err(|_| provider_task_interrupted())?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn list_runtime_targets(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<env_provider::runtime_target::RuntimeTarget>> {
+    let service = runtime.service(&request.project_id)?;
+    env_provider::runtime_target::list(service.root()).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn save_runtime_target(
+    payload: ProjectMutation<env_provider::runtime_target::RuntimeTarget>,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<env_provider::runtime_target::RuntimeTarget>> {
+    let service = runtime.service(&payload.project_id)?;
+    env_provider::runtime_target::save(service.root(), payload.request).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn remove_runtime_target(
+    request: RemoveRuntimeTargetRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<env_provider::runtime_target::RuntimeTarget>> {
+    let service = runtime.service(&request.project_id)?;
+    env_provider::runtime_target::remove(service.root(), &request.target_id).map_err(Into::into)
 }
 
 fn provider_app_data(app: &AppHandle) -> CommandResult<std::path::PathBuf> {
@@ -412,6 +555,63 @@ fn provider_app_data(app: &AppHandle) -> CommandResult<std::path::PathBuf> {
         code: "PROVIDER_ADAPTER_STORAGE_UNAVAILABLE".to_owned(),
         message: "Provider Adapter 저장 위치를 확인하지 못했습니다.".to_owned(),
     })
+}
+
+fn provider_push_receipt(
+    project_id: String,
+    request: &ProviderPushRequest,
+    result: &provider_push::ProviderPushResult,
+) -> ProviderPushReceipt {
+    let failed = result
+        .failed_keys
+        .iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let succeeded_keys = request
+        .selections
+        .iter()
+        .filter(|selection| !failed.contains(&selection.key))
+        .map(|selection| selection.key.clone())
+        .collect();
+    let timestamp_ms = if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
+        duration.as_millis().min(u128::from(u64::MAX)) as u64
+    } else {
+        0
+    };
+    ProviderPushReceipt {
+        timestamp_ms,
+        project_id,
+        provider: request.provider.clone(),
+        source_file: request.file.clone(),
+        destination: provider_destination(request),
+        succeeded_keys,
+        failed_keys: result.failed_keys.clone(),
+    }
+}
+
+fn provider_destination(request: &ProviderPushRequest) -> String {
+    match request.provider.as_str() {
+        "github-actions" => match (&request.repository, &request.github_environment) {
+            (Some(repository), Some(environment)) => format!("{repository} · {environment}"),
+            (Some(repository), None) => repository.clone(),
+            _ => "github-actions".to_owned(),
+        },
+        "cloudflare-workers" => match (&request.worker, &request.cloudflare_environment) {
+            (Some(worker), Some(environment)) => format!("{worker} · {environment}"),
+            (Some(worker), None) => worker.clone(),
+            _ => "cloudflare-workers".to_owned(),
+        },
+        "aws-secrets-manager" | "aws-ssm-parameter-store" => {
+            let region = request.aws_region.as_deref().unwrap_or("default-region");
+            match request.aws_path_prefix.as_deref() {
+                Some(prefix) if !prefix.is_empty() => format!("{region}/{prefix}"),
+                _ => region.to_owned(),
+            }
+        }
+        _ => request
+            .personal_target
+            .clone()
+            .unwrap_or_else(|| request.provider.clone()),
+    }
 }
 
 #[tauri::command]
@@ -587,6 +787,110 @@ pub async fn plan_team_import(
     let runtime_handle = runtime.inner();
     let plan = runtime_handle.plan_team_import(&project_id, &package, passphrase)?;
     Ok(Some(plan))
+}
+
+#[tauri::command]
+pub fn list_team_channels(
+    request: ProjectRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Vec<TeamChannelProjection>> {
+    runtime
+        .list_team_channels(&request.project_id)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn connect_folder_team_channel(
+    request: ConnectFolderTeamChannelRequest,
+    app: AppHandle,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<Option<TeamChannelProjection>> {
+    let selected = app
+        .dialog()
+        .file()
+        .set_title(if request.locale == "ko" {
+            "팀 공유 폴더 선택"
+        } else {
+            "Choose a team share folder"
+        })
+        .blocking_pick_folder();
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let path = selected
+        .into_path()
+        .map_err(|_| EnvError::invalid("선택한 팀 공유 폴더를 사용할 수 없습니다."))?;
+    let folder_name = path.file_name().map_or_else(
+        || "Team channel".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let suggested_name = folder_name
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(80)
+        .collect::<String>();
+    let suggested_name = if suggested_name.trim().is_empty() {
+        "Team channel".to_owned()
+    } else {
+        suggested_name
+    };
+    runtime
+        .connect_folder_team_channel(&request.project_id, &path, &suggested_name)
+        .map(Some)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn remove_team_channel(
+    request: TeamChannelRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<()> {
+    runtime
+        .remove_team_channel(&request.project_id, &request.channel_id)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn publish_team_channel(
+    request: PublishTeamChannelRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<env_team::TeamPackagePublishSummary> {
+    if request.passphrase.chars().count() < 10 {
+        return Err(EnvError::invalid("암호는 10자 이상이어야 합니다.").into());
+    }
+    let (service, transport) =
+        runtime.prepare_team_channel_operation(&request.project_id, &request.channel_id)?;
+    let passphrase = age::secrecy::SecretString::from(request.passphrase);
+    let selection = request.selection;
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        env_team::publish_project_package(
+            &service,
+            transport.as_ref(),
+            passphrase,
+            selection.as_deref(),
+        )
+    })
+    .await
+    .map_err(|_| EnvError::invalid("팀 채널 게시 작업이 중단되었습니다."))??;
+    Ok(summary)
+}
+
+#[tauri::command]
+pub fn plan_team_channel_import(
+    request: PlanTeamChannelImportRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<crate::runtime::TeamImportPlanProjection> {
+    if request.passphrase.chars().count() < 10 {
+        return Err(EnvError::invalid("암호는 10자 이상이어야 합니다.").into());
+    }
+    runtime
+        .plan_team_channel_import(
+            &request.project_id,
+            &request.channel_id,
+            &request.package_id,
+            age::secrecy::SecretString::from(request.passphrase),
+        )
+        .map_err(Into::into)
 }
 
 #[tauri::command]

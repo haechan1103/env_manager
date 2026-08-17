@@ -73,13 +73,22 @@ fn handle_line(broker: &Broker, line: &str) -> Option<Value> {
 
     let id = request.id?;
     let result = match request.method.as_str() {
-        "initialize" => json!({
-            "protocolVersion": request.params.get("protocolVersion")
+        "initialize" => {
+            if let Some(client_name) = request
+                .params
+                .pointer("/clientInfo/name")
                 .and_then(Value::as_str)
-                .unwrap_or("2025-06-18"),
-            "capabilities": { "tools": { "listChanged": false } },
-            "serverInfo": { "name": "env-manager", "version": env!("CARGO_PKG_VERSION") }
-        }),
+            {
+                broker.identify_client(client_name);
+            }
+            json!({
+                "protocolVersion": request.params.get("protocolVersion")
+                    .and_then(Value::as_str)
+                    .unwrap_or("2025-06-18"),
+                "capabilities": { "tools": { "listChanged": false } },
+                "serverInfo": { "name": "env-manager", "version": env!("CARGO_PKG_VERSION") }
+            })
+        }
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tool_definitions() }),
         "tools/call" => {

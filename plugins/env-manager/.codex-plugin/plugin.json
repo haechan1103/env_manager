@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.1.0",
+  "version": "1.5.0",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Env Manager",
     "shortDescription": "Manage registered env files through a redacted local broker.",
-    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted inspection, group and variable structure, access classification, migration plans, N-way variable links, and opaque same-name value reuse across registered projects.",
+    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted env management, encrypted team-channel inspection, opaque cross-project reuse, value-hidden deployment pushes, and redacted AWS or registered Runtime value checks.",
     "developerName": "haechan1103",
     "category": "Productivity",
     "capabilities": [
@@ -32,6 +32,11 @@
       "Group and variable structure",
       "N-way variable links",
       "Opaque cross-project value reuse",
+      "Encrypted team-channel inspection",
+      "Opaque deployment provider push",
+      "Redacted AWS deployment-value comparison",
+      "Encrypted registered Runtime comparison",
+      "Personal Provider Pack authoring",
       "Multi-agent compatible workflow"
     ],
     "defaultPrompt": [
@@ -39,7 +44,12 @@
       "GPT 그룹을 만들고 빈 환경변수를 추가해줘.",
       "기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘.",
       "같은 변수를 local과 development에서 연결해줘.",
-      "다른 등록 프로젝트의 GEMINI_API_KEY를 값 노출 없이 이 프로젝트에 복사해줘."
+      "다른 등록 프로젝트의 GEMINI_API_KEY를 값 노출 없이 이 프로젝트에 복사해줘.",
+      "이 프로젝트의 팀 공유 채널과 받은 암호화 패키지를 값 없이 확인해줘.",
+      "선택한 환경변수를 AWS Secrets Manager에 값 노출 없이 올려줘.",
+      "AWS에 배포된 값이 로컬과 같은지 실제 값 없이 확인해줘.",
+      "등록된 서버 Runtime 값이 로컬과 같은지 값 노출 없이 확인해줘.",
+      "이 CLI용 Personal Provider Pack을 만들어줘."
     ],
     "brandColor": "#16765A"
   },

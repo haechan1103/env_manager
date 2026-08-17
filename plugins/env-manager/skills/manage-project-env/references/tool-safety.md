@@ -18,6 +18,9 @@
 | Normalize groups | `plan_migration` → `apply_plan` |
 | Find same-name sources in other projects | `find_reusable_variable_sources` |
 | One-time opaque project copy | `find_reusable_variable_sources` → `plan_copy_variable_from_project` → `apply_plan` |
+| Inspect available deployment providers | `list_deployment_providers` |
+| Opaque provider push | `list_deployment_providers` → `plan_provider_push` → `apply_plan` |
+| Redacted provider comparison | `list_deployment_providers` → `compare_deployment_values` |
 
 ## Failures
 
@@ -38,6 +41,16 @@
 - Missing or ambiguous project-copy source: search again by the exact key and ask the
   user to select a candidate project/file. Never inspect the value, choose by file
   environment, or turn the copy into a continuing link.
+- Missing provider/target or unavailable Adapter: list providers again and ask for
+  the missing semantic destination. Never fall back to a shell, CLI command, raw HTTP,
+  or value read.
+- AWS authentication, Region, permission, or KMS failure: report the stable failure
+  and ask the user to fix their local AWS Profile/SSO session or target choice. Never
+  request credentials or a secret value in chat.
+- Provider comparison `unverifiable`: explain that the target does not return values
+  or lacks the fixed remote verifier. For Runtime comparison, list registered targets
+  and use only the returned target ID and source file. Never infer equality from a
+  prior push receipt and never fall back to a shell/hash/SSH recipe.
 
 ## Output allowlist
 

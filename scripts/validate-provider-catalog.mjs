@@ -9,9 +9,9 @@ const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const identifier = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const date = /^\d{4}-\d{2}-\d{2}$/;
 const supportStates = new Set(["implemented", "planned"]);
-const transports = new Set(["cli", "sdk"]);
-const valueTransports = new Set(["stdin", "in-process-sdk"]);
-const runtimeProbes = new Set(["semantic-version", "not-implemented"]);
+const transports = new Set(["cli", "sdk", "remote-verifier"]);
+const valueTransports = new Set(["stdin", "in-process-sdk", "age-stdin"]);
+const runtimeProbes = new Set(["semantic-version", "not-implemented", "sdk-config-chain", "fixed-protocol"]);
 const strategies = new Set(["gh-secret-set-v1", "wrangler-secret-bulk-v1"]);
 
 exactKeys(catalog, [
@@ -74,9 +74,17 @@ for (const provider of catalog.providers) {
     assert(provider.valueTransport === "stdin", `${provider.id} CLI values must use stdin`);
     assert(provider.client.runtimeProbe !== "not-implemented", `${provider.id} implemented CLI needs a runtime probe`);
     assert(provider.client.profiles.length > 0, `${provider.id} implemented CLI needs a compatibility profile`);
-  } else {
+  } else if (provider.transport === "sdk") {
     assert(provider.valueTransport === "in-process-sdk", `${provider.id} SDK values must stay in process`);
-    assert(provider.client.profiles.length === 0, `${provider.id} planned SDK must not claim a CLI profile`);
+    assert(provider.client.profiles.length === 0, `${provider.id} SDK must not claim a CLI profile`);
+    assert(
+      implemented ? provider.client.runtimeProbe === "sdk-config-chain" : provider.client.runtimeProbe === "not-implemented",
+      `${provider.id} SDK support state and runtime probe disagree`,
+    );
+  } else {
+    assert(provider.valueTransport === "age-stdin", `${provider.id} remote values must use age-encrypted stdin`);
+    assert(provider.client.runtimeProbe === "fixed-protocol", `${provider.id} must pin a fixed protocol`);
+    assert(provider.client.profiles.length === 0, `${provider.id} remote verifier must not use CLI profiles`);
   }
 
   assert(Array.isArray(provider.capabilities) && provider.capabilities.length > 0, `${provider.id} needs capabilities`);

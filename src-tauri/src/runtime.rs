@@ -7,15 +7,25 @@ use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use env_core::{
-    EnvError, EnvErrorCode, EnvResult, MigrationPlan, MigrationPreview, MutationSummary,
-    ProjectService, TeamImportPlan, TeamImportPreview, TeamImportSummary, TeamImportValueSide,
+    ClassificationReviewReason, ClassificationSource, DiscoveryOptions, EnvError, EnvErrorCode,
+    EnvResult, MigrationPlan, MigrationPreview, MutationSummary, ProjectService, TeamImportPlan,
+    TeamImportPreview, TeamImportSummary, TeamImportValueSide, is_env_candidate,
 };
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use env_team::TeamChannelRegistration;
+use notify::{
+    Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    event::{CreateKind, ModifyKind, RemoveKind},
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::NamedTempFile;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+mod agent_activity;
+mod team_channels;
+
+pub use team_channels::TeamChannelProjection;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRegistration {
     pub id: String,
@@ -41,6 +51,23 @@ struct RegistryData {
     projects: Vec<ProjectRegistration>,
     #[serde(default)]
     last_selected_project_id: Option<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "env_team::deserialize_team_channel_registrations")]
+    team_channels: Vec<TeamChannelRegistration>,
+    #[serde(default)]
+    provider_push_receipts: Vec<ProviderPushReceipt>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProviderPushReceipt {
+    pub timestamp_ms: u64,
+    pub project_id: String,
+    pub provider: String,
+    pub source_file: String,
+    pub destination: String,
+    pub succeeded_keys: Vec<String>,
+    pub failed_keys: Vec<String>,
 }
 
 pub struct AppRuntime {
@@ -81,7 +108,7 @@ pub struct TeamImportPlanProjection {
     pub preview: TeamImportPreview,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentActivityEvent {
     pub timestamp_ms: u64,
@@ -108,16 +135,33 @@ impl AppRuntime {
         let app_data = app.path().app_data_dir()?;
         fs::create_dir_all(&app_data)?;
         let registry_path = app_data.join("projects.json");
+        let mut migrate_team_channels = false;
         let mut registry: RegistryData = if registry_path.exists() {
             let bytes = fs::read(&registry_path)?;
+            migrate_team_channels = env_team::registry_contains_legacy_team_channels(&bytes);
             serde_json::from_slice(&bytes)?
         } else {
             RegistryData::default()
         };
         migrate_legacy_file_labels(&registry_path, &mut registry)?;
+        if migrate_team_channels {
+            persist_registry(&registry_path, &registry)?;
+        }
+        let audit_dir = app_data.join("agent-activity");
+        let legacy_audit_dir = std::env::temp_dir().join("env-manager-audit");
+        let project_ids = registry
+            .projects
+            .iter()
+            .map(|project| project.id.as_str())
+            .collect::<Vec<_>>();
+        let _ = agent_activity::migrate_legacy_agent_activity(
+            &legacy_audit_dir,
+            &audit_dir,
+            &project_ids,
+        );
         Ok(Self {
             registry_path,
-            audit_dir: app_data.join("agent-activity"),
+            audit_dir,
             registry: Mutex::new(registry),
             watchers: Mutex::new(HashMap::new()),
             migration_plans: Mutex::new(HashMap::new()),
@@ -273,6 +317,12 @@ impl AppRuntime {
                 registry.last_selected_project_id =
                     registry.projects.first().map(|project| project.id.clone());
             }
+            registry
+                .team_channels
+                .retain(|channel| channel.project_id != project_id);
+            registry
+                .provider_push_receipts
+                .retain(|receipt| receipt.project_id != project_id);
             self.persist(&registry)?;
         }
         self.watchers
@@ -288,16 +338,44 @@ impl AppRuntime {
     }
 
     pub fn scan(&self, project_id: &str) -> EnvResult<env_core::ProjectProjection> {
-        let registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let project = registry
-            .projects
-            .iter()
-            .find(|project| project.id == project_id)
-            .ok_or_else(|| EnvError::unregistered_project(project_id))?;
-        ProjectService::open(&project.root)?.initialize_with_file_labels(&project.file_labels)
+        let (root, file_labels) = {
+            let registry = self
+                .registry
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let project = registry
+                .projects
+                .iter()
+                .find(|project| project.id == project_id)
+                .ok_or_else(|| EnvError::unregistered_project(project_id))?;
+            (project.root.clone(), project.file_labels.clone())
+        };
+        let mut projection =
+            ProjectService::open(root)?.initialize_with_file_labels(&file_labels)?;
+        if let Ok(activity) = self.agent_activity(project_id) {
+            let requested_keys = activity
+                .into_iter()
+                .filter(|event| event.category == "value-read" && event.outcome == "blocked")
+                .flat_map(|event| event.variable_names)
+                .collect::<BTreeSet<_>>();
+            for item in &mut projection.classification_review {
+                if item.classified_by == ClassificationSource::Heuristic
+                    && requested_keys.contains(&item.key)
+                    && !item
+                        .review_reasons
+                        .contains(&ClassificationReviewReason::AgentAccessRequest)
+                {
+                    item.review_reasons
+                        .push(ClassificationReviewReason::AgentAccessRequest);
+                }
+            }
+            projection.access_review_count = projection
+                .classification_review
+                .iter()
+                .filter(|item| !item.review_reasons.is_empty())
+                .count();
+        }
+        Ok(projection)
     }
 
     pub fn rename_file(&self, project_id: &str, file: &str, name: &str) -> EnvResult<()> {
@@ -320,33 +398,37 @@ impl AppRuntime {
     pub fn agent_activity(&self, project_id: &str) -> EnvResult<Vec<AgentActivityEvent>> {
         // Resolve through the registration first so arbitrary file names cannot be requested.
         let service = self.service(project_id)?;
-        let path = self
-            .audit_dir
-            .join(format!("{}.jsonl", service.project_id()));
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(_) => return Err(EnvError::invalid("AI 활동 기록을 읽지 못했습니다.")),
-        };
-        let start = bytes.len().saturating_sub(2 * 1024 * 1024);
-        let slice = if start == 0 {
-            &bytes[..]
-        } else {
-            let offset = bytes[start..]
-                .iter()
-                .position(|byte| *byte == b'\n')
-                .map_or(bytes.len(), |offset| start + offset + 1);
-            &bytes[offset..]
-        };
-        let mut events = slice
-            .split(|byte| *byte == b'\n')
-            .filter(|line| !line.is_empty())
-            .filter_map(|line| serde_json::from_slice::<AgentActivityEvent>(line).ok())
-            .filter(|event| event.project_id == project_id)
-            .collect::<Vec<_>>();
-        events.sort_by_key(|event| std::cmp::Reverse(event.timestamp_ms));
-        events.truncate(200);
-        Ok(events)
+        Ok(agent_activity::load_agent_activity(
+            &self.audit_dir,
+            &std::env::temp_dir().join("env-manager-audit"),
+            service.project_id(),
+        ))
+    }
+
+    pub fn provider_push_receipts(&self, project_id: &str) -> EnvResult<Vec<ProviderPushReceipt>> {
+        let _ = self.root(project_id)?;
+        let registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Ok(registry
+            .provider_push_receipts
+            .iter()
+            .filter(|receipt| receipt.project_id == project_id)
+            .take(100)
+            .cloned()
+            .collect())
+    }
+
+    pub fn record_provider_push(&self, receipt: ProviderPushReceipt) -> EnvResult<()> {
+        let _ = self.root(&receipt.project_id)?;
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        registry.provider_push_receipts.insert(0, receipt);
+        registry.provider_push_receipts.truncate(500);
+        self.persist(&registry)
     }
 
     pub fn plan_migration(
@@ -410,6 +492,14 @@ impl AppRuntime {
         let manifest = env_core::ManifestStore::for_root(service.root()).load()?;
         let plan =
             env_core::plan_encrypted_team_import(service.root(), &manifest, package, passphrase)?;
+        self.store_team_import_plan(project_id, plan)
+    }
+
+    fn store_team_import_plan(
+        &self,
+        project_id: &str,
+        plan: TeamImportPlan,
+    ) -> EnvResult<TeamImportPlanProjection> {
         let preview = plan.preview().clone();
         let plan_id = format!(
             "team-import-{}-{}",
@@ -525,11 +615,21 @@ impl AppRuntime {
 
         let (sender, receiver) = mpsc::channel::<PathBuf>();
         let managed_paths_for_events = absolute_paths.clone();
+        let root_for_filter = root.clone();
+        let ignored_directories = DiscoveryOptions::default().ignored_directories;
         let mut watcher = RecommendedWatcher::new(
             move |result: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = result {
                     for path in event.paths {
-                        let _ = sender.send(path);
+                        if should_rescan_for_event(
+                            &root_for_filter,
+                            &path,
+                            &event.kind,
+                            &managed_paths_for_events,
+                            &ignored_directories,
+                        ) {
+                            let _ = sender.send(path);
+                        }
                     }
                 }
             },
@@ -537,15 +637,9 @@ impl AppRuntime {
         )
         .map_err(|_| EnvError::invalid("파일 감시기를 시작하지 못했습니다."))?;
 
-        let parent_directories = absolute_paths
-            .iter()
-            .filter_map(|path| path.parent().map(Path::to_path_buf))
-            .collect::<BTreeSet<_>>();
-        for path in &parent_directories {
-            watcher
-                .watch(path, RecursiveMode::NonRecursive)
-                .map_err(|_| EnvError::invalid("env 파일을 감시하지 못했습니다."))?;
-        }
+        watcher
+            .watch(&root, RecursiveMode::Recursive)
+            .map_err(|_| EnvError::invalid("env 파일을 감시하지 못했습니다."))?;
 
         let app = app.clone();
         let root_for_events = root.clone();
@@ -558,7 +652,6 @@ impl AppRuntime {
                 }
                 let paths = changed
                     .into_iter()
-                    .filter(|path| managed_paths_for_events.contains(path))
                     .filter_map(|path| {
                         path.strip_prefix(&root_for_events)
                             .ok()
@@ -598,6 +691,48 @@ impl AppRuntime {
     fn persist(&self, registry: &RegistryData) -> EnvResult<()> {
         persist_registry(&self.registry_path, registry)
     }
+}
+
+fn should_rescan_for_event(
+    root: &Path,
+    path: &Path,
+    kind: &EventKind,
+    managed_paths: &BTreeSet<PathBuf>,
+    ignored_directories: &BTreeSet<String>,
+) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        return false;
+    };
+    if relative.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        )
+    }) {
+        return false;
+    }
+    if relative.components().any(|component| {
+        ignored_directories.contains(component.as_os_str().to_string_lossy().as_ref())
+    }) {
+        return false;
+    }
+    if managed_paths.contains(path) {
+        return true;
+    }
+    if path
+        .file_name()
+        .is_some_and(|name| is_env_candidate(&name.to_string_lossy()))
+    {
+        return true;
+    }
+    matches!(
+        kind,
+        EventKind::Create(CreateKind::Folder)
+            | EventKind::Remove(RemoveKind::Folder)
+            | EventKind::Modify(ModifyKind::Name(_))
+    )
 }
 
 fn migrate_legacy_file_labels(
@@ -697,6 +832,66 @@ mod tests {
     use super::*;
 
     #[test]
+    fn watcher_rescans_only_for_managed_candidates_and_directory_topology() {
+        let project = tempfile::tempdir().expect("project");
+        let root = project.path().canonicalize().expect("canonical project");
+        let managed = root.join(".env.local");
+        fs::write(&managed, "PORT=fake_3000\n").expect("managed fixture");
+        let managed_paths = BTreeSet::from([managed.clone()]);
+        let ignored = DiscoveryOptions::default().ignored_directories;
+
+        assert!(should_rescan_for_event(
+            &root,
+            &managed,
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(should_rescan_for_event(
+            &root,
+            &root.join("secrets/runtime.env"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(should_rescan_for_event(
+            &root,
+            &root.join("apps/new-service"),
+            &EventKind::Create(CreateKind::Folder),
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(!should_rescan_for_event(
+            &root,
+            &root.join("README.md"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(!should_rescan_for_event(
+            &root,
+            &root.join("node_modules/package/runtime.env"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(!should_rescan_for_event(
+            &root,
+            &root.join("sample.env"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(!should_rescan_for_event(
+            &root,
+            &root.join("../outside/runtime.env"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+    }
+
+    #[test]
     fn persists_the_last_selected_project_and_falls_back_when_removed() {
         let app_data = tempfile::tempdir().expect("app data");
         let first_root = tempfile::tempdir().expect("first project");
@@ -724,6 +919,8 @@ mod tests {
                 },
             ],
             last_selected_project_id: None,
+            team_channels: Vec::new(),
+            provider_push_receipts: Vec::new(),
         };
         persist_registry(&registry_path, &registry).expect("persist registry");
         let runtime = AppRuntime {
@@ -745,6 +942,62 @@ mod tests {
 
         runtime.remove(&second_id).expect("remove selected project");
         assert_eq!(runtime.last_selected_project_id(), Some(first_id));
+    }
+
+    #[test]
+    fn blocked_agent_value_request_enters_review_without_exposing_a_value() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let project = tempfile::tempdir().expect("project");
+        fs::write(
+            project.path().join(".env.local"),
+            "CUSTOM_MODE=fake_value\n",
+        )
+        .expect("synthetic env");
+        let audit_dir = app_data.path().join("agent-activity");
+        let runtime = AppRuntime {
+            registry_path: app_data.path().join("projects.json"),
+            audit_dir: audit_dir.clone(),
+            registry: Mutex::new(RegistryData::default()),
+            watchers: Mutex::new(HashMap::new()),
+            migration_plans: Mutex::new(HashMap::new()),
+            team_import_plans: Mutex::new(HashMap::new()),
+            next_plan_id: AtomicU64::new(1),
+        };
+        let registered = runtime.register(project.path()).expect("register project");
+        fs::create_dir_all(&audit_dir).expect("audit directory");
+        let event = AgentActivityEvent {
+            timestamp_ms: 1,
+            project_id: registered.id.clone(),
+            actor: "codex".to_owned(),
+            category: "value-read".to_owned(),
+            operation: "read_allowed_value".to_owned(),
+            relative_paths: vec![".env.local".to_owned()],
+            variable_names: vec!["CUSTOM_MODE".to_owned()],
+            policy_decision: "policy-checked".to_owned(),
+            outcome: "blocked".to_owned(),
+            result_code: "CODEX_ACCESS_BLOCKED".to_owned(),
+        };
+        let mut event_bytes = serde_json::to_vec(&event).expect("audit event");
+        event_bytes.push(b'\n');
+        fs::write(
+            audit_dir.join(format!("{}.jsonl", registered.id)),
+            event_bytes,
+        )
+        .expect("audit fixture");
+
+        let projection = runtime.scan(&registered.id).expect("scan project");
+        let review = projection
+            .classification_review
+            .iter()
+            .find(|item| item.key == "CUSTOM_MODE")
+            .expect("review item");
+
+        assert_eq!(projection.access_review_count, 1);
+        assert_eq!(review.access, env_core::CodexAccess::Unclassified);
+        assert_eq!(
+            review.review_reasons,
+            vec![ClassificationReviewReason::AgentAccessRequest]
+        );
     }
 
     #[test]
@@ -773,6 +1026,8 @@ mod tests {
                 file_labels: BTreeMap::new(),
             }],
             last_selected_project_id: None,
+            team_channels: Vec::new(),
+            provider_push_receipts: Vec::new(),
         };
 
         migrate_legacy_file_labels(&registry_path, &mut registry).expect("migration");
@@ -789,5 +1044,96 @@ mod tests {
         let shared_manifest = fs::read_to_string(&manifest_path).expect("shared manifest");
         assert!(!shared_manifest.contains("fileLabels"));
         assert!(!shared_manifest.contains("Local display name"));
+    }
+
+    #[test]
+    fn folder_team_channel_path_stays_local_and_missing_mount_is_reported() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let project = tempfile::tempdir().expect("project");
+        let shared = tempfile::tempdir().expect("shared folder");
+        let registry_path = app_data.path().join("projects.json");
+        let runtime = AppRuntime {
+            registry_path: registry_path.clone(),
+            audit_dir: app_data.path().join("agent-activity"),
+            registry: Mutex::new(RegistryData::default()),
+            watchers: Mutex::new(HashMap::new()),
+            migration_plans: Mutex::new(HashMap::new()),
+            team_import_plans: Mutex::new(HashMap::new()),
+            next_plan_id: AtomicU64::new(1),
+        };
+        let registered = runtime.register(project.path()).expect("register project");
+        let connected = runtime
+            .connect_folder_team_channel(&registered.id, shared.path(), "Synthetic channel")
+            .expect("connect channel");
+
+        assert!(connected.readable);
+        assert!(connected.publishable);
+        let local_registry = fs::read_to_string(&registry_path).expect("local registry");
+        assert!(local_registry.contains("teamChannels"));
+        assert!(local_registry.contains(&shared.path().to_string_lossy().to_string()));
+        let local_registry: serde_json::Value =
+            serde_json::from_str(&local_registry).expect("registry json");
+        let channel = &local_registry["teamChannels"][0];
+        assert_eq!(channel["transport"]["type"], "folder");
+        let canonical_shared = shared.path().canonicalize().expect("canonical shared path");
+        assert_eq!(
+            channel["transport"]["path"],
+            canonical_shared.to_string_lossy().as_ref()
+        );
+        assert!(channel.get("root").is_none());
+        assert!(channel.get("channelId").is_none());
+        let shared_manifest = fs::read_to_string(project.path().join(env_core::MANIFEST_FILE_NAME))
+            .expect("synthetic manifest");
+        assert!(!shared_manifest.contains("teamChannel"));
+        assert!(!shared_manifest.contains(&shared.path().to_string_lossy().to_string()));
+
+        shared.close().expect("remove mounted folder fixture");
+        let channels = runtime
+            .list_team_channels(&registered.id)
+            .expect("list unavailable channel");
+        assert_eq!(channels.len(), 1);
+        assert!(!channels[0].readable);
+        assert!(!channels[0].publishable);
+    }
+
+    #[test]
+    fn provider_push_receipt_persists_metadata_without_value_fingerprints() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let project = tempfile::tempdir().expect("synthetic project");
+        let runtime = AppRuntime {
+            registry_path: app_data.path().join("projects.json"),
+            audit_dir: app_data.path().join("agent-activity"),
+            registry: Mutex::new(RegistryData::default()),
+            watchers: Mutex::new(HashMap::new()),
+            migration_plans: Mutex::new(HashMap::new()),
+            team_import_plans: Mutex::new(HashMap::new()),
+            next_plan_id: AtomicU64::new(1),
+        };
+        let registered = runtime.register(project.path()).expect("register project");
+        runtime
+            .record_provider_push(ProviderPushReceipt {
+                timestamp_ms: 42,
+                project_id: registered.id.clone(),
+                provider: "aws-secrets-manager".to_owned(),
+                source_file: ".env.local".to_owned(),
+                destination: "ap-northeast-2/demo".to_owned(),
+                succeeded_keys: vec!["DEMO_TOKEN".to_owned()],
+                failed_keys: Vec::new(),
+            })
+            .expect("record receipt");
+
+        let saved =
+            fs::read_to_string(app_data.path().join("projects.json")).expect("read local registry");
+        assert!(saved.contains("DEMO_TOKEN"));
+        assert!(!saved.contains("valueHash"));
+        assert!(!saved.contains("revision"));
+        assert!(!saved.contains("fingerprint"));
+        assert_eq!(
+            runtime
+                .provider_push_receipts(&registered.id)
+                .expect("list receipts")
+                .len(),
+            1
+        );
     }
 }

@@ -3,10 +3,17 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const packageVersion = JSON.parse(await read("package.json")).version;
+const packageLock = JSON.parse(await read("package-lock.json"));
 const tauriVersion = JSON.parse(await read("src-tauri/tauri.conf.json")).version;
 const workspaceVersion = (await read("Cargo.toml")).match(/\[workspace\.package\][\s\S]*?version = "([^"]+)"/)?.[1];
 
-const versions = { packageVersion, tauriVersion, workspaceVersion };
+const versions = {
+  packageVersion,
+  packageLockVersion: packageLock.version,
+  packageLockRootVersion: packageLock.packages?.[""]?.version,
+  tauriVersion,
+  workspaceVersion,
+};
 const mismatched = Object.entries(versions).filter(([, version]) => version !== packageVersion);
 if (mismatched.length > 0) {
   throw new Error(`Release versions do not match: ${JSON.stringify(versions)}`);

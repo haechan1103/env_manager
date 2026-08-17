@@ -36,6 +36,14 @@ pub struct ClassificationReviewProjection {
     pub classified_by: ClassificationSource,
     pub suggestion: ClassificationSuggestion,
     pub client_exposed: bool,
+    pub review_reasons: Vec<ClassificationReviewReason>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClassificationReviewReason {
+    ClientExposureConflict,
+    AgentAccessRequest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,5 +72,6 @@ pub struct ProjectProjection {
     pub issue_count: usize,
     pub git_safety: GitSafetyProjection,
     pub classification_review: Vec<ClassificationReviewProjection>,
+    pub access_review_count: usize,
     pub client_exposure_count: usize,
 }
