@@ -163,11 +163,23 @@ jobs:
           codesign --verify --verbose=2 "$dmg_path"
           codesign --display --verbose=4 "$app_path" 2>&1 | grep -F "Authority=Developer ID Application:" >/dev/null
           spctl --assess --type execute --verbose=4 "$app_path"
-          spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
           xcrun stapler validate "$app_path"
-          xcrun stapler validate "$dmg_path"
+
+          mount_point="$RUNNER_TEMP/env-manager-${{ matrix.target }}-dmg"
+          mkdir -p "$mount_point"
+          hdiutil attach "$dmg_path" -readonly -nobrowse -mountpoint "$mount_point"
+          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
+          embedded_app="$(find "$mount_point" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          if [[ -z "$embedded_app" ]]; then
+            echo "The DMG does not contain an app bundle." >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$embedded_app"
+          codesign --display --verbose=4 "$embedded_app" 2>&1 | grep -F "Authority=Developer ID Application:" >/dev/null
+          spctl --assess --type execute --verbose=4 "$embedded_app"
+          xcrun stapler validate "$embedded_app"
           if command -v syspolicy_check >/dev/null 2>&1; then
-            syspolicy_check distribution "$app_path"
+            syspolicy_check distribution "$embedded_app"
           fi
 
       - name: Remove temporary Apple signing material

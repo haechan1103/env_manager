@@ -33,9 +33,9 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 | **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
 | Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
 
-## New in 0.6.3
+## New in 0.6.4
 
-- **Trusted macOS installation:** Apple Silicon and Intel DMGs are signed with an Apple Developer ID, notarized, stapled, and verified by the release pipeline before publication.
+- **Trusted macOS installation:** Apple Silicon and Intel DMGs are Developer ID signed, and their notarized, stapled apps are verified by the release pipeline before publication.
 
 ## New in 0.6.2
 
@@ -191,7 +191,7 @@ The Windows installer is not yet Authenticode-signed. Microsoft Defender SmartSc
 
 ### macOS first launch
 
-Starting with `0.6.3`, both macOS DMGs are signed with an Apple Developer ID, notarized by Apple, and stapled before the release is published. macOS may still show the normal confirmation for an app downloaded from the internet; it should identify the developer instead of reporting that Apple cannot verify the app.
+Starting with `0.6.4`, both macOS DMGs are signed with an Apple Developer ID and contain an app notarized and stapled by Apple before the release is published. macOS may still show the normal confirmation for an app downloaded from the internet; it should identify the developer instead of reporting that Apple cannot verify the app.
 
 If macOS reports an unidentified or unverifiable developer, do not bypass the warning. Confirm that the file came from the [official GitHub Release](https://github.com/haechan1103/env_manager/releases/latest) and report the affected version and Mac architecture.
 
@@ -220,7 +220,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.3` adds Developer ID signing and Apple notarization for macOS on top of the Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows introduced in `0.6.2`. Authenticode-signed Windows builds, Windows ARM64, and additional languages remain planned.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.4` adds Developer ID signing and Apple notarization for macOS on top of the Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows introduced in `0.6.2`. Authenticode-signed Windows builds, Windows ARM64, and additional languages remain planned.
 
 ## Community
 
