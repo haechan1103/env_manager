@@ -33,6 +33,10 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
 | **env 파일을 커밋하지 않고 공유** | **고른 값만 배포** | **Git 실수를 먼저 발견** |
 | 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
 
+## 0.6.3의 새로운 기능
+
+- **신뢰할 수 있는 macOS 설치:** Apple Silicon·Intel DMG를 Apple Developer ID로 서명하고, Apple 공증과 스테이플링 및 배포 검증을 모두 통과한 경우에만 공개합니다.
+
 ## 0.6.2의 새로운 기능
 
 - **Folder Team Channel:** NAS나 기존 동기화 폴더에서 암호화 패키지를 주고받고, 충돌을 확인한 뒤 프로젝트에 적용합니다.
@@ -187,16 +191,9 @@ GPT_API_KEY를 local과 development에서 연결해줘.
 
 ### macOS 첫 실행
 
-현재 공개 빌드는 ad-hoc 서명을 사용하며 아직 Apple 공증을 받지 않았습니다. 처음 실행할 때 macOS가 **“Env Manager.app”을 열 수 없음** 경고를 표시할 수 있습니다.
+`0.6.3`부터 macOS DMG 두 종류 모두 Apple Developer ID로 서명하고 Apple 공증과 스테이플링을 마친 뒤 공개합니다. 인터넷에서 받은 앱이라는 일반 확인 창은 나타날 수 있지만, Apple이 앱을 확인할 수 없다는 경고 대신 확인된 개발자 정보가 표시되어야 합니다.
 
-공식 GitHub Release에서 받았고 실행하려는 경우:
-
-1. **휴지통으로 이동** 대신 **완료**를 누릅니다.
-2. **시스템 설정 → 개인정보 보호 및 보안**을 엽니다.
-3. **보안** 영역에서 Env Manager의 **확인 없이 열기**를 누릅니다.
-4. 인증한 뒤 마지막 확인 창에서 **열기**를 누릅니다.
-
-이 동작은 실행이 차단된 뒤 약 1시간 동안 표시됩니다. 다른 경로에서 받은 파일에는 우회 절차를 사용하지 마세요. [Apple 공식 안내](https://support.apple.com/ko-kr/guide/mac-help/mh40616/mac)를 참고하세요.
+확인되지 않은 개발자 또는 검증할 수 없는 앱이라는 경고가 나오면 우회 실행하지 마세요. [공식 GitHub Release](https://github.com/haechan1103/env_manager/releases/latest)에서 받은 파일인지 확인한 뒤 버전과 Mac 종류를 알려주세요.
 
 앱은 고정된 GitHub Releases 주소에서 서명된 업데이트만 확인합니다. 업데이트 확인 중 프로젝트 경로, env 메타데이터, 값이나 텔레메트리를 보내지 않습니다.
 
@@ -223,7 +220,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.2`는 Folder Team Channel, AWS 암호화 Secret 대상과 값 없는 비교, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용, 지원 AI 에이전트의 값 비노출 Provider 흐름을 추가합니다. Authenticode Windows 서명, macOS 공증, Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.3`은 `0.6.2`의 Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 macOS Developer ID 서명과 Apple 공증을 추가합니다. Authenticode Windows 서명, Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 
