@@ -15,7 +15,12 @@ const overviewPath = path.join(outputDir, "env-manager-overview.png");
 const heroPath = path.join(outputDir, "env-manager-editor.png");
 const integrationsPath = path.join(outputDir, "env-manager-ai-integrations.png");
 const providerPath = path.join(outputDir, "env-manager-cloudflare-push.png");
+const awsPath = path.join(outputDir, "env-manager-aws-compare.png");
+const runtimePath = path.join(outputDir, "env-manager-runtime-compare.png");
 const sharingPath = path.join(outputDir, "env-manager-encrypted-share.png");
+const teamChannelPath = path.join(outputDir, "env-manager-team-sharing.png");
+const importPath = path.join(outputDir, "env-manager-import-conflicts.png");
+const activityPath = path.join(outputDir, "env-manager-ai-activity.png");
 const gifPath = path.join(outputDir, "env-manager-demo.gif");
 const socialPreviewPath = path.join(brandDir, "env-manager-social-preview.png");
 
@@ -40,10 +45,33 @@ async function captureScreenshots() {
   await page.getByRole("button", { name: "Push variables" }).click();
   await page.getByRole("heading", { name: "Push variables" }).waitFor();
   await page.getByRole("button", { name: /Cloudflare Workers/ }).click();
-  await page.getByLabel("Worker").fill("sample-worker");
+  await page.getByRole("textbox", { name: "Cloudflare Worker", exact: true }).fill("sample-worker");
   await page.getByRole("button", { name: "Select all" }).click();
   await page.screenshot({ path: providerPath, fullPage: true });
   await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.getByRole("button", { name: "Push variables" }).click();
+  await page.getByRole("heading", { name: "Push variables" }).waitFor();
+  await page.getByRole("button", { name: /AWS Secrets Manager/ }).click();
+  await page.getByLabel("Secret path prefix").fill("sample-saas/staging");
+  await page.getByRole("button", { name: "Select all" }).click();
+  await page.getByText("AWS account verified").waitFor();
+  await page.getByRole("button", { name: /^Check / }).click();
+  await page.getByText("Current deployment value check").waitFor();
+  await page.screenshot({ path: awsPath, fullPage: true });
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Push variables" }).click();
+  await page.getByRole("heading", { name: "Push variables" }).waitFor();
+  await page.getByRole("button", { name: /Remote Runtime/ }).click();
+  await page.locator('select').filter({ has: page.locator('option[value="demo-runtime-staging"]') }).waitFor();
+  await page.getByRole("button", { name: "Select all" }).click();
+  await page.getByRole("button", { name: /^Check / }).click();
+  await page.getByText("Current deployment value check").waitFor();
+  await page.screenshot({ path: runtimePath, fullPage: true });
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.setViewportSize({ width: 1440, height: 940 });
 
   await page.getByRole("button", { name: "Export" }).click();
   await page.getByRole("heading", { name: "Export env files" }).waitFor();
@@ -51,6 +79,25 @@ async function captureScreenshots() {
   await page.getByRole("dialog").locator(".share-variable-select").filter({ hasText: "GPT_API_KEY" }).first().click();
   await page.screenshot({ path: sharingPath, fullPage: true });
   await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Team sharing" }).click();
+  await page.getByRole("heading", { name: "Team sharing" }).waitFor();
+  await page.getByText("Product team · shared folder").waitFor();
+  await page.screenshot({ path: teamChannelPath, fullPage: true });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  await page.getByRole("button", { name: "Import share" }).click();
+  await page.getByRole("heading", { name: "Import encrypted env share" }).waitFor();
+  await page.getByLabel("Share passphrase").fill("fake-readme-passphrase");
+  await page.getByRole("button", { name: "Choose encrypted file" }).click();
+  await page.getByText("Choose each conflicting value.").waitFor();
+  await page.screenshot({ path: importPath, fullPage: true });
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "AI activity" }).click();
+  await page.getByRole("heading", { name: "AI activity" }).waitFor();
+  await page.getByText("inspect_project").waitFor();
+  await page.screenshot({ path: activityPath, fullPage: true });
 
   await page.getByRole("button", { name: "AI tool connections" }).click();
   await page.getByRole("heading", { name: "AI tool connections" }).waitFor();
@@ -81,9 +128,13 @@ async function captureDemoFrames() {
   await capture(6);
   await page.getByRole("button", { name: "Push variables" }).click();
   await page.getByRole("heading", { name: "Push variables" }).waitFor();
-  await page.getByRole("button", { name: /Cloudflare Workers/ }).click();
+  await page.getByRole("button", { name: /AWS Secrets Manager/ }).click();
   await capture(6);
   await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Team sharing" }).click();
+  await page.getByRole("heading", { name: "Team sharing" }).waitFor();
+  await capture(6);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "AI tool connections" }).hover();
   await capture(2);
   await page.getByRole("button", { name: "AI tool connections" }).click();

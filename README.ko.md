@@ -1,7 +1,8 @@
 <div align="center">
   <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager 로고" />
   <h1>Env Manager</h1>
-  <p><strong>프로젝트가 이미 사용하는 <code>.env</code>를 편집하고, 연결하고, 공유하고, 배포하세요.</strong></p>
+  <p><strong>프로젝트가 이미 사용하는 모든 <code>.env</code>를 한곳에서.</strong></p>
+  <p>실행 방식을 바꾸거나 보호된 값을 AI 채팅에 붙여 넣지 않고 환경변수를 편집하고, 연결하고, 공유하고, 배포하세요.</p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
   <p>
     <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="최신 릴리스" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
@@ -12,9 +13,7 @@
   </p>
 </div>
 
-![프로젝트 개요, env 편집, Cloudflare 전송, AI 도구 연결을 보여주는 Env Manager 데모](assets/screenshots/env-manager-demo.gif)
-
-Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 기존 `.env`, `.env.local`, `.env.development`, 하위 앱 env 파일을 한 화면에서 관리합니다. 프로젝트의 실행 방식은 바꾸지 않고 값도 별도 전용 vault로 옮기지 않습니다.
+![프로젝트 개요, env 편집, AWS 배포, 팀 공유, AI 도구 연결을 보여주는 Env Manager 데모](assets/screenshots/env-manager-demo.gif)
 
 <div align="center">
   <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>macOS·Windows용 다운로드</strong></a>
@@ -24,65 +23,102 @@ Env Manager는 환경변수를 위한 로컬 우선 데스크톱 앱입니다. �
   <a href="SECURITY.md">보안 모델</a>
 </div>
 
-## 이럴 때 활용하세요
+Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 그 프로젝트가 실제로 사용하는 `.env`, `.env.local`, `.env.development`, `runtime.env`, 하위 앱 env 파일을 찾아줍니다. 값은 원래 파일에 남으며, 계정이나 호스팅된 vault, 새로운 실행 명령을 도입하지 않습니다.
 
-| 상황 | Env Manager가 해주는 일 |
-| --- | --- |
-| 바이브코딩 중 AI가 API 키 입력을 요청할 때 | 채팅에 값을 붙여 넣지 않고 마스킹된 데스크톱 화면에서 직접 입력합니다. AI는 이름·그룹과 허용된 작업을 계속 다룰 수 있습니다. |
-| `.env.local`, `.env.development`, 여러 앱 env가 흩어져 있을 때 | 실제 경로와 원본 형식을 유지하면서 한곳에서 발견하고 이동합니다. |
-| 같은 키를 2개, 3개 이상의 파일에서 똑같이 유지해야 할 때 | 원하는 변수들만 명시적으로 연결하고 어느 파일에서든 한 번 수정해 함께 저장합니다. |
-| 팀원에게 로컬 설정의 일부만 전달해야 할 때 | 전체 또는 선택한 변수만 암호화해 연결한 팀 폴더에 새 패키지로 게시하고, 받는 프로젝트에서 검토 후 병합합니다. |
-| 로컬 값을 배포 환경에 등록해야 할 때 | 필요한 변수만 골라 GitHub Actions, Cloudflare Workers, AWS Secrets Manager, SSM Parameter Store 또는 직접 설치한 Provider Pack으로 올립니다. |
-| Codex·Claude Code·Copilot이 env 구조를 수정해야 할 때 | Agent Skill과 redacted broker를 연결해 보호된 값을 일반 조회 응답에서 제외합니다. |
+## 왜 Env Manager인가요?
 
-![Git 보호와 AI 접근 상태를 보여주는 Env Manager 프로젝트 개요](assets/screenshots/env-manager-overview.png)
+| 지금 쓰는 방식을 그대로 | 연결된 값은 한 번만 수정 | AI에는 필요한 권한만 |
+| --- | --- | --- |
+| 기존 파일과 실행 명령이 계속 기준입니다. 경로, 주석, 순서와 관련 없는 형식을 보존합니다. | 같은 키를 2개, 3개 이상의 파일에서 명시적으로 연결합니다. 어느 파일에서 수정해도 연결된 모든 위치에 한 번에 저장합니다. | Codex, Claude Code, Copilot이 값이 제거된 로컬 Broker를 통해 구조를 확인하고 허용된 작업을 수행합니다. 보호된 값은 일반 조회 응답에 포함되지 않습니다. |
+| **env 파일을 커밋하지 않고 공유** | **고른 값만 배포** | **Git 실수를 먼저 발견** |
+| 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
 
-## 기존 env 파일을 그대로 관리합니다
+## 0.6.2의 새로운 기능
 
-- 직접 등록한 프로젝트 안에서만 지원 env 파일을 찾습니다.
-- 기존 프레임워크와 실행 명령이 사용하는 실제 파일을 편집합니다.
-- 관련 없는 주석과 형식을 보존하면서 그룹·설명·변수를 정리합니다.
-- 프로젝트와 env 파일에는 로컬 표시 이름을 붙일 수 있으며 실제 경로는 바꾸지 않습니다.
-- 값은 기본적으로 가리고, 환경변수명 복사와 짧은 명시적 값 보기를 지원합니다.
-- 변수가 많은 파일에서는 그룹 빠른 이동으로 원하는 구역으로 바로 이동합니다.
-- Git ignore 누락, 이미 추적된 파일, 과거 기록, 공개 프론트엔드 변수명의 위험을 구분해 알려줍니다.
-- 현재 버전은 `.env.example` 계열을 탐색에서 의도적으로 제외합니다.
+- **Folder Team Channel:** NAS나 기존 동기화 폴더에서 암호화 패키지를 주고받고, 충돌을 확인한 뒤 프로젝트에 적용합니다.
+- **AWS 배포:** Secrets Manager와 SSM `SecureString`으로 전송하고, 선택적으로 KMS 키를 지정하며, 값을 표시하지 않고 `같음` / `다름` / `없음` 상태를 확인합니다.
+- **Remote Runtime 확인:** age로 암호화된 SSH Verifier를 통해 관리 파일과 서버의 허용된 대상을 비교합니다. UI에는 원격 값이나 해시가 아닌 일치 상태만 돌아옵니다.
+- **Personal Provider Pack:** 앱 업데이트를 기다리지 않고 표준 입력 전용 사용자 CLI 연동을 로컬에 추가합니다.
+- **AI Provider 작업:** 지원 에이전트도 데스크톱과 같은 값 비노출 Provider Engine과 값 없는 활동 기록을 사용합니다.
+- **프로젝트 간 값 재사용:** 같은 이름의 보호된 값을 Rust 내부에서 다른 등록 프로젝트로 복사하며 에이전트나 일반 UI에 반환하지 않습니다.
+
+## 실제 사용 흐름
+
+### 복사본이 아니라 실제 env 파일을 정리합니다
+
+프로젝트와 파일에 로컬 표시 이름을 붙여도 실제 경로는 그대로 보이고 바뀌지 않습니다. 값은 기본적으로 가려지며, 변수명 복사, 그룹 빠른 이동, 연결 파일과 저장 영향 범위를 한 화면에서 확인할 수 있습니다.
 
 ![마스킹된 합성 값, 연결 파일, 그룹 빠른 이동을 보여주는 Env Manager 파일 편집기](assets/screenshots/env-manager-editor.png)
 
-## 배포 서비스로 필요한 변수만 전송
+### 지금 확인해야 할 것만 모아봅니다
 
-관리 중인 env 파일 하나에서 필요한 변수만 골라 배포 서비스로 보낼 수 있습니다. 공식 CLI에는 값을 표준 입력으로 전달하고, AWS는 SDK의 로컬 자격 증명 체인을 사용합니다. Env Manager가 서비스 토큰이나 임시 env 파일을 저장하지 않습니다.
+프로젝트 개요는 값이 비어 있는 변수, 조치가 필요한 AI 접근 검토, 파싱 경고, Git 유출 위험과 관리 파일 이동을 한곳에 모읍니다. 이 점검을 위해 값을 읽지는 않습니다.
 
-| 서비스 | 지원 대상 | 대상 찾기 |
+![Git 보호와 AI 접근 상태를 보여주는 Env Manager 프로젝트 개요](assets/screenshots/env-manager-overview.png)
+
+### 전체 설정도, 팀원에게 필요한 일부만도 공유합니다
+
+<table>
+  <tr>
+    <td width="50%"><strong>파일과 변수를 직접 선택</strong><br />연결된 변수는 함께 선택됩니다. 암호화 내보내기는 중간 평문 ZIP을 만들지 않습니다.</td>
+    <td width="50%"><strong>팀이 이미 쓰는 폴더 활용</strong><br />마운트한 NAS나 동기화 폴더에는 암호문 패키지만 저장합니다. 기존 폴더 권한이 그대로 기준이 됩니다.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-encrypted-share.png" alt="암호화 Env Manager 패키지에 넣을 개별 변수 선택" /></td>
+    <td><img src="assets/screenshots/env-manager-team-sharing.png" alt="Folder Team Channel의 변경 불가능한 암호화 패키지 목록" /></td>
+  </tr>
+</table>
+
+가져올 때는 없는 변수만 추가하고 받는 사람에게만 있는 내용은 유지합니다. 서로 다른 값은 하나씩 선택하며 기본값은 내 값 유지입니다. 독립된 충돌은 각각 선택할 수 있고 기존 연결 그룹은 하나의 선택으로 유지됩니다.
+
+![적용 전에 대상 파일과 암호화 패키지 충돌을 검토하는 화면](assets/screenshots/env-manager-import-conflicts.png)
+
+### 필요한 값만 올리고, 확인 가능한 대상은 값 없이 비교합니다
+
+<table>
+  <tr>
+    <td width="50%"><strong>Cloudflare Workers</strong><br />가장 가까운 Wrangler 설정을 찾고 로그인·계정·Worker 접근을 확인한 뒤 선택한 Worker Secret을 표준 입력으로 전송합니다.</td>
+    <td width="50%"><strong>AWS Secrets Manager·SSM</strong><br />로컬 AWS Profile 또는 SSO를 사용해 계정·Region·KMS를 확인하고 실제 값을 표시하지 않은 채 일치 여부를 확인합니다.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-cloudflare-push.png" alt="Wrangler를 통해 선택한 마스킹 변수를 Cloudflare Worker로 전송" /></td>
+    <td><img src="assets/screenshots/env-manager-aws-compare.png" alt="AWS로 선택한 변수를 전송하고 값 없이 배포 상태를 비교" /></td>
+  </tr>
+</table>
+
+프로젝트 밖의 서버 env 파일은 관리자가 고정 Env Manager Verifier를 설치하고 대상과 변수명을 허용 목록에 넣을 수 있습니다. Env Manager는 age 암호화 stdin 프레임을 SSH로 전송하며 고정된 Verifier 명령만 실행합니다.
+
+![암호화 Verifier를 통해 선택한 로컬 변수와 허용된 서버 Runtime을 비교](assets/screenshots/env-manager-runtime-compare.png)
+
+Provider 전송은 항상 명시적으로 시작하는 단방향 작업입니다. GitHub와 Cloudflare Secret은 다시 읽을 수 없으므로 일치한다고 추측하지 않습니다. AWS와 등록한 Runtime 대상만 별도 비교 기능으로 일치 상태를 반환합니다. 선택하지 않은 원격 항목은 삭제하지 않습니다.
+
+## 지원하는 배포 대상
+
+| Provider | 지원 대상 | 대상 찾기 |
 | --- | --- | --- |
-| GitHub Actions | 저장소 또는 배포 Environment의 Secret과 설정 Variable | 가장 가까운 Git worktree와 GitHub `origin`을 기본 감지하고, `gh`로 접근 가능한 저장소·Environment를 불러오며 필요한 Environment를 직접 생성할 수 있습니다. |
-| Cloudflare Workers | 기본 Worker 또는 Wrangler 환경의 Worker Secret | 가장 가까운 `wrangler.jsonc`, `wrangler.json`, `wrangler.toml`에서 Worker 이름과 설정된 `env.*` 환경을 감지합니다. |
-| AWS Secrets Manager | 선택한 변수마다 암호화된 Secret 하나 | 로컬 AWS Profile/SSO 자격 증명을 사용하고 STS로 계정·Region을 확인합니다. 고객 관리형 대칭 KMS 키도 선택할 수 있습니다. |
-| AWS SSM Parameter Store | 선택한 변수마다 `SecureString` Parameter 하나 | 같은 AWS 사전 검사를 거치며 경로 prefix와 선택적 KMS 키를 지원합니다. |
-| Personal Provider Pack | 로컬 `provider.json`이 선언한 대상 | 셸을 거치지 않고 선언된 실행 파일을 직접 실행하며 값은 표준 입력으로만 전달합니다. Pack은 이 컴퓨터에만 설치되고 앱에서 제거할 수 있습니다. |
+| GitHub Actions | 저장소 또는 배포 Environment의 Secret과 설정 Variable | 가장 가까운 Git worktree와 GitHub `origin`을 기본 감지하고, `gh`로 접근 가능한 저장소·Environment를 불러오며 Environment를 직접 생성할 수 있습니다. |
+| Cloudflare Workers | 기본 Worker 또는 Wrangler 환경의 Worker Secret | 가장 가까운 `wrangler.jsonc`, `wrangler.json`, `wrangler.toml`을 찾고 현재 Wrangler 계정과 Worker 접근을 확인합니다. |
+| AWS Secrets Manager | 선택 변수마다 암호화 Secret 하나 | 로컬 AWS Profile/SSO 체인을 사용하고 STS로 계정·Region을 확인하며 선택적 고객 관리형 대칭 KMS 키를 지원합니다. |
+| AWS SSM Parameter Store | 선택 변수마다 `SecureString` 하나 | 같은 AWS 사전 검사를 사용하며 경로 prefix와 선택적 KMS 키를 지원합니다. |
+| Remote Runtime | 허용된 서버 대상과 값 일치 여부 확인 | Git으로 공유할 수 있는 값 없는 대상 정의와 별도 설치한 고정 SSH Verifier를 사용합니다. 서버 파일을 업로드하거나 수정하지 않습니다. |
+| Personal Provider Pack | 로컬 `provider.json`이 선언한 대상 | 셸 없이 선언된 실행 파일을 직접 실행하고 값은 표준 입력으로만 보냅니다. Pack은 이 컴퓨터에만 설치되고 독립적으로 제거할 수 있습니다. |
 
-![Wrangler를 통해 선택한 마스킹 변수를 Cloudflare Worker로 보내는 화면](assets/screenshots/env-manager-cloudflare-push.png)
-
-이 기능은 사용자가 직접 시작하는 **단방향 전송**입니다. 원격 Secret 값을 다시 읽거나 로컬 값과 같은지 비교하지 않으며, 선택하지 않은 원격 항목을 삭제하지도 않습니다. GitHub·Cloudflare는 [`gh`](https://cli.github.com/manual/gh_secret_set) 또는 [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk)를 설치하고 로그인해야 합니다. AWS 대상은 로컬 AWS Profile 또는 SSO 세션을 준비해야 합니다. 외부 Provider Pack은 설치 전 실행 파일과 manifest를 직접 확인하세요.
-
-## 전체 또는 일부만 암호화해서 공유
-
-- **일반 ZIP:** 신뢰할 수 있는 로컬 환경에서 사용하는 평문 내보내기입니다.
-- **암호화 내보내기:** 평문 중간 ZIP 없이 `age` 호환 암호화 파일을 만듭니다.
-- **전체·부분 선택:** 모든 관리 파일, 특정 파일, 개별 변수만 선택할 수 있으며 연결된 변수는 함께 선택됩니다.
-- **안전한 가져오기:** 없는 변수는 추가하고 받는 사람의 관련 없는 내용은 유지하며, 서로 다른 로컬 값은 적용 전에 선택합니다.
-- **Folder Team Channel:** 마운트한 NAS나 기존 동기화 앱의 폴더를 연결하고, 덮어쓰지 않는 새 암호화 패키지를 게시하거나 팀원이 올린 패키지를 검토합니다.
-- 기존 폴더 권한을 그대로 따릅니다. Env Manager는 읽기 전용·접근 불가 상태를 알려주며 ACL, 마운트, 저장소 계정을 직접 변경하지 않습니다.
-- 암호는 저장하거나 복구하지 않습니다. 파일과 암호는 서로 다른 신뢰할 수 있는 채널로 전달하세요.
-
-![암호화된 Env Manager 공유 파일에 넣을 개별 변수를 선택하는 화면](assets/screenshots/env-manager-encrypted-share.png)
+GitHub와 Cloudflare를 사용하기 전 [`gh`](https://cli.github.com/manual/gh_secret_set) 또는 [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk)를 설치하고 로그인하세요. AWS는 기존 AWS SDK 자격 증명을 사용합니다. 외부 Provider Pack은 설치 전에 manifest와 실행 파일을 직접 확인해야 합니다.
 
 ## AI 코딩 에이전트 연결
 
-독립적으로 버전 관리되는 하나의 로컬 번들이 **Codex**, **Claude Code**, **GitHub Copilot / VS Code**를 지원합니다. 데스크톱 앱의 **AI 도구 연결**에서 지원 도구를 감지하고 Env Manager 연동을 설치할 수 있습니다.
+독립적으로 버전 관리되는 하나의 로컬 번들이 **Codex**, **Claude Code**, **GitHub Copilot / VS Code**를 지원합니다. 앱에서 도구 감지, 설치된 번들 버전, 업데이트와 활성 보호 계층을 확인할 수 있습니다.
 
-![Codex, Claude Code, GitHub Copilot용 Env Manager 연결 화면](assets/screenshots/env-manager-ai-integrations.png)
+<table>
+  <tr>
+    <td width="50%"><strong>하나의 연결 화면</strong><br />도구별 감지 상태, 설치 버전, 업데이트 가능 여부와 활성 보호 방식을 확인합니다.</td>
+    <td width="50%"><strong>값 없는 AI 활동 기록</strong><br />Broker 구조 확인, 값 읽기 시도, 수정, Provider 확인과 허용·차단 결과를 봅니다. 실제 값과 값 일부는 기록하지 않습니다.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-ai-integrations.png" alt="Codex, Claude Code, GitHub Copilot용 Env Manager 연결 화면" /></td>
+    <td><img src="assets/screenshots/env-manager-ai-activity.png" alt="허용과 차단 결과가 표시되는 값 없는 AI Broker 활동 기록" /></td>
+  </tr>
+</table>
 
 터미널에서 직접 설치할 수도 있습니다.
 
@@ -113,31 +149,29 @@ copilot plugin install env-manager@env-manager
 ```
 </details>
 
-먼저 Env Manager 앱에 프로젝트를 등록하고 새 에이전트 세션에서 자연스럽게 요청하세요.
+먼저 Env Manager에 프로젝트를 등록하고 새 에이전트 세션에서 자연스럽게 요청하세요.
 
 ```text
 이 프로젝트 env 구조를 값 없이 점검해줘.
 Database 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
 GPT_API_KEY를 local과 development에서 연결해줘.
+다른 등록 프로젝트의 GEMINI_API_KEY를 값을 보여주지 말고 여기서 재사용해줘.
 선택한 배포 키를 값은 보지 말고 AWS Secrets Manager의 my-service/staging 아래에 올려줘.
-이 프로젝트의 팀 공유 채널과 암호화 패키지를 내용은 보지 말고 확인해줘.
 ```
 
-AI가 전송을 요청해도 앱과 같은 보호 흐름을 사용합니다. 사용 가능한 Provider를 확인하고, 값이 없는 계획을 만든 뒤 로컬 broker가 적용합니다. 에이전트가 `gh`, Wrangler, AWS 명령 또는 Personal Pack 실행 파일을 직접 호출하지 않습니다.
+연동 도구가 프로젝트를 임의로 등록하지는 않습니다. 데스크톱 앱에 이미 등록된 프로젝트만 Broker가 허용합니다.
 
-연동 도구가 프로젝트를 임의로 등록하지는 않습니다. 데스크톱 앱에 이미 등록된 프로젝트만 broker가 허용합니다.
-
-## AI 접근 정책
+### AI 접근 정책
 
 | 정책 | 에이전트 접근 |
 | --- | --- |
-| `protected` | 이름과 값 존재 여부만 확인하고 실제 값은 차단 |
-| `unclassified` | 정책을 고르기 전까지 `protected`처럼 차단 |
-| `read-write` | 명시적인 broker 값 도구가 값을 읽거나 수정할 수 있음 |
+| `protected` | 이름과 값 존재 여부만 확인하고 명시적인 값 읽기는 차단합니다. |
+| `unclassified` | 정책을 정하기 전까지 `protected`와 동일하게 처리합니다. |
+| `read-write` | 전용 Broker 값 도구가 명시적으로 호출될 때 값을 읽거나 수정할 수 있습니다. |
 
-일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 이미 `read-write`로 지정된 키에 전용 값 도구가 호출된 경우에만 값이 반환될 수 있습니다.
+일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 연결 저장, 프로젝트 간 복사, Provider 전송, 값 없는 비교 같은 Rust 내부 작업은 접근 정책을 낮추지 않습니다.
 
-> Env Manager는 실수로 값을 노출할 가능성을 줄여주지만 운영체제 수준의 샌드박스나 운영용 Secret Manager의 대체재는 아닙니다. 값은 원래 env 파일에 남습니다. 전체 경계는 [SECURITY.md](SECURITY.md)를 확인하세요.
+> Env Manager는 실수로 값이 노출될 가능성을 줄여주지만 운영체제 수준의 샌드박스나 운영용 Secret Manager의 대체재는 아닙니다. 값은 원래 env 파일에 남습니다. 전체 경계는 [SECURITY.md](SECURITY.md)를 확인하세요.
 
 ## 설치
 
@@ -149,33 +183,22 @@ AI가 전송을 요청해도 앱과 같은 보호 흐름을 사용합니다. 사
 
 ### Windows 첫 실행
 
-현재 Windows 설치 파일은 아직 Authenticode 서명을 사용하지 않습니다.
-Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수
-있습니다. 공식 GitHub Release에서 받은 파일임을 확인한 경우에만
-**추가 정보 → 실행**을 선택하세요. 조직에서 관리하는 컴퓨터는 서명되지
-않은 앱 실행을 완전히 차단할 수도 있습니다. Windows 코드 서명은 예정되어
-있습니다.
+현재 Windows 설치 파일은 아직 Authenticode 서명을 사용하지 않습니다. Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수 있습니다. 공식 GitHub Release에서 받은 파일임을 확인한 경우에만 **추가 정보 → 실행**을 선택하세요. 조직 관리 컴퓨터는 서명되지 않은 앱을 완전히 차단할 수도 있습니다.
 
 ### macOS 첫 실행
 
-현재 공개 빌드는 ad-hoc 서명을 사용하며 아직 Apple 공증을 받지 않았습니다.
-따라서 이 저장소에서 받은 앱이어도 처음 실행할 때 macOS가
-**“Env Manager.app”을 열 수 없음** 경고를 표시할 수 있습니다.
+현재 공개 빌드는 ad-hoc 서명을 사용하며 아직 Apple 공증을 받지 않았습니다. 처음 실행할 때 macOS가 **“Env Manager.app”을 열 수 없음** 경고를 표시할 수 있습니다.
 
-공식 GitHub Release에서 받은 파일임을 확인했고 실행하려는 경우:
+공식 GitHub Release에서 받았고 실행하려는 경우:
 
-1. 경고 창에서 **휴지통으로 이동** 대신 **완료**를 누릅니다.
+1. **휴지통으로 이동** 대신 **완료**를 누릅니다.
 2. **시스템 설정 → 개인정보 보호 및 보안**을 엽니다.
-3. 아래쪽 **보안** 영역에서 Env Manager의 **확인 없이 열기**를 누릅니다.
-4. 사용자 인증을 마친 뒤 마지막 확인 창에서 **열기**를 누릅니다.
+3. **보안** 영역에서 Env Manager의 **확인 없이 열기**를 누릅니다.
+4. 인증한 뒤 마지막 확인 창에서 **열기**를 누릅니다.
 
-**확인 없이 열기**는 실행이 차단된 뒤 약 1시간 동안 표시됩니다. 다른
-경로에서 받은 파일에는 이 우회 절차를 사용하지 마세요. 자세한 내용은
-[확인되지 않은 개발자의 앱을 여는 Apple 공식 안내](https://support.apple.com/ko-kr/guide/mac-help/mh40616/mac)를 참고하세요.
-이 과정이 필요 없도록 Apple Developer ID 서명과 공증을 적용하는 작업은
-예정되어 있습니다.
+이 동작은 실행이 차단된 뒤 약 1시간 동안 표시됩니다. 다른 경로에서 받은 파일에는 우회 절차를 사용하지 마세요. [Apple 공식 안내](https://support.apple.com/ko-kr/guide/mac-help/mh40616/mac)를 참고하세요.
 
-앱은 고정된 GitHub Releases 주소에서 서명된 앱 업데이트만 확인합니다. 업데이트 확인 중 프로젝트 경로, env 메타데이터, 값을 보내지 않습니다.
+앱은 고정된 GitHub Releases 주소에서 서명된 업데이트만 확인합니다. 업데이트 확인 중 프로젝트 경로, env 메타데이터, 값이나 텔레메트리를 보내지 않습니다.
 
 ## 로컬 개발
 
@@ -200,7 +223,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.2`는 Folder Team Channel, AWS 암호화 Secret 대상, 사용자가 설치하는 Personal Provider Pack, 지원 AI 에이전트의 값 비노출 전송 흐름을 추가합니다. Authenticode로 서명된 Windows 빌드, 공증된 macOS 빌드, Windows ARM64와 더 많은 언어는 다음 단계입니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.2`는 Folder Team Channel, AWS 암호화 Secret 대상과 값 없는 비교, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용, 지원 AI 에이전트의 값 비노출 Provider 흐름을 추가합니다. Authenticode Windows 서명, macOS 공증, Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 

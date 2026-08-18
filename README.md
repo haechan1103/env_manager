@@ -1,7 +1,8 @@
 <div align="center">
   <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager logo" />
   <h1>Env Manager</h1>
-  <p><strong>Edit, link, share, and deploy the <code>.env</code> files your projects already use.</strong></p>
+  <p><strong>One place for every <code>.env</code> file your project already uses.</strong></p>
+  <p>Edit, link, share, and deploy environment variables—without changing your runtime or pasting protected values into AI chat.</p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
   <p>
     <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
@@ -12,9 +13,7 @@
   </p>
 </div>
 
-![Env Manager demo showing project overview, env editing, Cloudflare push, and AI tool connections](assets/screenshots/env-manager-demo.gif)
-
-Env Manager is a local-first desktop app for environment variables. Register a project and manage its existing `.env`, `.env.local`, `.env.development`, and nested app env files from one UI—without changing how the project starts or moving values into a proprietary vault.
+![Env Manager demo showing project overview, env editing, AWS deployment, team sharing, and AI tool connections](assets/screenshots/env-manager-demo.gif)
 
 <div align="center">
   <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS or Windows</strong></a>
@@ -24,67 +23,104 @@ Env Manager is a local-first desktop app for environment variables. Register a p
   <a href="SECURITY.md">Security model</a>
 </div>
 
-## Where it helps
+Env Manager is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
 
-| Situation | What Env Manager does |
-| --- | --- |
-| You are vibe-coding and an AI agent asks for API keys | Enter values in a masked desktop UI instead of pasting them into chat. The agent can still work with names, groups, and approved operations. |
-| A project has `.env.local`, `.env.development`, and multiple app env files | Discover and browse them together while preserving their real paths and source formatting. |
-| The same key must stay equal in two, three, or more files | Explicitly link those occurrences, then edit from any linked file and save once. |
-| A teammate needs only part of your local setup | Publish all or selected variables as a passphrase-encrypted package to a connected team folder, then review and merge it into the receiver's project. |
-| Local values must become deployment secrets | Select only the required variables and push them to GitHub Actions, Cloudflare Workers, AWS Secrets Manager, SSM Parameter Store, or a locally installed Provider Pack. |
-| Codex, Claude Code, or Copilot needs to update env structure | Connect the shared Agent Skill and redacted broker so protected values stay outside normal inspection responses. |
+## Why use it?
 
-![Env Manager project overview with Git safety and AI access status](assets/screenshots/env-manager-overview.png)
+| Keep your current workflow | Update linked values once | Work with AI more safely |
+| --- | --- | --- |
+| Your existing files and commands remain authoritative. Env Manager preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
+| **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
+| Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
 
-## Manage local env files without replacing them
+## New in 0.6.2
 
-- Discover supported env files only inside projects you register.
-- Edit the original files used by your existing framework and commands.
-- Organize variables with groups and descriptions while preserving unrelated comments and formatting.
-- Rename projects and env files with local display aliases; physical paths stay unchanged.
-- Mask values by default, copy variable names, and reveal values only through an explicit short-lived action.
-- Jump between groups when a file contains many variables.
-- Detect missing Git ignore coverage, already tracked env files, historical paths, and suspicious public frontend variable names.
-- `.env.example` variants remain intentionally excluded from discovery in the current release.
+- **Folder Team Channels:** use a mounted NAS or existing sync folder to exchange immutable encrypted packages, then review conflicts before applying.
+- **AWS deployment:** push to Secrets Manager or SSM `SecureString`, choose an optional KMS key, and compare selected values with redacted `same` / `different` / `unset` results.
+- **Remote Runtime checks:** compare a managed file with an allowlisted server target through an age-encrypted SSH verifier; the UI receives equality states, never remote values or hashes.
+- **Personal Provider Packs:** add a locally trusted stdin-only CLI integration without waiting for an Env Manager app release.
+- **AI provider operations:** supported agents can use the same opaque provider engine and value-free activity log as the desktop app.
+- **Cross-project reuse:** copy a protected same-name value between registered projects inside Rust without returning it to the agent or normal UI projection.
+
+## See the workflow
+
+### Organize real env files, not copies
+
+Projects and files can have local display names while their physical paths remain visible and unchanged. Values are masked by default; variable names can be copied, groups can be jumped to quickly, and linked rows show every file affected by Save.
 
 ![Env Manager file editor with masked synthetic values, linked files, and group navigation](assets/screenshots/env-manager-editor.png)
 
-## Push selected variables to deployment providers
+### Know what needs attention
 
-Env Manager can send a selected subset of one managed env file to a deployment provider. Official CLIs receive values through standard input, while AWS uses its SDK credential chain. Provider tokens and temporary env files are not stored by Env Manager.
+The project overview combines missing values, actionable AI-access reviews, parse warnings, Git leak checks, and managed-file navigation without reading values for those checks.
 
-| Provider | Supported targets | Target discovery |
+![Env Manager project overview with Git safety and AI access status](assets/screenshots/env-manager-overview.png)
+
+### Share the whole setup—or only the part a teammate needs
+
+<table>
+  <tr>
+    <td width="50%"><strong>Select files and variables</strong><br />Linked occurrences are selected together. Encrypted export never writes an intermediate plaintext ZIP.</td>
+    <td width="50%"><strong>Use a folder your team already has</strong><br />A mounted NAS or sync folder stores ciphertext packages only. Existing folder permissions remain authoritative.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-encrypted-share.png" alt="Choose individual variables for a passphrase-encrypted Env Manager package" /></td>
+    <td><img src="assets/screenshots/env-manager-team-sharing.png" alt="Browse immutable encrypted packages in a Folder Team Channel" /></td>
+  </tr>
+</table>
+
+Imports add missing variables, preserve receiver-only content, and make differing values explicit. Keep-local is the default; each unlinked conflict is independent, while an existing linked group stays one atomic choice.
+
+![Review target-file mapping and resolve encrypted package conflicts before applying](assets/screenshots/env-manager-import-conflicts.png)
+
+### Push selected values, then verify where verification is possible
+
+<table>
+  <tr>
+    <td width="50%"><strong>Cloudflare Workers</strong><br />Detect the nearest Wrangler config, verify login/account/Worker access, and send selected Worker Secrets through stdin.</td>
+    <td width="50%"><strong>AWS Secrets Manager and SSM</strong><br />Use the local AWS profile or SSO chain, verify account and Region, select KMS, and check equality without displaying values.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-cloudflare-push.png" alt="Push selected masked variables to a Cloudflare Worker through Wrangler" /></td>
+    <td><img src="assets/screenshots/env-manager-aws-compare.png" alt="Push selected variables to AWS and compare deployment values with redacted results" /></td>
+  </tr>
+</table>
+
+For a server env file outside a project, an administrator can install the fixed Env Manager Verifier and allowlist a target and variable names. Env Manager sends an age-encrypted stdin frame over SSH and runs only the fixed verifier command.
+
+![Compare selected local variables with an allowlisted server Runtime through the encrypted verifier](assets/screenshots/env-manager-runtime-compare.png)
+
+Provider push is always explicit and one-way. GitHub and Cloudflare secret values cannot be read back, so Env Manager does not pretend to verify them. AWS and registered Runtime targets expose a separate comparison operation that returns only equality states. Unselected remote entries are never deleted.
+
+## Supported deployment targets
+
+| Provider | Supported target | How the destination is found |
 | --- | --- | --- |
 | GitHub Actions | Repository or deployment Environment secrets and configuration variables | Detects the nearest Git worktree and GitHub `origin`, lists accessible repositories and Environments through `gh`, and can explicitly create an Environment. |
-| Cloudflare Workers | Worker secrets for the default Worker or a configured Wrangler environment | Detects the nearest `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`, including Worker name and configured `env.*` names. |
-| AWS Secrets Manager | One encrypted secret per selected variable | Uses the local AWS profile/SSO credential chain, verifies the account and Region with STS, and optionally validates a customer-managed symmetric KMS key. |
+| Cloudflare Workers | Worker Secrets for the default Worker or a configured Wrangler environment | Detects the nearest `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`, then checks the active Wrangler account and Worker access. |
+| AWS Secrets Manager | One encrypted secret per selected variable | Uses the local AWS profile/SSO credential chain, verifies identity and Region with STS, and supports an optional customer-managed symmetric KMS key. |
 | AWS SSM Parameter Store | One `SecureString` parameter per selected variable | Uses the same AWS preflight and optional KMS key, with a configurable path prefix. |
-| Personal Provider Pack | A target declared by a locally installed `provider.json` | Runs the declared non-shell executable directly and sends each value only through standard input. Packs are local and separately removable. |
+| Remote Runtime | Equality check against one allowlisted server target | Uses a project-shared, value-free target definition and a separately installed fixed SSH Verifier. It does not upload or edit the server file. |
+| Personal Provider Pack | A target declared by a locally installed `provider.json` | Runs the declared non-shell executable directly and sends values only through standard input. Packs stay on this computer and can be removed independently. |
 
-![Push selected masked variables to a Cloudflare Worker through Wrangler](assets/screenshots/env-manager-cloudflare-push.png)
-
-This is an explicit, one-way push—not remote secret synchronization. Env Manager cannot read secret values back, compare local and remote values, or delete unselected remote entries. Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) first, or configure a local AWS profile/SSO session for AWS targets. Third-party Provider Packs are local trust decisions: review their executable and manifest before installing them.
-
-## Share a full setup or only selected variables
-
-- **Standard ZIP:** portable plaintext export for trusted local handling.
-- **Encrypted export:** an `age`-compatible, passphrase-protected package with no plaintext intermediate archive.
-- **Full or partial scope:** share every managed file, selected files, or individual variables. Linked occurrences are selected together.
-- **Safe import:** add missing variables, keep unrelated receiver content, and resolve differing local values before applying.
-- **Folder Team Channels:** connect a mounted NAS or sync-client folder, publish a new immutable encrypted package, and review packages from teammates without configuring a vendor-specific integration.
-- Existing folder permissions stay authoritative. Env Manager reports read-only or unavailable folders and never changes ACLs, mounts, or storage accounts.
-- The passphrase is never saved or recoverable by Env Manager. Transfer the package and passphrase through separate trusted channels.
-
-![Choose individual variables for a passphrase-encrypted Env Manager package](assets/screenshots/env-manager-encrypted-share.png)
+Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) before using those providers. AWS uses credentials already configured for the AWS SDK. Review a third-party Provider Pack's manifest and executable before installing it.
 
 ## Connect your AI coding agent
 
-The same independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The desktop app detects supported tools and installs their Env Manager connection from **AI tool connections**.
+One independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The app detects supported tools and installs or updates their Env Manager connection.
 
-![Env Manager connections for Codex, Claude Code, and GitHub Copilot](assets/screenshots/env-manager-ai-integrations.png)
+<table>
+  <tr>
+    <td width="50%"><strong>One connection screen</strong><br />See detection, installed bundle version, update state, and active protection layer per tool.</td>
+    <td width="50%"><strong>Value-free activity history</strong><br />See broker structure checks, value-read attempts, mutations, provider checks, and allowed/blocked results. Values and value fragments are never logged.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/env-manager-ai-integrations.png" alt="Env Manager connections for Codex, Claude Code, and GitHub Copilot" /></td>
+    <td><img src="assets/screenshots/env-manager-ai-activity.png" alt="Value-free AI broker activity with allowed and blocked outcomes" /></td>
+  </tr>
+</table>
 
-You can also install from a terminal:
+You can also install the integration from a terminal:
 
 <details>
   <summary><strong>Codex</strong></summary>
@@ -119,25 +155,23 @@ Register the project in Env Manager first, start a new agent session, and ask na
 Inspect this project's env structure without reading values.
 Create a Database group and add an empty DATABASE_URL variable.
 Link GPT_API_KEY across local and development.
+Reuse this registered project's GEMINI_API_KEY here without showing it to me.
 Push the selected deployment keys to AWS Secrets Manager under my-service/staging without showing their values.
-List this project's team channels and encrypted packages without reading their contents.
 ```
 
-Agent-initiated deployment follows the same redacted flow as the app: list available providers, prepare a value-free plan, then apply it through the local broker. The agent does not invoke `gh`, Wrangler, AWS commands, or Personal Pack executables itself.
+The integration never registers arbitrary projects. Only projects already registered in the desktop app are accepted by the broker.
 
-The integration never registers arbitrary projects on its own. Only projects already registered in the desktop app are accepted by the broker.
-
-## AI access policies
+### AI access policies
 
 | Policy | Agent access |
 | --- | --- |
-| `protected` | Key name and value presence only; the value is blocked |
-| `unclassified` | Blocked like `protected` until you choose a policy |
-| `read-write` | Explicit broker value tools may read or update the value |
+| `protected` | The agent can see the name and whether a value exists; explicit value reads are blocked. |
+| `unclassified` | Treated like `protected` until you choose a policy. |
+| `read-write` | A dedicated broker value tool may read or update the value when explicitly invoked. |
 
-Normal structure inspection never returns values, including `read-write` values. A value can be returned only when a dedicated value tool is called for a key already marked `read-write`.
+Normal structure inspection never returns values, including `read-write` values. Internal operations such as linked saves, cross-project copies, provider pushes, and redacted comparisons do not downgrade this policy.
 
-> Env Manager reduces accidental exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
+> Env Manager reduces accidental value exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
 
 ## Install
 
@@ -149,31 +183,22 @@ Download the installer for your computer from [GitHub Releases](https://github.c
 
 ### Windows first launch
 
-The Windows installer is not yet Authenticode-signed. Microsoft Defender SmartScreen
-may show **Windows protected your PC**. Proceed only if the installer came from the
-official GitHub Release: choose **More info → Run anyway**. An organization-managed
-computer may block unsigned applications completely. Windows code signing is planned.
+The Windows installer is not yet Authenticode-signed. Microsoft Defender SmartScreen may show **Windows protected your PC**. Proceed only if the installer came from the official GitHub Release: choose **More info → Run anyway**. An organization-managed computer may block unsigned applications completely.
 
 ### macOS first launch
 
-The current public build uses ad-hoc signing and is not yet notarized by Apple. macOS
-may therefore show **“Env Manager.app” Not Opened** on first launch even when the app
-was downloaded from this repository.
+The current public build uses ad-hoc signing and is not yet notarized by Apple. macOS may show **“Env Manager.app” Not Opened** on first launch.
 
 If you trust the download from the official GitHub Release:
 
-1. Choose **Done** in the warning instead of **Move to Trash**.
+1. Choose **Done** instead of **Move to Trash**.
 2. Open **System Settings → Privacy & Security**.
-3. Scroll to **Security** and choose **Open Anyway** for Env Manager.
-4. Authenticate when prompted, then choose **Open** in the final confirmation.
+3. In **Security**, choose **Open Anyway** for Env Manager.
+4. Authenticate, then choose **Open** in the final confirmation.
 
-The **Open Anyway** action is available for about one hour after a blocked launch.
-Do not bypass this protection for a copy obtained from any other source. See
-[Apple's guidance for opening an app from an unidentified developer](https://support.apple.com/guide/mac-help/mh40616/mac).
-Developer ID signing and notarization, which will remove this workaround from the
-normal installation flow, are planned.
+The action is available for about one hour after a blocked launch. Do not bypass this protection for a copy obtained elsewhere. See [Apple's official guidance](https://support.apple.com/guide/mac-help/mh40616/mac).
 
-Env Manager checks the fixed GitHub Releases endpoint for signed app updates. It does not send project paths, env metadata, or values during an update check.
+Env Manager checks one fixed GitHub Releases endpoint for signed app updates. It sends no project path, env metadata, value, or telemetry during the check.
 
 ## Develop locally
 
@@ -198,7 +223,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.2` adds Folder Team Channels, AWS encrypted-secret targets, user-installable Personal Provider Packs, and the same opaque provider-push workflow for supported AI agents. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain next-stage work.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.2` adds Folder Team Channels, AWS encrypted-secret targets and redacted comparisons, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and the same opaque provider workflow for supported AI agents. Authenticode-signed Windows builds, notarized macOS builds, Windows ARM64, and additional languages remain planned.
 
 ## Community
 

@@ -151,6 +151,31 @@ export async function listDeploymentProviders(
         targetLabel: "Parameter path prefix",
         adapter: null,
       },
+      {
+        id: "remote-runtime",
+        name: "Remote Runtime",
+        available: true,
+        detail: "Encrypted SSH verifier",
+        source: "official",
+        version: "1.0.0",
+        targetLabel: "Runtime target",
+        adapter: null,
+      },
+      {
+        id: "demo-hosting",
+        name: "Demo Hosting CLI",
+        available: true,
+        detail: "Personal Provider Pack",
+        source: "personal",
+        version: "1.0.0",
+        targetLabel: "Environment",
+        adapter: {
+          cliVersion: "1.4.0",
+          profileId: "demo-hosting-v1",
+          adapterVersion: "1.0.0",
+          adapterSource: "personal",
+        },
+      },
     ];
   }
   return call("list_deployment_providers", { request: { projectId } });
@@ -283,12 +308,17 @@ export async function compareProviderValues(
   request: ProviderCompareRequest,
 ): Promise<ProviderCompareResult> {
   if (!isTauriRuntime) {
+    const runtimeTarget = request.provider === "remote-runtime"
+      ? "API server · staging"
+      : `${request.awsRegion ?? "ap-northeast-2"}/${request.awsPathPrefix ?? ""}`.replace(/\/$/, "");
     return {
       provider: request.provider,
-      target: `${request.awsRegion ?? "ap-northeast-2"}/${request.awsPathPrefix ?? ""}`.replace(/\/$/, ""),
+      target: runtimeTarget,
       items: request.keys.map((key, index) => ({
         key,
-        remoteName: request.awsPathPrefix ? `${request.awsPathPrefix}/${key}` : key,
+        remoteName: request.provider === "remote-runtime"
+          ? `sample-saas-staging/${key}`
+          : request.awsPathPrefix ? `${request.awsPathPrefix}/${key}` : key,
         state: index === 0 ? "same" : "different",
         resultCode: null,
       })),
@@ -298,7 +328,16 @@ export async function compareProviderValues(
 }
 
 export async function listRuntimeTargets(projectId: string): Promise<RuntimeTarget[]> {
-  if (!isTauriRuntime) return [];
+  if (!isTauriRuntime) {
+    return [{
+      id: "demo-runtime-staging",
+      displayName: "API server · staging",
+      sourceFile: ".env.development",
+      remoteTargetId: "sample-saas-staging",
+      recipient: "age1demo00000000000000000000000000000000000000000000000000000",
+      transport: { type: "ssh", destination: "deploy@example.com" },
+    }];
+  }
   return call("list_runtime_targets", { request: { projectId } });
 }
 
@@ -385,7 +424,18 @@ export async function exportEnvFiles(
 }
 
 export async function listTeamChannels(projectId: string): Promise<TeamChannel[]> {
-  if (!isTauriRuntime) return [];
+  if (!isTauriRuntime) {
+    return [{
+      id: "demo-folder-channel",
+      name: "Product team · shared folder",
+      readable: true,
+      publishable: true,
+      packages: [
+        { id: "01JTEAMDEMO000000000000002", byteSize: 18_432, modifiedAtMs: Date.UTC(2026, 7, 18, 4, 15) },
+        { id: "01JTEAMDEMO000000000000001", byteSize: 16_896, modifiedAtMs: Date.UTC(2026, 7, 17, 9, 30) },
+      ],
+    }];
+  }
   return call("list_team_channels", { request: { projectId } });
 }
 
