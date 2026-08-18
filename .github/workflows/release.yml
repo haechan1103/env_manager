@@ -19,7 +19,6 @@ jobs:
     runs-on: macos-14
     env:
       ENV_MANAGER_TARGET: ${{ matrix.target }}
-      OPTIONAL_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,37 +37,76 @@ jobs:
       - run: npm run validate:release-version
       - run: npm run validate:provider-catalog
 
-      - name: Import Apple signing certificate
-        if: ${{ env.OPTIONAL_APPLE_SIGNING_IDENTITY != '' }}
+      - name: Require Apple distribution credentials
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for name in \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY \
+            KEYCHAIN_PASSWORD \
+            APPLE_API_ISSUER \
+            APPLE_API_KEY \
+            APPLE_API_PRIVATE_KEY
+          do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing required Apple release secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          if [[ "$APPLE_SIGNING_IDENTITY" != "Developer ID Application:"* ]]; then
+            echo "APPLE_SIGNING_IDENTITY must name a Developer ID Application certificate." >&2
+            exit 1
+          fi
+
+      - name: Import Apple signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          rm certificate.p12
-          echo "APPLE_SIGNING_IDENTITY=$OPTIONAL_APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
-
-      - name: Configure ad-hoc signing fallback
-        if: ${{ env.OPTIONAL_APPLE_SIGNING_IDENTITY == '' }}
-        run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+          certificate_path="$RUNNER_TEMP/env-manager-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/env-manager-signing.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security default-keychain -s "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          if ! security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY" >/dev/null; then
+            echo "The imported keychain does not contain APPLE_SIGNING_IDENTITY." >&2
+            exit 1
+          fi
+          rm -f "$certificate_path"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "ENV_MANAGER_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
 
       - name: Configure Apple notarization
         env:
-          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
-          NOTARY_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          NOTARY_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
-          if [[ -n "$NOTARY_APPLE_ID" && -n "$NOTARY_APPLE_PASSWORD" && -n "$NOTARY_APPLE_TEAM_ID" ]]; then
-            echo "APPLE_ID=$NOTARY_APPLE_ID" >> "$GITHUB_ENV"
-            echo "APPLE_PASSWORD=$NOTARY_APPLE_PASSWORD" >> "$GITHUB_ENV"
-            echo "APPLE_TEAM_ID=$NOTARY_APPLE_TEAM_ID" >> "$GITHUB_ENV"
-          fi
+          private_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" | base64 --decode > "$private_key_path"
+          chmod 600 "$private_key_path"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY=$APPLE_API_KEY" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
+          echo "ENV_MANAGER_NOTARY_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
 
       - uses: tauri-apps/tauri-action@v1
         env:
@@ -108,9 +146,39 @@ jobs:
             - 같은 이름의 보호된 값을 에이전트에 노출하지 않고 등록 프로젝트 사이에서 재사용할 수 있습니다.
           generateReleaseNotes: true
           prerelease: false
-          releaseDraft: false
+          releaseDraft: true
           retryAttempts: 2
           args: --target ${{ matrix.target }} --bundles app,dmg --config src-tauri/tauri.release.conf.json
+
+      - name: Verify signed and notarized macOS bundles
+        run: |
+          bundle_root="target/${{ matrix.target }}/release/bundle"
+          app_path="$(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          dmg_path="$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          if [[ -z "$app_path" || -z "$dmg_path" ]]; then
+            echo "Expected macOS app and DMG bundles were not produced." >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign --verify --verbose=2 "$dmg_path"
+          codesign --display --verbose=4 "$app_path" 2>&1 | grep -F "Authority=Developer ID Application:" >/dev/null
+          spctl --assess --type execute --verbose=4 "$app_path"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
+          xcrun stapler validate "$app_path"
+          xcrun stapler validate "$dmg_path"
+          if command -v syspolicy_check >/dev/null 2>&1; then
+            syspolicy_check distribution "$app_path"
+          fi
+
+      - name: Remove temporary Apple signing material
+        if: ${{ always() }}
+        run: |
+          if [[ -n "${ENV_MANAGER_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$ENV_MANAGER_SIGNING_KEYCHAIN" || true
+          fi
+          if [[ -n "${ENV_MANAGER_NOTARY_KEY_PATH:-}" ]]; then
+            rm -f "$ENV_MANAGER_NOTARY_KEY_PATH"
+          fi
 
   windows:
     runs-on: windows-latest
@@ -172,7 +240,19 @@ jobs:
             - 같은 이름의 보호된 값을 에이전트에 노출하지 않고 등록 프로젝트 사이에서 재사용할 수 있습니다.
           generateReleaseNotes: true
           prerelease: false
-          releaseDraft: false
+          releaseDraft: true
           retryAttempts: 2
           updaterJsonPreferNsis: true
           args: --target x86_64-pc-windows-msvc --bundles nsis --config src-tauri/tauri.release.conf.json
+
+  publish-release:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_tag="v$(jq -r '.version' package.json)"
+          gh release edit "$release_tag" --draft=false --latest
