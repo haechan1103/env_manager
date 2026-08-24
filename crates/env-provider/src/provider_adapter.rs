@@ -266,10 +266,10 @@ fn cached_client_version(executable: &Path) -> Result<Version, ProviderPushError
         fingerprint: executable_fingerprint(executable)?,
     };
     let cache = VERSION_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(cache) = cache.lock() {
-        if let Some(version) = cache.get(&key) {
-            return Ok(version.clone());
-        }
+    if let Ok(cache) = cache.lock()
+        && let Some(version) = cache.get(&key)
+    {
+        return Ok(version.clone());
     }
 
     let args = ["--version".into()];
