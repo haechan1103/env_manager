@@ -4,6 +4,9 @@
     "createUpdaterArtifacts": true,
     "macOS": {
       "hardenedRuntime": true
+    },
+    "windows": {
+      "signCommand": "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ../scripts/sign-windows-artifact.ps1 %1"
     }
   }
 }
