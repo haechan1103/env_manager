@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
@@ -34,6 +34,7 @@
       "Opaque cross-project value reuse",
       "Encrypted team-channel inspection",
       "Opaque deployment provider push",
+      "Value-hidden Expo EAS environment push",
       "Redacted AWS deployment-value comparison",
       "Encrypted registered Runtime comparison",
       "Personal Provider Pack authoring",
@@ -47,6 +48,7 @@
       "다른 등록 프로젝트의 GEMINI_API_KEY를 값 노출 없이 이 프로젝트에 복사해줘.",
       "이 프로젝트의 팀 공유 채널과 받은 암호화 패키지를 값 없이 확인해줘.",
       "선택한 환경변수를 AWS Secrets Manager에 값 노출 없이 올려줘.",
+      "EXPO_PUBLIC 키를 EAS development, preview, production에 값 노출 없이 올려줘.",
       "AWS에 배포된 값이 로컬과 같은지 실제 값 없이 확인해줘.",
       "등록된 서버 Runtime 값이 로컬과 같은지 값 노출 없이 확인해줘.",
       "이 CLI용 Personal Provider Pack을 만들어줘."
