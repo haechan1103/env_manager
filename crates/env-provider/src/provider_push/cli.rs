@@ -66,11 +66,11 @@ fn suppress_console_window(_command: &mut Command) {}
 
 pub(crate) fn find_cli(name: &str, root: &Path) -> Option<PathBuf> {
     let mut candidates = Vec::new();
-    if name == "wrangler" {
+    if matches!(name, "wrangler" | "eas") {
         candidates.push(root.join("node_modules/.bin").join(if cfg!(windows) {
-            "wrangler.cmd"
+            format!("{name}.cmd")
         } else {
-            "wrangler"
+            name.to_owned()
         }));
     }
     let executable_names = if cfg!(windows) {
@@ -101,8 +101,11 @@ pub(crate) fn find_cli(name: &str, root: &Path) -> Option<PathBuf> {
                 candidates.push(directory.join(executable));
             }
         }
-        if name == "wrangler" && cfg!(windows) {
-            candidates.push(base.home_dir().join("AppData/Roaming/npm/wrangler.cmd"));
+        if matches!(name, "wrangler" | "eas") && cfg!(windows) {
+            candidates.push(
+                base.home_dir()
+                    .join(format!("AppData/Roaming/npm/{name}.cmd")),
+            );
         }
     }
     if !cfg!(windows) {

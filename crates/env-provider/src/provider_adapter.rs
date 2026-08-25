@@ -31,6 +31,7 @@ pub enum AdapterSource {
 pub enum AdapterStrategy {
     GhSecretSetV1,
     WranglerSecretBulkV1,
+    EasEnvSetPromptV1,
 }
 
 #[derive(Debug, Clone)]
@@ -310,7 +311,7 @@ fn executable_fingerprint(executable: &Path) -> Result<FileFingerprint, Provider
         .ok()
         .and_then(|path| std::fs::metadata(path).ok());
     let package_metadata =
-        wrangler_package_json(executable).and_then(|path| std::fs::metadata(path).ok());
+        node_cli_package_json(executable).and_then(|path| std::fs::metadata(path).ok());
     Ok(FileFingerprint {
         executable_len: executable_metadata.len(),
         executable_modified_nanos: modified_nanos(&executable_metadata),
@@ -321,12 +322,25 @@ fn executable_fingerprint(executable: &Path) -> Result<FileFingerprint, Provider
     })
 }
 
-fn wrangler_package_json(executable: &Path) -> Option<PathBuf> {
+fn node_cli_package_json(executable: &Path) -> Option<PathBuf> {
     let bin = executable.parent()?;
     if bin.file_name()?.to_string_lossy() != ".bin" {
         return None;
     }
-    Some(bin.parent()?.join("wrangler/package.json"))
+    let packages = bin.parent()?;
+    let executable_name = executable.file_name()?.to_string_lossy();
+    let package = match executable_name
+        .strip_suffix(".cmd")
+        .or_else(|| executable_name.strip_suffix(".bat"))
+        .or_else(|| executable_name.strip_suffix(".exe"))
+        .unwrap_or(&executable_name)
+    {
+        "wrangler" => "wrangler",
+        "eas" => "eas-cli",
+        _ => return None,
+    };
+    let path = packages.join(package).join("package.json");
+    path.is_file().then_some(path)
 }
 
 fn modified_nanos(metadata: &Metadata) -> u128 {
@@ -341,6 +355,7 @@ fn provider_id(provider: OfficialProviderId) -> &'static str {
     match provider {
         OfficialProviderId::GithubActions => "github-actions",
         OfficialProviderId::CloudflareWorkers => "cloudflare-workers",
+        OfficialProviderId::ExpoEas => "expo-eas",
         OfficialProviderId::AwsSecretsManager => "aws-secrets-manager",
         OfficialProviderId::AwsSsmParameterStore => "aws-ssm-parameter-store",
     }
@@ -373,6 +388,10 @@ mod tests {
         assert_eq!(
             parse_client_version(b"wrangler 4.115.0\n"),
             Some(Version::new(4, 115, 0))
+        );
+        assert_eq!(
+            parse_client_version(b"eas-cli/22.2.0 darwin-arm64 node-v24.8.0\n"),
+            Some(Version::new(22, 2, 0))
         );
         assert_eq!(parse_client_version(b"not a version"), None);
     }

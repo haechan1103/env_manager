@@ -8,7 +8,9 @@ import type {
   CloudflareAccessContext,
   DeploymentProviderId,
   DeploymentProviderStatus,
-  GitHubEntryKind,
+  EasTargetContext,
+  EasAccessContext,
+  ProviderEntryKind,
   ProviderCompareResult,
   ProviderPushReceipt,
   ProjectProjection,
@@ -23,7 +25,7 @@ interface Props {
   onNotice: (message: string) => void;
 }
 
-type Selection = Record<string, { selected: boolean; kind: GitHubEntryKind }>;
+type Selection = Record<string, { selected: boolean; kind: ProviderEntryKind }>;
 
 export function ProviderPushModal({ projectId, projection, onClose, onError, onNotice }: Props) {
   const { locale, t } = useI18n();
@@ -49,6 +51,12 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
   const [cloudflareAccess, setCloudflareAccess] = useState<CloudflareAccessContext | null>(null);
   const [loadingCloudflareAccess, setLoadingCloudflareAccess] = useState(false);
   const [cloudflareAccessError, setCloudflareAccessError] = useState(false);
+  const [easTarget, setEasTarget] = useState<EasTargetContext | null>(null);
+  const [easProject, setEasProject] = useState("");
+  const [easEnvironments, setEasEnvironments] = useState<string[]>([]);
+  const [loadingEasTarget, setLoadingEasTarget] = useState(false);
+  const [easAccess, setEasAccess] = useState<EasAccessContext | null>(null);
+  const [easAccessError, setEasAccessError] = useState(false);
   const [personalTarget, setPersonalTarget] = useState("");
   const [installingPack, setInstallingPack] = useState(false);
   const [removingPack, setRemovingPack] = useState(false);
@@ -106,6 +114,15 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
   useEffect(() => setComparison(null), [provider, awsProfile, awsRegion, awsPathPrefix]);
 
   useEffect(() => {
+    setSelection((current) => Object.fromEntries(Object.entries(current).map(([key, item]) => [key, {
+      ...item,
+      kind: provider === "expo-eas"
+        ? (item.kind === "plaintext" ? "plaintext" : "sensitive")
+        : (item.kind === "variable" && provider === "github-actions" ? "variable" : "secret"),
+    }])));
+  }, [provider]);
+
+  useEffect(() => {
     if (!uiReady || provider !== "remote-runtime") return;
     let active = true;
     void api.listRuntimeTargets(projectId)
@@ -135,6 +152,34 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
       .finally(() => {
         if (active) setDetectingRepository(false);
       });
+    return () => { active = false; };
+  }, [file, projectId, provider, uiReady]);
+
+  useEffect(() => {
+    if (!uiReady || provider !== "expo-eas") return;
+    let active = true;
+    setLoadingEasTarget(true);
+    setEasTarget(null);
+    setEasProject("");
+    setEasEnvironments([]);
+    setEasAccess(null);
+    setEasAccessError(false);
+    void api.detectEasTarget(projectId, file)
+      .then(async (target) => {
+        if (!active) return;
+        setEasTarget(target);
+        const detectedProject = target.project ?? target.projectId ?? "";
+        setEasProject(detectedProject);
+        setEasEnvironments(target.environments);
+        const access = await api.inspectEasAccess(projectId, file, detectedProject || null);
+        if (active) setEasAccess(access);
+      })
+      .catch(() => {
+        if (!active) return;
+        setEasAccess(null);
+        setEasAccessError(true);
+      })
+      .finally(() => { if (active) setLoadingEasTarget(false); });
     return () => { active = false; };
   }, [file, projectId, provider, uiReady]);
 
@@ -304,7 +349,7 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
   );
   const selected = variables
     .filter((variable) => selection[variable.key]?.selected)
-    .map((variable) => ({ key: variable.key, kind: selection[variable.key]?.kind ?? "secret" }));
+    .map((variable) => ({ key: variable.key, kind: selection[variable.key]?.kind ?? (provider === "expo-eas" ? "sensitive" : "secret") }));
   const available = isRemoteRuntime
     ? runtimeTargets.length > 0
     : providers.find((item) => item.id === provider)?.available ?? false;
@@ -314,6 +359,8 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
     ? /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repository)
     : provider === "cloudflare-workers"
       ? /^[A-Za-z0-9._-]+$/.test(worker)
+      : provider === "expo-eas"
+        ? easProject.trim().length > 0 && easEnvironments.length > 0 && easTarget !== null
       : isAwsProvider
         ? awsPathPrefix.length <= 400
         : isRemoteRuntime
@@ -328,7 +375,8 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
     && cloudflareAccess.targetState === "accessible"
   );
   const awsReady = !isAwsProvider || (awsAccess !== null && !loadingAwsAccess);
-  const valid = available && selected.length > 0 && targetValid && githubEnvironmentReady && cloudflareReady && awsReady;
+  const easReady = provider !== "expo-eas" || (!loadingEasTarget && easTarget !== null && easAccess !== null);
+  const valid = available && selected.length > 0 && targetValid && githubEnvironmentReady && cloudflareReady && awsReady && easReady;
 
   const resetRuntimeTargetDraft = () => {
     setRuntimeDisplayName("");
@@ -444,6 +492,8 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         githubEnvironment: provider === "github-actions" && githubEnvironment !== "__new__" ? githubEnvironment.trim() || null : null,
         worker: provider === "cloudflare-workers" ? worker.trim() : null,
         cloudflareEnvironment: provider === "cloudflare-workers" ? cloudflareEnvironment.trim() || null : null,
+        easProject: provider === "expo-eas" ? easProject.trim() || null : null,
+        easEnvironments: provider === "expo-eas" ? easEnvironments : [],
         personalTarget: currentProvider?.source === "personal" ? personalTarget.trim() || null : null,
         awsProfile: isAwsProvider ? awsProfile.trim() || null : null,
         awsRegion: isAwsProvider ? awsRegion.trim() || null : null,
@@ -499,7 +549,8 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
           const id = item.id as DeploymentProviderId;
           const status = providers.find((candidate) => candidate.id === id);
           const mark = id === "github-actions" ? "GH"
-            : id === "cloudflare-workers" ? "CF"
+              : id === "cloudflare-workers" ? "CF"
+              : id === "expo-eas" ? "EA"
               : id === "aws-secrets-manager" ? "AS"
                 : id === "aws-ssm-parameter-store" ? "SS"
                   : id === "remote-runtime" ? "RT" : "P";
@@ -637,6 +688,42 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
               failed={cloudflareAccessError}
               t={t}
             />
+          </>
+        ) : provider === "expo-eas" ? (
+          <>
+            <label>
+              <span>{t("push.easProject")}</span>
+              <input value={easProject} readOnly placeholder="travel-pieces" />
+              {loadingEasTarget ? (
+                <span className="target-loading" role="status"><span className="spinner" />{t("push.detectingEas")}</span>
+              ) : easTarget?.configPath ? (
+                <small className="field-help">{t("push.easDetected", { path: easTarget.configPath })}</small>
+              ) : (
+                <small className="field-error">{t("push.easTargetMissing")}</small>
+              )}
+              {!loadingEasTarget && easAccess && (
+                <small className="field-help">{t("push.easAccessReady", { project: easAccess.project })}</small>
+              )}
+              {!loadingEasTarget && easAccessError && easTarget && (
+                <small className="field-error">{t("push.easAccessFailed")}</small>
+              )}
+            </label>
+            <fieldset className="eas-environment-options">
+              <legend>{t("push.easEnvironments")}</legend>
+              {(easTarget?.environments ?? []).map((environment) => (
+                <label key={environment}>
+                  <input
+                    type="checkbox"
+                    checked={easEnvironments.includes(environment)}
+                    onChange={(event) => setEasEnvironments((current) => event.target.checked
+                      ? [...new Set([...current, environment])]
+                      : current.filter((item) => item !== environment))}
+                  />
+                  <span>{environment}</span>
+                </label>
+              ))}
+              <small>{t("push.easEnvironmentHelp")}</small>
+            </fieldset>
           </>
         ) : isAwsProvider ? (
           <>
@@ -793,7 +880,7 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
             const allSelected = variables.filter((item) => item.valueState === "present").every((item) => selection[item.key]?.selected);
             setSelection(Object.fromEntries(variables.map((item) => [item.key, {
               selected: item.valueState === "present" && !allSelected,
-              kind: selection[item.key]?.kind ?? "secret",
+              kind: selection[item.key]?.kind ?? (provider === "expo-eas" ? "sensitive" : "secret"),
             }])));
           }}>{t("push.selectAll")}</button>
         </header>
@@ -808,7 +895,7 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
                 checked={selection[variable.key]?.selected ?? false}
                 onChange={(event) => setSelection((current) => ({
                   ...current,
-                  [variable.key]: { selected: event.target.checked, kind: current[variable.key]?.kind ?? "secret" },
+                  [variable.key]: { selected: event.target.checked, kind: current[variable.key]?.kind ?? (provider === "expo-eas" ? "sensitive" : "secret") },
                 }))}
               />
               <span className="push-variable-name"><code>{variable.key}</code><small>{variable.valueState === "empty" ? t("push.empty") : t("push.valuePresent")}</small></span>
@@ -820,12 +907,28 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
                     ...current,
                     [variable.key]: {
                       selected: current[variable.key]?.selected ?? false,
-                      kind: event.target.value as GitHubEntryKind,
+                      kind: event.target.value as ProviderEntryKind,
                     },
                   }))}
                 >
                   <option value="secret">Secret</option>
                   <option value="variable">Variable</option>
+                </select>
+              ) : provider === "expo-eas" ? (
+                <select
+                  aria-label={t("push.kindFor", { key: variable.key })}
+                  value={selection[variable.key]?.kind ?? "sensitive"}
+                  onChange={(event) => setSelection((current) => ({
+                    ...current,
+                    [variable.key]: {
+                      selected: current[variable.key]?.selected ?? false,
+                      kind: event.target.value as ProviderEntryKind,
+                    },
+                  }))}
+                >
+                  <option value="sensitive">Sensitive</option>
+                  <option value="plaintext">Plain text</option>
+                  {!variable.key.startsWith("EXPO_PUBLIC_") && <option value="secret">Secret</option>}
                 </select>
               ) : <span className="secret-only-badge">{provider === "cloudflare-workers" ? t("push.workerSecret") : isAwsProvider ? t("push.awsSecretType") : isRemoteRuntime ? t("runtimeTarget.encryptedCompare") : t("push.stdinSecret")}</span>}
             </label>
@@ -852,6 +955,9 @@ export function ProviderPushModal({ projectId, projection, onClose, onError, onN
         <p>{t(isRemoteRuntime ? "runtimeTarget.networkBody" : "push.networkBody")}</p>
         {provider === "github-actions" && Object.values(selection).some((item) => item.kind === "variable") && (
           <p className="provider-variable-warning">{t("push.variableVisible")}</p>
+        )}
+        {provider === "expo-eas" && (
+          <p className="provider-variable-warning">{t("push.easVisibilityHelp")}</p>
         )}
       </div>
       {comparison && (

@@ -9,10 +9,10 @@ const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const identifier = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const date = /^\d{4}-\d{2}-\d{2}$/;
 const supportStates = new Set(["implemented", "planned"]);
-const transports = new Set(["cli", "sdk", "remote-verifier"]);
-const valueTransports = new Set(["stdin", "in-process-sdk", "age-stdin"]);
+const transports = new Set(["cli", "cli-pty", "sdk", "remote-verifier"]);
+const valueTransports = new Set(["stdin", "hidden-interactive-prompt", "in-process-sdk", "age-stdin"]);
 const runtimeProbes = new Set(["semantic-version", "not-implemented", "sdk-config-chain", "fixed-protocol"]);
-const strategies = new Set(["gh-secret-set-v1", "wrangler-secret-bulk-v1"]);
+const strategies = new Set(["gh-secret-set-v1", "wrangler-secret-bulk-v1", "eas-env-set-prompt-v1"]);
 
 exactKeys(catalog, [
   "schemaVersion",
@@ -70,8 +70,9 @@ for (const provider of catalog.providers) {
     assert(typeof profile.versionRequirement === "string" && profile.versionRequirement.length > 0, `${provider.id} profile needs a version requirement`);
   }
 
-  if (provider.transport === "cli") {
-    assert(provider.valueTransport === "stdin", `${provider.id} CLI values must use stdin`);
+  if (provider.transport === "cli" || provider.transport === "cli-pty") {
+    const expectedValueTransport = provider.transport === "cli" ? "stdin" : "hidden-interactive-prompt";
+    assert(provider.valueTransport === expectedValueTransport, `${provider.id} CLI value transport does not match its process transport`);
     assert(provider.client.runtimeProbe !== "not-implemented", `${provider.id} implemented CLI needs a runtime probe`);
     assert(provider.client.profiles.length > 0, `${provider.id} implemented CLI needs a compatibility profile`);
   } else if (provider.transport === "sdk") {

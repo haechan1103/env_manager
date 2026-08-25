@@ -6,11 +6,11 @@ use env_core::ProviderValue;
 use serde::Serialize;
 use zeroize::Zeroizing;
 
-use super::error::{ProviderPushError, invalid_target};
+use super::error::{ProviderPushError, invalid_request, invalid_target};
 use super::model::{
     AWS_SECRETS_MANAGER_ID, AWS_SSM_PARAMETER_STORE_ID, OfficialProviderId, ProviderCompareRequest,
-    ProviderCompareResult, ProviderComparisonItem, ProviderComparisonState, ProviderPushRequest,
-    ProviderPushResult,
+    ProviderCompareResult, ProviderComparisonItem, ProviderComparisonState, ProviderEntryKind,
+    ProviderPushRequest, ProviderPushResult,
 };
 
 const MAX_KMS_ALIASES: usize = 500;
@@ -49,6 +49,15 @@ pub(super) fn prepare(
     provider: OfficialProviderId,
     request: &ProviderPushRequest,
 ) -> Result<PreparedAwsProvider, ProviderPushError> {
+    if request
+        .selections
+        .iter()
+        .any(|selection| selection.kind != ProviderEntryKind::Secret)
+    {
+        return Err(invalid_request(
+            "AWS Secrets Manager와 SSM에는 Secret 유형만 전송할 수 있습니다.",
+        ));
+    }
     let profile = validate_optional_profile(request.aws_profile.as_deref())?;
     let region = validate_optional_region(request.aws_region.as_deref())?;
     let prefix = validate_prefix(request.aws_path_prefix.as_deref())?.to_owned();

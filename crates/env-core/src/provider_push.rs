@@ -4,7 +4,7 @@ use zeroize::Zeroizing;
 ///
 /// The type intentionally has no `Debug`, `Display`, or serialization implementation.
 /// It may cross only the in-process core-to-Tauri boundary before being written to a
-/// provider CLI's standard input.
+/// a provider's privileged stdin or hidden-prompt transport.
 pub struct ProviderValue {
     key: String,
     value: Zeroizing<String>,

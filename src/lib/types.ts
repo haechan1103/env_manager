@@ -5,7 +5,7 @@ export type AgentProtection = "broker" | "guarded" | "inactive";
 export type AgentIntegrationBlocker = "tool-not-found" | "broker-unavailable" | "bundle-unavailable";
 export type GitSafetyState = "protected" | "needs-attention" | "not-repository" | "unavailable";
 export type DeploymentProviderId = string;
-export type GitHubEntryKind = "secret" | "variable";
+export type ProviderEntryKind = "secret" | "variable" | "plaintext" | "sensitive";
 export type AdapterSource = "bundled" | "local-repair" | "personal";
 export type DeploymentProviderSource = "official" | "personal";
 export type CloudflareAuthState = "authenticated" | "not-authenticated" | "unavailable";
@@ -51,6 +51,19 @@ export interface CloudflareTargetContext {
   environmentAccountIds: Record<string, string>;
 }
 
+export interface EasTargetContext {
+  project: string | null;
+  projectId: string | null;
+  environments: string[];
+  configPath: string | null;
+}
+
+export interface EasAccessContext {
+  project: string;
+  projectId: string;
+  adapter: AdapterStatus;
+}
+
 export interface CloudflareAccessContext {
   authState: CloudflareAuthState;
   authType: string | null;
@@ -73,11 +86,13 @@ export interface AwsAccessContext {
 export interface ProviderPushRequest {
   provider: DeploymentProviderId;
   file: string;
-  selections: Array<{ key: string; kind: GitHubEntryKind }>;
+  selections: Array<{ key: string; kind: ProviderEntryKind }>;
   repository: string | null;
   githubEnvironment: string | null;
   worker: string | null;
   cloudflareEnvironment: string | null;
+  easProject: string | null;
+  easEnvironments: string[];
   personalTarget: string | null;
   awsProfile: string | null;
   awsRegion: string | null;

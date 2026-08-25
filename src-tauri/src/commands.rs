@@ -97,6 +97,14 @@ pub struct CloudflareAccessRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EasAccessRequest {
+    project_id: String,
+    file: String,
+    project: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AwsAccessRequest {
     profile: Option<String>,
     region: Option<String>,
@@ -410,6 +418,42 @@ pub async fn detect_cloudflare_target(
 }
 
 #[tauri::command]
+pub async fn detect_eas_target(
+    request: CloudflareTargetRequest,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::EasTargetContext> {
+    let service = runtime.service(&request.project_id)?;
+    let root = service.root().to_path_buf();
+    let file = request.file;
+    tauri::async_runtime::spawn_blocking(move || provider_push::detect_eas_target(&root, &file))
+        .await
+        .map_err(|_| provider_task_interrupted())?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn inspect_eas_access(
+    request: EasAccessRequest,
+    app: AppHandle,
+    runtime: State<'_, AppRuntime>,
+) -> CommandResult<provider_push::EasAccessContext> {
+    let service = runtime.service(&request.project_id)?;
+    let root = service.root().to_path_buf();
+    let app_data = provider_app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_push::inspect_eas_access(
+            &root,
+            &app_data,
+            &request.file,
+            request.project.as_deref(),
+        )
+    })
+    .await
+    .map_err(|_| provider_task_interrupted())?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn inspect_cloudflare_access(
     request: CloudflareAccessRequest,
     app: AppHandle,
@@ -599,6 +643,10 @@ fn provider_destination(request: &ProviderPushRequest) -> String {
             (Some(worker), Some(environment)) => format!("{worker} · {environment}"),
             (Some(worker), None) => worker.clone(),
             _ => "cloudflare-workers".to_owned(),
+        },
+        "expo-eas" => match &request.eas_project {
+            Some(project) => format!("{} · {}", project, request.eas_environments.join(", ")),
+            None => "expo-eas".to_owned(),
         },
         "aws-secrets-manager" | "aws-ssm-parameter-store" => {
             let region = request.aws_region.as_deref().unwrap_or("default-region");

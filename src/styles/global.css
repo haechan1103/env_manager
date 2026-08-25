@@ -686,6 +686,11 @@ select:focus-visible {
 .provider-target-form label:first-child { grid-column: 1 / -1; }
 .provider-target-form label span em { margin-left: 4px; color: var(--faint); font-style: normal; font-weight: 500; }
 .provider-target-form .field-help { display: block; margin-top: 5px; }
+.eas-environment-options { grid-column: 1 / -1; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.eas-environment-options legend { padding: 0 5px; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.eas-environment-options label { display: inline-flex; align-items: center; gap: 7px; margin-right: 16px; }
+.eas-environment-options input { width: auto; }
+.eas-environment-options small { display: block; margin-top: 9px; color: var(--faint); }
 .runtime-target-actions { display: flex; align-items: center; gap: 8px; }
 .runtime-target-editor { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
 .runtime-target-editor > button { align-self: end; justify-self: start; }

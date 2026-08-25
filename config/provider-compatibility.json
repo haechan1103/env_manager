@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "3.2.0",
-  "providerProtocolVersion": "0.4.0",
-  "lastReviewed": "2026-08-17",
+  "catalogVersion": "3.3.0",
+  "providerProtocolVersion": "0.5.0",
+  "lastReviewed": "2026-08-25",
   "providers": [
     {
       "id": "github-actions",
@@ -66,6 +66,40 @@
         "https://developers.cloudflare.com/workers/wrangler/commands/workers/",
         "https://developers.cloudflare.com/workers/configuration/secrets/",
         "https://developers.cloudflare.com/workers/wrangler/configuration/"
+      ]
+    },
+    {
+      "id": "expo-eas",
+      "displayName": "Expo EAS",
+      "adapterVersion": "1.0.0",
+      "uiSupport": "implemented",
+      "agentSupport": "implemented",
+      "transport": "cli-pty",
+      "client": {
+        "name": "eas",
+        "runtimeProbe": "semantic-version",
+        "profiles": [
+          {
+            "id": "eas-env-set-prompt-v1",
+            "strategy": "eas-env-set-prompt-v1",
+            "versionRequirement": ">=22.0.0,<23.0.0"
+          }
+        ]
+      },
+      "valueTransport": "hidden-interactive-prompt",
+      "capabilities": [
+        "project-environment-variable",
+        "multi-environment",
+        "plaintext-visibility",
+        "sensitive-visibility",
+        "secret-visibility",
+        "project-discovery",
+        "environment-discovery"
+      ],
+      "officialDocs": [
+        "https://docs.expo.dev/eas/environment-variables/",
+        "https://docs.expo.dev/eas/environment-variables/manage/",
+        "https://github.com/expo/eas-cli/blob/main/packages/eas-cli/src/commands/env/set.ts"
       ]
     },
     {
