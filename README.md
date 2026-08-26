@@ -189,13 +189,19 @@ Normal structure inspection never returns values, including `read-write` values.
 
 Download the installer for your computer from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
 
-- Windows 10/11 x64: `x64-setup.exe`
+- Windows 10/11 x64 beta (unsigned): `x64-setup.exe`
 - Apple Silicon (M1 or newer): `aarch64` DMG
 - Intel Mac: `x86_64` DMG
 
 ### Windows first launch
 
-The Windows installer is not yet Authenticode-signed. Microsoft Defender SmartScreen may show **Windows protected your PC**. Proceed only if the installer came from the official GitHub Release: choose **More info → Run anyway**. An organization-managed computer may block unsigned applications completely.
+The Windows installer is a free **unsigned beta** while the project applies for open-source code signing. Microsoft Defender SmartScreen may show **Windows protected your PC**.
+
+1. Download `x64-setup.exe` only from the [official GitHub Release](https://github.com/haechan1103/env_manager/releases/latest).
+2. Open the installer. If SmartScreen appears, select **More info**.
+3. Confirm the app name is Env Manager, then select **Run anyway**.
+
+Do not continue if the file came from another site or its details are unexpected. An organization-managed computer may block unsigned applications completely; in that case, contact its administrator instead of bypassing the policy.
 
 ### macOS first launch
 
@@ -228,7 +234,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.5` adds Expo EAS deployment through a hidden-value prompt on top of the signed desktop builds, Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows. Windows ARM64 and additional languages remain planned.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.5` ships signed and notarized macOS builds plus an explicitly unsigned Windows x64 beta, and adds Expo EAS deployment through a hidden-value prompt on top of Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows. Windows code signing, ARM64, and additional languages remain planned.
 
 ## Community
 
