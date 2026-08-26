@@ -47,6 +47,15 @@
 - AWS authentication, Region, permission, or KMS failure: report the stable failure
   and ask the user to fix their local AWS Profile/SSO session or target choice. Never
   request credentials or a secret value in chat.
+- `EAS_CONFIG_NOT_FOUND`: ask the user to connect the source env file to an app
+  directory containing `eas.json`. Never guess another workspace package.
+- `EAS_ACCESS_UNAVAILABLE`: ask the user to run the official EAS login flow locally
+  or obtain access to the detected project. Never request an Expo token in chat.
+- `EAS_PROJECT_MISMATCH`: report the requested project name and ask the user to fix
+  the local EAS project/account selection. Never push to the project that happened to
+  be logged in.
+- `EAS_PUBLIC_SECRET_UNSUPPORTED`: use `sensitive` or, only when explicitly requested,
+  `plaintext` for `EXPO_PUBLIC_`; do not retry as `secret`.
 - Provider comparison `unverifiable`: explain that the target does not return values
   or lacks the fixed remote verifier. For Runtime comparison, list registered targets
   and use only the returned target ID and source file. Never infer equality from a

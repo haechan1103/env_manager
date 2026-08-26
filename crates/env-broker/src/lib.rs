@@ -264,6 +264,9 @@ struct PlanProviderPushArgs {
     github_environment: Option<String>,
     worker: Option<String>,
     cloudflare_environment: Option<String>,
+    eas_project: Option<String>,
+    #[serde(default)]
+    eas_environments: Vec<String>,
     personal_target: Option<String>,
     aws_profile: Option<String>,
     aws_region: Option<String>,
@@ -815,6 +818,14 @@ impl Broker {
         if unique.len() != keys.len() {
             return Err(EnvError::invalid("같은 변수를 중복 선택할 수 없습니다."));
         }
+        let destination = if args.provider == "expo-eas" {
+            match args.eas_project.as_deref() {
+                Some(project) => format!("{project} [{}]", args.eas_environments.join(", ")),
+                None => "대상 미지정".to_owned(),
+            }
+        } else {
+            args.provider.clone()
+        };
         let request = ProviderPushRequest {
             provider: args.provider.clone(),
             file: args.file.clone(),
@@ -823,6 +834,8 @@ impl Broker {
             github_environment: args.github_environment,
             worker: args.worker,
             cloudflare_environment: args.cloudflare_environment,
+            eas_project: args.eas_project,
+            eas_environments: args.eas_environments,
             personal_target: args.personal_target,
             aws_profile: args.aws_profile,
             aws_region: args.aws_region,
@@ -833,10 +846,10 @@ impl Broker {
             &service,
             PlannedOperation::ProviderPush(request),
             format!(
-                "{}의 환경변수 {}개를 {} Provider로 값 노출 없이 전송합니다.",
+                "{}의 환경변수 {}개를 {} 대상으로 값 노출 없이 전송합니다.",
                 args.file,
                 keys.len(),
-                args.provider
+                destination
             ),
             vec![args.file],
             keys,
@@ -1613,7 +1626,7 @@ pub fn tool_definitions() -> Value {
                             "type": "object",
                             "properties": {
                                 "key": { "type": "string" },
-                                "kind": { "type": "string", "enum": ["secret", "variable"] }
+                                "kind": { "type": "string", "enum": ["secret", "variable", "plaintext", "sensitive"] }
                             },
                             "required": ["key", "kind"],
                             "additionalProperties": false
@@ -1623,6 +1636,11 @@ pub fn tool_definitions() -> Value {
                     "githubEnvironment": { "type": ["string", "null"] },
                     "worker": { "type": ["string", "null"] },
                     "cloudflareEnvironment": { "type": ["string", "null"] },
+                    "easProject": { "type": ["string", "null"] },
+                    "easEnvironments": {
+                        "type": "array", "maxItems": 10,
+                        "items": { "type": "string" }
+                    },
                     "personalTarget": { "type": ["string", "null"] }
                     ,"awsProfile": { "type": ["string", "null"] }
                     ,"awsRegion": { "type": ["string", "null"] }

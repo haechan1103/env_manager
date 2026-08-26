@@ -1,6 +1,6 @@
 ---
 name: manage-project-env
-description: Safely inspect, manage, deploy, compare, and coordinate encrypted sharing of environment variables in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, manage groups or variables, link occurrences, reuse a same-name value from another project, inspect Folder Team Channels, push selected variables to GitHub, Cloudflare, AWS, or a locally installed Personal Provider Pack, check whether selected AWS deployment values match without revealing them, or author a new stdin-only Provider Pack for an unsupported CLI. Trigger for natural requests mentioning `.env`, env groups, environment variables, local/development linkage, cross-project key reuse, encrypted team packages, NAS/shared folders, deployment secrets, provider CLIs, AWS Secrets Manager, SSM, KMS, remote value equality, or Env Manager.
+description: Safely inspect, manage, deploy, compare, and coordinate encrypted sharing of environment variables in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, manage groups or variables, link occurrences, reuse a same-name value from another project, inspect Folder Team Channels, push selected variables to GitHub, Cloudflare, Expo EAS, AWS, or a locally installed Personal Provider Pack, check deployed values without revealing them, or author a new stdin-only Provider Pack for an unsupported CLI. Trigger for natural requests mentioning `.env`, Expo/EAS environments, env groups, environment variables, local/development linkage, cross-project key reuse, encrypted team packages, NAS/shared folders, deployment secrets, provider CLIs, AWS Secrets Manager, SSM, KMS, remote value equality, or Env Manager.
 ---
 
 # Manage Project Env
@@ -60,21 +60,27 @@ interpreter, or generic editing tools.
 - Call `list_deployment_providers` first. Work only with an `available` official or
   locally installed provider returned by the Broker.
 - Require a concrete source file, variable names, provider, and destination. Ask one
-  concise question when repository, Worker, AWS Region/path, or Personal Pack target
-  is missing or ambiguous.
+  concise question when repository, Worker, EAS project/environments, AWS Region/path,
+  or Personal Pack target is missing or ambiguous.
 - Call `plan_provider_push` with semantic fields only, verify its redacted paths,
   names, destination, and impact, then call `apply_plan` immediately when it matches
   the current request.
 - Keep every selection `secret` unless the user explicitly requests a GitHub
-  configuration Variable. Cloudflare, AWS, and Personal Packs accept secret entries
-  only.
+  configuration Variable or an Expo EAS visibility. Cloudflare, AWS, and Personal
+  Packs accept secret entries only.
+- For Expo EAS, pass `easProject` and one or more `easEnvironments`. Prefer
+  `sensitive` for public app identifiers unless the user requests `plaintext`.
+  Never use `secret` for `EXPO_PUBLIC_` variables: EAS Build must be able to read
+  them and the final client bundle exposes them. A public prefix is not permission
+  to upload unrelated credential-like keys.
 - For AWS, pass an optional profile, an explicit or locally configured Region, an
   optional resource path prefix, and an optional symmetric KMS key alias/ARN. Treat
   KMS as encryption configuration for Secrets Manager or SSM `SecureString`, not as
   a separate env-value destination.
-- Never call `gh`, Wrangler, AWS CLI, a Personal Pack executable, raw HTTP, or shell
-  directly. Protected and unclassified values use the same opaque Broker plan and do
-  not require a policy downgrade.
+- Never call `gh`, Wrangler, `eas`, AWS CLI, a Personal Pack executable, raw HTTP, or
+  shell directly. Protected and unclassified values use the same opaque Broker plan
+  and do not require a policy downgrade. The Broker supplies EAS values only through
+  the CLI's hidden interactive prompt; do not reproduce `--value` commands.
 - Report attempted, succeeded, and failed names only. A completed push is not proof
   of current equality and never implies continuing synchronization.
 

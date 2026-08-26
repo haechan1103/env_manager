@@ -31,7 +31,13 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 | --- | --- | --- |
 | Your existing files and commands remain authoritative. Env Manager preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
 | **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
-| Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
+| Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, Expo EAS, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
+
+## New in 0.6.5
+
+- **Expo EAS deployment:** send selected values to `development`, `preview`, and `production` through the EAS CLI hidden-value prompt. Values never enter command arguments, temporary files, or Env Manager output.
+- **Project-aware checks:** Env Manager detects the nearest EAS project, confirms the signed-in Expo account and project identity, and applies `Sensitive` or `Plain text` visibility per variable.
+- **AI-safe EAS operations:** Codex, Claude Code, and Copilot use the same redacted Broker plan and activity trail as the desktop app.
 
 ## New in 0.6.4
 
@@ -102,12 +108,13 @@ Provider push is always explicit and one-way. GitHub and Cloudflare secret value
 | --- | --- | --- |
 | GitHub Actions | Repository or deployment Environment secrets and configuration variables | Detects the nearest Git worktree and GitHub `origin`, lists accessible repositories and Environments through `gh`, and can explicitly create an Environment. |
 | Cloudflare Workers | Worker Secrets for the default Worker or a configured Wrangler environment | Detects the nearest `wrangler.jsonc`, `wrangler.json`, or `wrangler.toml`, then checks the active Wrangler account and Worker access. |
+| Expo EAS | Project variables across one or more EAS environments | Detects the nearest `eas.json`, verifies the logged-in project, and sends each value through the EAS CLI hidden prompt instead of `--value`. `EXPO_PUBLIC_` defaults to Sensitive and cannot be EAS Secret. |
 | AWS Secrets Manager | One encrypted secret per selected variable | Uses the local AWS profile/SSO credential chain, verifies identity and Region with STS, and supports an optional customer-managed symmetric KMS key. |
 | AWS SSM Parameter Store | One `SecureString` parameter per selected variable | Uses the same AWS preflight and optional KMS key, with a configurable path prefix. |
 | Remote Runtime | Equality check against one allowlisted server target | Uses a project-shared, value-free target definition and a separately installed fixed SSH Verifier. It does not upload or edit the server file. |
 | Personal Provider Pack | A target declared by a locally installed `provider.json` | Runs the declared non-shell executable directly and sends values only through standard input. Packs stay on this computer and can be removed independently. |
 
-Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set) or [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk) before using those providers. AWS uses credentials already configured for the AWS SDK. Review a third-party Provider Pack's manifest and executable before installing it.
+Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set), [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk), or [EAS CLI](https://docs.expo.dev/eas/environment-variables/manage/) before using those providers. AWS uses credentials already configured for the AWS SDK. Review a third-party Provider Pack's manifest and executable before installing it.
 
 ## Connect your AI coding agent
 
@@ -161,6 +168,7 @@ Create a Database group and add an empty DATABASE_URL variable.
 Link GPT_API_KEY across local and development.
 Reuse this registered project's GEMINI_API_KEY here without showing it to me.
 Push the selected deployment keys to AWS Secrets Manager under my-service/staging without showing their values.
+Push EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY to EAS development, preview, and production as Sensitive without showing its value.
 ```
 
 The integration never registers arbitrary projects. Only projects already registered in the desktop app are accepted by the broker.
@@ -220,7 +228,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.4` adds Developer ID signing and Apple notarization for macOS on top of the Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows introduced in `0.6.2`. Authenticode-signed Windows builds, Windows ARM64, and additional languages remain planned.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.5` adds Expo EAS deployment through a hidden-value prompt on top of the signed desktop builds, Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows. Windows ARM64 and additional languages remain planned.
 
 ## Community
 

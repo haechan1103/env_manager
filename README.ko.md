@@ -31,7 +31,13 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
 | --- | --- | --- |
 | 기존 파일과 실행 명령이 계속 기준입니다. 경로, 주석, 순서와 관련 없는 형식을 보존합니다. | 같은 키를 2개, 3개 이상의 파일에서 명시적으로 연결합니다. 어느 파일에서 수정해도 연결된 모든 위치에 한 번에 저장합니다. | Codex, Claude Code, Copilot이 값이 제거된 로컬 Broker를 통해 구조를 확인하고 허용된 작업을 수행합니다. 보호된 값은 일반 조회 응답에 포함되지 않습니다. |
 | **env 파일을 커밋하지 않고 공유** | **고른 값만 배포** | **Git 실수를 먼저 발견** |
-| 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
+| 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, Expo EAS, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
+
+## 0.6.5의 새로운 기능
+
+- **Expo EAS 배포:** 선택한 값을 EAS CLI의 숨김 입력으로 `development`, `preview`, `production`에 보냅니다. 값은 명령 인자, 임시 파일, Env Manager 출력에 들어가지 않습니다.
+- **프로젝트 단위 사전 확인:** 가장 가까운 EAS 프로젝트를 찾고 로그인한 Expo 계정과 프로젝트 식별자를 확인한 뒤, 변수마다 `Sensitive` 또는 `Plain text` 공개 범위를 적용합니다.
+- **AI에서도 같은 보호 흐름:** Codex, Claude Code, Copilot이 데스크톱 앱과 같은 값 비노출 Broker 계획과 활동 기록을 사용합니다.
 
 ## 0.6.4의 새로운 기능
 
@@ -102,12 +108,13 @@ Provider 전송은 항상 명시적으로 시작하는 단방향 작업입니다
 | --- | --- | --- |
 | GitHub Actions | 저장소 또는 배포 Environment의 Secret과 설정 Variable | 가장 가까운 Git worktree와 GitHub `origin`을 기본 감지하고, `gh`로 접근 가능한 저장소·Environment를 불러오며 Environment를 직접 생성할 수 있습니다. |
 | Cloudflare Workers | 기본 Worker 또는 Wrangler 환경의 Worker Secret | 가장 가까운 `wrangler.jsonc`, `wrangler.json`, `wrangler.toml`을 찾고 현재 Wrangler 계정과 Worker 접근을 확인합니다. |
+| Expo EAS | 하나 이상의 EAS 환경에 등록하는 프로젝트 변수 | 가장 가까운 `eas.json`과 로그인된 프로젝트를 확인하고, `--value` 대신 EAS CLI 숨김 입력창으로 값을 전달합니다. `EXPO_PUBLIC_`는 Sensitive가 기본이며 EAS Secret으로는 올릴 수 없습니다. |
 | AWS Secrets Manager | 선택 변수마다 암호화 Secret 하나 | 로컬 AWS Profile/SSO 체인을 사용하고 STS로 계정·Region을 확인하며 선택적 고객 관리형 대칭 KMS 키를 지원합니다. |
 | AWS SSM Parameter Store | 선택 변수마다 `SecureString` 하나 | 같은 AWS 사전 검사를 사용하며 경로 prefix와 선택적 KMS 키를 지원합니다. |
 | Remote Runtime | 허용된 서버 대상과 값 일치 여부 확인 | Git으로 공유할 수 있는 값 없는 대상 정의와 별도 설치한 고정 SSH Verifier를 사용합니다. 서버 파일을 업로드하거나 수정하지 않습니다. |
 | Personal Provider Pack | 로컬 `provider.json`이 선언한 대상 | 셸 없이 선언된 실행 파일을 직접 실행하고 값은 표준 입력으로만 보냅니다. Pack은 이 컴퓨터에만 설치되고 독립적으로 제거할 수 있습니다. |
 
-GitHub와 Cloudflare를 사용하기 전 [`gh`](https://cli.github.com/manual/gh_secret_set) 또는 [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk)를 설치하고 로그인하세요. AWS는 기존 AWS SDK 자격 증명을 사용합니다. 외부 Provider Pack은 설치 전에 manifest와 실행 파일을 직접 확인해야 합니다.
+GitHub, Cloudflare, Expo EAS를 사용하기 전 [`gh`](https://cli.github.com/manual/gh_secret_set), [Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/#secret-bulk), [EAS CLI](https://docs.expo.dev/eas/environment-variables/manage/)를 설치하고 로그인하세요. AWS는 기존 AWS SDK 자격 증명을 사용합니다. 외부 Provider Pack은 설치 전에 manifest와 실행 파일을 직접 확인해야 합니다.
 
 ## AI 코딩 에이전트 연결
 
@@ -161,6 +168,7 @@ Database 그룹을 만들고 DATABASE_URL 빈 변수를 추가해줘.
 GPT_API_KEY를 local과 development에서 연결해줘.
 다른 등록 프로젝트의 GEMINI_API_KEY를 값을 보여주지 말고 여기서 재사용해줘.
 선택한 배포 키를 값은 보지 말고 AWS Secrets Manager의 my-service/staging 아래에 올려줘.
+EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 값은 보지 말고 EAS development, preview, production에 Sensitive로 올려줘.
 ```
 
 연동 도구가 프로젝트를 임의로 등록하지는 않습니다. 데스크톱 앱에 이미 등록된 프로젝트만 Broker가 허용합니다.
@@ -220,7 +228,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.4`는 `0.6.2`의 Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 macOS Developer ID 서명과 Apple 공증을 추가합니다. Authenticode Windows 서명, Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.5`는 서명된 데스크톱 빌드, Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 숨김 입력 기반 Expo EAS 배포를 추가합니다. Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 

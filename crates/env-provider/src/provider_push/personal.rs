@@ -7,7 +7,7 @@ use crate::personal_provider::ResolvedPersonalProvider;
 
 use super::cli::run_with_stdin;
 use super::error::{ProviderPushError, invalid_target};
-use super::model::{GitHubEntryKind, ProviderPushRequest, ProviderPushResult};
+use super::model::{ProviderEntryKind, ProviderPushRequest, ProviderPushResult};
 
 pub(super) fn push(
     root: &Path,
@@ -18,7 +18,7 @@ pub(super) fn push(
     if request
         .selections
         .iter()
-        .any(|selection| selection.kind != GitHubEntryKind::Secret)
+        .any(|selection| selection.kind != ProviderEntryKind::Secret)
     {
         return Err(ProviderPushError {
             code: "PERSONAL_PROVIDER_KIND_UNSUPPORTED",

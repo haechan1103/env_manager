@@ -13,7 +13,7 @@ use crate::provider_adapter::{AdapterStrategy, ResolvedAdapter};
 use super::cli::run_with_stdin;
 use super::error::{ProviderPushError, invalid_request, invalid_target};
 use super::model::{
-    CLOUDFLARE_WORKERS_ID, GitHubEntryKind, ProviderPushRequest, ProviderPushResult,
+    CLOUDFLARE_WORKERS_ID, ProviderEntryKind, ProviderPushRequest, ProviderPushResult,
 };
 use super::validation::{optional_target, validate_simple_target};
 
@@ -29,7 +29,7 @@ pub(super) fn push(
     if request
         .selections
         .iter()
-        .any(|selection| selection.kind != GitHubEntryKind::Secret)
+        .any(|selection| selection.kind != ProviderEntryKind::Secret)
     {
         return Err(invalid_request(
             "Cloudflare Workers에는 현재 Secret만 전송할 수 있습니다.",

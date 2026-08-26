@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn agent_bundle_version_is_independent_from_the_app_release() {
-        assert_eq!(agent_bundle_version(), "1.5.0");
+        assert_eq!(agent_bundle_version(), "1.6.0");
         assert_ne!(agent_bundle_version(), env!("CARGO_PKG_VERSION"));
     }
 

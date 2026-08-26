@@ -8,27 +8,31 @@ use crate::provider_adapter::AdapterStatus;
 pub enum OfficialProviderId {
     GithubActions,
     CloudflareWorkers,
+    ExpoEas,
     AwsSecretsManager,
     AwsSsmParameterStore,
 }
 
 pub const GITHUB_ACTIONS_ID: &str = "github-actions";
 pub const CLOUDFLARE_WORKERS_ID: &str = "cloudflare-workers";
+pub const EXPO_EAS_ID: &str = "expo-eas";
 pub const AWS_SECRETS_MANAGER_ID: &str = "aws-secrets-manager";
 pub const AWS_SSM_PARAMETER_STORE_ID: &str = "aws-ssm-parameter-store";
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum GitHubEntryKind {
+pub enum ProviderEntryKind {
     Secret,
     Variable,
+    Plaintext,
+    Sensitive,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSelection {
     pub key: String,
-    pub kind: GitHubEntryKind,
+    pub kind: ProviderEntryKind,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -41,6 +45,8 @@ pub struct ProviderPushRequest {
     pub github_environment: Option<String>,
     pub worker: Option<String>,
     pub cloudflare_environment: Option<String>,
+    pub eas_project: Option<String>,
+    pub eas_environments: Vec<String>,
     pub personal_target: Option<String>,
     pub aws_profile: Option<String>,
     pub aws_region: Option<String>,
@@ -134,6 +140,23 @@ pub struct CloudflareTargetContext {
     pub config_path: Option<String>,
     pub account_id: Option<String>,
     pub environment_account_ids: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EasTargetContext {
+    pub project: Option<String>,
+    pub project_id: Option<String>,
+    pub environments: Vec<String>,
+    pub config_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EasAccessContext {
+    pub project: String,
+    pub project_id: String,
+    pub adapter: AdapterStatus,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]

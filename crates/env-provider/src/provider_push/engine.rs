@@ -8,13 +8,14 @@ use crate::runtime_target::{self, REMOTE_RUNTIME_PROVIDER_ID};
 
 use super::aws;
 use super::cloudflare;
+use super::eas;
 use super::error::{ProviderPushError, invalid_target};
 use super::github;
 use super::model::{
     AWS_SECRETS_MANAGER_ID, AWS_SSM_PARAMETER_STORE_ID, CLOUDFLARE_WORKERS_ID,
-    DeploymentProviderSource, DeploymentProviderStatus, GITHUB_ACTIONS_ID, OfficialProviderId,
-    ProviderCompareRequest, ProviderCompareResult, ProviderComparisonItem, ProviderComparisonState,
-    ProviderPushRequest, ProviderPushResult,
+    DeploymentProviderSource, DeploymentProviderStatus, EXPO_EAS_ID, GITHUB_ACTIONS_ID,
+    OfficialProviderId, ProviderCompareRequest, ProviderCompareResult, ProviderComparisonItem,
+    ProviderComparisonState, ProviderPushRequest, ProviderPushResult,
 };
 use super::personal;
 
@@ -22,7 +23,23 @@ pub fn list(root: &Path, app_data: &Path) -> Vec<DeploymentProviderStatus> {
     let github = provider_adapter::resolve(OfficialProviderId::GithubActions, root, app_data);
     let cloudflare =
         provider_adapter::resolve(OfficialProviderId::CloudflareWorkers, root, app_data);
+    let eas_root = find_eas_root(root).unwrap_or_else(|| root.to_owned());
+    let expo_eas = provider_adapter::resolve(OfficialProviderId::ExpoEas, &eas_root, app_data);
     let mut providers = vec![
+        DeploymentProviderStatus {
+            id: EXPO_EAS_ID.to_owned(),
+            name: "Expo EAS".to_owned(),
+            available: expo_eas.is_ok(),
+            detail: if expo_eas.is_ok() {
+                "Compatible EAS CLI ready".to_owned()
+            } else {
+                "EAS CLI is missing, unavailable, or unsupported".to_owned()
+            },
+            source: DeploymentProviderSource::Official,
+            version: None,
+            target_label: Some("EAS project and environments".to_owned()),
+            adapter: expo_eas.as_ref().ok().map(AdapterStatus::from),
+        },
         DeploymentProviderStatus {
             id: GITHUB_ACTIONS_ID.to_owned(),
             name: "GitHub Actions".to_owned(),
@@ -126,6 +143,7 @@ pub fn push(
         PreparedProvider::Cloudflare(adapter) => {
             cloudflare::push(service.root(), request, values, adapter)
         }
+        PreparedProvider::ExpoEas(prepared) => eas::push(request, values, prepared),
         PreparedProvider::Personal(adapter) => {
             personal::push(service.root(), request, values, adapter)
         }
@@ -157,7 +175,7 @@ pub fn compare(
                 })?;
             runtime_target::compare(service.root(), target_id, &request.file, values)
         }
-        GITHUB_ACTIONS_ID | CLOUDFLARE_WORKERS_ID => Ok(ProviderCompareResult {
+        GITHUB_ACTIONS_ID | CLOUDFLARE_WORKERS_ID | EXPO_EAS_ID => Ok(ProviderCompareResult {
             provider: request.provider,
             target: "unreadable-secret-store".to_owned(),
             items: request
@@ -181,6 +199,7 @@ pub fn compare(
 enum PreparedProvider {
     Github(ResolvedAdapter),
     Cloudflare(ResolvedAdapter),
+    ExpoEas(eas::PreparedEasProvider),
     Personal(ResolvedPersonalProvider),
     Aws(aws::PreparedAwsProvider),
 }
@@ -207,6 +226,9 @@ fn prepare(
             cloudflare::preflight::ensure_access(&access)?;
             Ok(PreparedProvider::Cloudflare(adapter))
         }
+        EXPO_EAS_ID => {
+            eas::prepare(service.root(), app_data, request).map(PreparedProvider::ExpoEas)
+        }
         AWS_SECRETS_MANAGER_ID => {
             aws::prepare(OfficialProviderId::AwsSecretsManager, request).map(PreparedProvider::Aws)
         }
@@ -223,6 +245,40 @@ fn prepare(
             message: "지원하지 않는 Provider입니다.",
         }),
     }
+}
+
+fn find_eas_root(root: &Path) -> Option<std::path::PathBuf> {
+    if root.join("eas.json").is_file() {
+        return Some(root.to_owned());
+    }
+    let mut directories = vec![root.to_owned()];
+    while let Some(directory) = directories.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| {
+                    matches!(name.to_str(), Some("node_modules" | ".git" | "target"))
+                }) {
+                    continue;
+                }
+                if path.join("eas.json").is_file() {
+                    return Some(path);
+                }
+                if path
+                    .strip_prefix(root)
+                    .ok()
+                    .map_or(0, |relative| relative.components().count())
+                    < 3
+                {
+                    directories.push(path);
+                }
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

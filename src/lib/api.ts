@@ -9,6 +9,8 @@ import type {
   CodexAccess,
   CloudflareAccessContext,
   CloudflareTargetContext,
+  EasTargetContext,
+  EasAccessContext,
   AwsAccessContext,
   DeploymentProviderStatus,
   GitHubEnvironmentOptions,
@@ -132,6 +134,21 @@ export async function listDeploymentProviders(
         },
       },
       {
+        id: "expo-eas",
+        name: "Expo EAS",
+        available: true,
+        detail: "Compatible EAS CLI ready",
+        source: "official",
+        version: null,
+        targetLabel: "EAS project and environments",
+        adapter: {
+          cliVersion: "22.2.0",
+          profileId: "eas-env-set-prompt-v1",
+          adapterVersion: "1.0.0",
+          adapterSource: "bundled",
+        },
+      },
+      {
         id: "aws-secrets-manager",
         name: "AWS Secrets Manager",
         available: true,
@@ -248,6 +265,36 @@ export async function detectCloudflareTarget(
 ): Promise<CloudflareTargetContext> {
   if (!isTauriRuntime) return { worker: null, environments: [], configPath: null, accountId: null, environmentAccountIds: {} };
   return call("detect_cloudflare_target", { request: { projectId, file } });
+}
+
+export async function detectEasTarget(
+  projectId: string,
+  file: string,
+): Promise<EasTargetContext> {
+  if (!isTauriRuntime) {
+    return {
+      project: "travel-pieces",
+      projectId: "synthetic-project-id",
+      environments: ["development", "preview", "production"],
+      configPath: "apps/mobile/eas.json",
+    };
+  }
+  return call("detect_eas_target", { request: { projectId, file } });
+}
+
+export async function inspectEasAccess(
+  projectId: string,
+  file: string,
+  project: string | null,
+): Promise<EasAccessContext> {
+  if (!isTauriRuntime) {
+    return {
+      project: "@demo/travel-pieces",
+      projectId: "synthetic-project-id",
+      adapter: { cliVersion: "22.2.0", profileId: "eas-env-set-prompt-v1", adapterVersion: "1.0.0", adapterSource: "bundled" },
+    };
+  }
+  return call("inspect_eas_access", { request: { projectId, file, project } });
 }
 
 export async function inspectCloudflareAccess(

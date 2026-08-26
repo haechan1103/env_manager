@@ -8,10 +8,10 @@ use env_core::ProviderValue;
 use crate::provider_adapter::{self, AdapterStrategy, ResolvedAdapter};
 
 use super::cli::{background_command, provider_command, run_with_stdin};
-use super::error::{ProviderPushError, invalid_target};
+use super::error::{ProviderPushError, invalid_request, invalid_target};
 use super::model::{
-    GITHUB_ACTIONS_ID, GitHubEntryKind, GitHubEnvironmentOptions, GitHubRepositoryContext,
-    GitHubRepositoryOptions, OfficialProviderId, ProviderPushRequest, ProviderPushResult,
+    GITHUB_ACTIONS_ID, GitHubEnvironmentOptions, GitHubRepositoryContext, GitHubRepositoryOptions,
+    OfficialProviderId, ProviderEntryKind, ProviderPushRequest, ProviderPushResult,
 };
 use super::validation::{
     optional_target, source_directory, validate_repository, validate_simple_target,
@@ -143,11 +143,16 @@ pub(super) fn push(
         let kind = kinds
             .get(value.key())
             .copied()
-            .unwrap_or(GitHubEntryKind::Secret);
+            .unwrap_or(ProviderEntryKind::Secret);
         let mut args = vec![
             OsString::from(match kind {
-                GitHubEntryKind::Secret => "secret",
-                GitHubEntryKind::Variable => "variable",
+                ProviderEntryKind::Secret => "secret",
+                ProviderEntryKind::Variable => "variable",
+                _ => {
+                    return Err(invalid_request(
+                        "GitHub는 Secret 또는 Variable만 지원합니다.",
+                    ));
+                }
             }),
             OsString::from("set"),
             OsString::from(value.key()),
