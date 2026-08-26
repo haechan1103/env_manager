@@ -189,13 +189,19 @@ EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 값은 보지 말고 EAS development, previe
 
 [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest)에서 컴퓨터에 맞는 설치 파일을 받으세요.
 
-- Windows 10/11 x64: `x64-setup.exe`
+- Windows 10/11 x64 베타(미서명): `x64-setup.exe`
 - Apple Silicon(M1 이상): `aarch64` DMG
 - Intel Mac: `x86_64` DMG
 
 ### Windows 첫 실행
 
-현재 Windows 설치 파일은 아직 Authenticode 서명을 사용하지 않습니다. Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수 있습니다. 공식 GitHub Release에서 받은 파일임을 확인한 경우에만 **추가 정보 → 실행**을 선택하세요. 조직 관리 컴퓨터는 서명되지 않은 앱을 완전히 차단할 수도 있습니다.
+현재 Windows 설치 파일은 오픈소스 코드 서명을 신청하는 동안 무료로 배포하는 **미서명 베타**입니다. Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수 있습니다.
+
+1. [공식 GitHub Release](https://github.com/haechan1103/env_manager/releases/latest)에서 `x64-setup.exe`를 받습니다.
+2. 설치 파일을 열고 SmartScreen이 나타나면 **추가 정보**를 누릅니다.
+3. 앱 이름이 Env Manager인지 확인한 뒤 **실행**을 누릅니다.
+
+다른 사이트에서 받았거나 파일 정보가 예상과 다르면 실행하지 마세요. 조직에서 관리하는 컴퓨터는 미서명 앱을 완전히 차단할 수 있으며, 이때는 보안 정책을 우회하지 말고 관리자에게 문의해야 합니다.
 
 ### macOS 첫 실행
 
@@ -228,7 +234,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.5`는 서명된 데스크톱 빌드, Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 숨김 입력 기반 Expo EAS 배포를 추가합니다. Windows ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.5`는 서명·공증된 macOS 빌드와 명확히 표시된 Windows x64 미서명 베타를 배포하고, Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 숨김 입력 기반 Expo EAS 배포를 추가합니다. Windows 코드 서명, ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 
