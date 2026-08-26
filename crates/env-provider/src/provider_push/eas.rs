@@ -663,7 +663,7 @@ mod tests {
         let executable = directory.path().join("fake-eas.cmd");
         std::fs::write(
             &executable,
-            "@echo off\r\n<nul set /p \"=Variable value:\"\r\nset /p \"value=\"\r\nif \"%value%\"==\"synthetic-eas-pty-canary\" exit /b 0\r\nexit /b 1\r\n",
+            "@echo off\r\npowershell.exe -NoLogo -NoProfile -NonInteractive -Command \"[Console]::Out.Write('Variable value:'); [Console]::Out.Flush(); $value = [Console]::In.ReadLine(); if ($value -eq 'synthetic-eas-pty-canary') { exit 0 } else { exit 1 }\"\r\nexit /b %errorlevel%\r\n",
         )
         .expect("script");
         let args = set_args(
