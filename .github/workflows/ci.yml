@@ -64,6 +64,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: npm ci
+      - run: cargo test --workspace --locked
       - run: npm run tauri build -- --bundles nsis
       - name: Install Windows package and verify bundled broker
         shell: pwsh
@@ -87,5 +88,4 @@ jobs:
           if (-not $broker) { throw "Installed broker sidecar was not found" }
           & $broker.FullName --version
           if ($LASTEXITCODE -ne 0) { throw "Windows broker sidecar did not run" }
-      - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings

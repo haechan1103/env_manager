@@ -348,8 +348,9 @@ fn pty_command(executable: &Path, args: &[OsString]) -> CommandBuilder {
         let mut command = CommandBuilder::new("cmd.exe");
         command.args([
             OsString::from("/D"),
-            OsString::from("/S"),
+            OsString::from("/Q"),
             OsString::from("/C"),
+            OsString::from("call"),
         ]);
         command.arg(executable.as_os_str());
         command.args(args.iter());
