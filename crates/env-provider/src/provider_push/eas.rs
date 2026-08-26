@@ -23,6 +23,10 @@ use super::model::{
 use super::validation::{source_directory, validate_simple_target};
 
 const PROMPT: &[u8] = b"Variable value:";
+#[cfg(windows)]
+const CURSOR_POSITION_REQUEST: &[u8] = b"\x1b[6n";
+#[cfg(windows)]
+const CURSOR_POSITION_RESPONSE: &[u8] = b"\x1b[1;1R";
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(30);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_PREFLIGHT_OUTPUT: usize = 64 * 1024;
@@ -241,6 +245,13 @@ fn set_args(
 }
 
 fn execute_hidden_prompt(executable: &Path, root: &Path, args: &[OsString], value: &str) -> bool {
+    #[derive(Clone, Copy)]
+    enum PtyEvent {
+        Prompt,
+        #[cfg(windows)]
+        CursorPositionRequest,
+    }
+
     let system = native_pty_system();
     let pair = match system.openpty(PtySize {
         rows: 24,
@@ -276,21 +287,40 @@ fn execute_hidden_prompt(executable: &Path, root: &Path, args: &[OsString], valu
     let reader_thread = thread::spawn(move || {
         let mut chunk = Zeroizing::new([0_u8; 512]);
         let mut window = Zeroizing::new(Vec::<u8>::with_capacity(MAX_PROMPT_WINDOW));
-        let mut reported = false;
+        let mut prompt_reported = false;
+        #[cfg(windows)]
+        let mut cursor_reported = false;
         while let Ok(count) = reader.read(&mut *chunk) {
             if count == 0 {
                 break;
             }
-            if !reported {
+            if !prompt_reported {
                 window.extend_from_slice(&chunk[..count]);
+                #[cfg(windows)]
+                if !cursor_reported
+                    && window
+                        .windows(CURSOR_POSITION_REQUEST.len())
+                        .any(|candidate| candidate == CURSOR_POSITION_REQUEST)
+                {
+                    if sender.send(PtyEvent::CursorPositionRequest).is_err() {
+                        break;
+                    }
+                    cursor_reported = true;
+                }
                 if window
                     .windows(PROMPT.len())
                     .any(|candidate| candidate == PROMPT)
                 {
-                    let _ = sender.send(());
-                    reported = true;
+                    let _ = sender.send(PtyEvent::Prompt);
+                    prompt_reported = true;
                     window.zeroize();
                 } else if window.len() > MAX_PROMPT_WINDOW {
+                    #[cfg(windows)]
+                    let keep = PROMPT
+                        .len()
+                        .max(CURSOR_POSITION_REQUEST.len())
+                        .saturating_sub(1);
+                    #[cfg(not(windows))]
                     let keep = PROMPT.len().saturating_sub(1);
                     let discard = window.len().saturating_sub(keep);
                     window.drain(..discard);
@@ -302,8 +332,19 @@ fn execute_hidden_prompt(executable: &Path, root: &Path, args: &[OsString], valu
 
     let prompt_deadline = Instant::now() + PROMPT_TIMEOUT;
     let prompted = loop {
-        if receiver.recv_timeout(Duration::from_millis(50)).is_ok() {
-            break true;
+        match receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(PtyEvent::Prompt) => break true,
+            #[cfg(windows)]
+            Ok(PtyEvent::CursorPositionRequest) => {
+                // portable-pty opens ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR.
+                // ConPTY waits for this terminal response before forwarding the
+                // CLI prompt, so answer it without mixing it with the secret.
+                if writer.write_all(CURSOR_POSITION_RESPONSE).is_err() || writer.flush().is_err() {
+                    break false;
+                }
+                continue;
+            }
+            Err(_) => {}
         }
         if child.try_wait().ok().flatten().is_some() || Instant::now() >= prompt_deadline {
             break false;
