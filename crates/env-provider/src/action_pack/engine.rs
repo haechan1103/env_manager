@@ -313,9 +313,11 @@ mod tests {
 
     use super::*;
     use crate::action_pack::{
-        ActionPackManifest, CliActionProfile, CliResultPolicy, CliSecretTransport,
-        HttpActionMethod, HttpResultPolicy, HttpSecretBinding, HttpSecretSource, install,
+        ActionPackManifest, HttpActionMethod, HttpResultPolicy, HttpSecretBinding,
+        HttpSecretSource, install,
     };
+    #[cfg(unix)]
+    use crate::action_pack::{CliActionProfile, CliResultPolicy, CliSecretTransport};
 
     #[test]
     fn http_action_returns_only_allowlisted_metadata_even_when_the_body_echoes_the_secret() {
