@@ -1,7 +1,7 @@
 interface:
   display_name: "Manage Project Env"
-  short_description: "Manage, share, deploy, and compare registered environment variables"
-  default_prompt: "Use $manage-project-env to inspect, update, share, deploy, or compare registered deployment and Runtime environment configuration safely."
+  short_description: "Manage, share, deploy, and use registered environment variables safely"
+  default_prompt: "Use $manage-project-env to inspect, update, generate, share, deploy, compare, or run an installed Action Pack with registered environment configuration safely."
 dependencies:
   tools:
     - type: "mcp"

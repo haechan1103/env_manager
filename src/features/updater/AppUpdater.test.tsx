@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as updateApi from "./updateApi";
 import { I18nProvider } from "../../i18n";
 import { AppUpdater, localizedUpdateNotes } from "./AppUpdater";
+import { UPDATE_CHECK_INTERVAL_MS } from "./checkSchedule";
 
 vi.mock("./updateApi", () => ({
   currentAppVersion: vi.fn(async () => "0.4.0"),
@@ -46,6 +47,33 @@ describe("AppUpdater", () => {
     await act(async () => undefined);
 
     expect(screen.getByText("You are on the latest version.")).toBeInTheDocument();
+  });
+
+  it("rechecks quietly once per hour while the app remains open", async () => {
+    render(<AppUpdater />);
+
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(updateApi.checkForAppUpdate).toHaveBeenCalledTimes(1);
+
+    await act(async () => vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS));
+    expect(updateApi.checkForAppUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an already discovered update visible when an hourly check fails", async () => {
+    vi.mocked(updateApi.checkForAppUpdate)
+      .mockResolvedValueOnce({
+        currentVersion: "0.4.0",
+        version: "0.4.1",
+        notes: null,
+      })
+      .mockRejectedValueOnce(new Error("offline"));
+    render(<AppUpdater />);
+
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(screen.getByText("Env Manager 0.4.1")).toBeInTheDocument();
+
+    await act(async () => vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS));
+    expect(screen.getByText("Env Manager 0.4.1")).toBeInTheDocument();
   });
 
   it("shows only the Korean section of bilingual release notes in Korean", async () => {

@@ -106,7 +106,12 @@ pub fn is_env_candidate(name: &str) -> bool {
     if is_env_template(name) {
         return false;
     }
-    name == ".env" || name.starts_with(".env.") || name.ends_with(".env") || name.contains(".env.")
+    name == ".env"
+        || name.starts_with(".env.")
+        || name.ends_with(".env")
+        || name.contains(".env.")
+        || name == ".dev.vars"
+        || name.starts_with(".dev.vars.")
 }
 
 fn is_env_template(name: &str) -> bool {
@@ -139,6 +144,11 @@ mod tests {
         project.write(".env.local", "PORT=fake_4000\n");
         project.write("runtime.env", "PORT=fake_runtime\n");
         project.write("runtime.env.staging", "PORT=fake_staging\n");
+        project.write(".dev.vars", "PORT=fake_worker\n");
+        project.write(
+            "workers/api/.dev.vars.staging",
+            "PORT=fake_worker_staging\n",
+        );
         project.write(".env.example", "PORT=fake_example\n");
         project.write("sample.env", "PORT=fake_sample\n");
         project.write("runtime.env.template", "PORT=fake_template\n");
@@ -160,11 +170,13 @@ mod tests {
         assert_eq!(
             paths,
             vec![
+                ".dev.vars",
                 ".env",
                 ".env.local",
                 "apps/web/.env.dev",
                 "runtime.env",
-                "runtime.env.staging"
+                "runtime.env.staging",
+                "workers/api/.dev.vars.staging"
             ]
         );
     }
@@ -177,6 +189,8 @@ mod tests {
             "runtime.env",
             "runtime.env.production",
             "api.env.local",
+            ".dev.vars",
+            ".dev.vars.production",
         ] {
             assert!(is_env_candidate(supported), "{supported} should be managed");
         }
@@ -188,6 +202,8 @@ mod tests {
             "runtime.env.template",
             ".env.dist",
             ".envrc",
+            ".dev.vars.example",
+            "worker.dev.vars",
         ] {
             assert!(!is_env_candidate(excluded), "{excluded} should be excluded");
         }

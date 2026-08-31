@@ -314,7 +314,7 @@ fn validate_id(id: &str) -> Result<(), ProviderPushError> {
     if valid { Ok(()) } else { Err(invalid_pack()) }
 }
 
-fn validate_executable_candidate(candidate: &str) -> Result<(), ProviderPushError> {
+pub(crate) fn validate_executable_candidate(candidate: &str) -> Result<(), ProviderPushError> {
     validate_text(candidate, 1, 260)?;
     let path = Path::new(candidate);
     if !path.is_absolute() && (path.components().count() != 1 || candidate.contains(['/', '\\'])) {
@@ -358,7 +358,7 @@ fn validate_literal_argument(argument: &str, max: usize) -> Result<(), ProviderP
     Ok(())
 }
 
-fn validate_text(value: &str, min: usize, max: usize) -> Result<(), ProviderPushError> {
+pub(crate) fn validate_text(value: &str, min: usize, max: usize) -> Result<(), ProviderPushError> {
     if value.len() < min
         || value.len() > max
         || value.contains('\0')
@@ -397,21 +397,21 @@ fn placeholders(argument: &str) -> Result<Vec<String>, ProviderPushError> {
     Ok(values)
 }
 
-fn is_identifier(value: &str) -> bool {
+pub(crate) fn is_identifier(value: &str) -> bool {
     !value.is_empty()
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-fn is_kebab_identifier(value: &str) -> bool {
+pub(crate) fn is_kebab_identifier(value: &str) -> bool {
     is_identifier(value)
         && !value.starts_with('-')
         && !value.ends_with('-')
         && !value.contains("--")
 }
 
-fn find_executable(candidate: &str, root: &Path) -> Option<PathBuf> {
+pub(crate) fn find_executable(candidate: &str, root: &Path) -> Option<PathBuf> {
     let path = PathBuf::from(candidate);
     let resolved = if path.is_absolute() {
         path.is_file().then_some(path)
@@ -424,7 +424,10 @@ fn find_executable(candidate: &str, root: &Path) -> Option<PathBuf> {
     .then_some(resolved)
 }
 
-fn probe_version(executable: &Path, version_args: &[String]) -> Result<Version, ProviderPushError> {
+pub(crate) fn probe_version(
+    executable: &Path,
+    version_args: &[String],
+) -> Result<Version, ProviderPushError> {
     let metadata = fs::metadata(executable).map_err(|_| cli_unavailable())?;
     let key = VersionCacheKey {
         executable: executable.to_path_buf(),

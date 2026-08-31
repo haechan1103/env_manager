@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.6.0",
+  "version": "1.9.0",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
@@ -22,11 +22,12 @@
   "interface": {
     "displayName": "Env Manager",
     "shortDescription": "Manage registered env files through a redacted local broker.",
-    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted env management, encrypted team-channel inspection, opaque cross-project reuse, value-hidden deployment pushes, and redacted AWS or registered Runtime value checks.",
+    "longDescription": "Adds a portable Agent Skill and local MCP broker for redacted env management, encrypted team-channel inspection, opaque cross-project reuse, value-hidden deployment pushes, installed Action Pack execution, and redacted AWS or registered Runtime value checks.",
     "developerName": "haechan1103",
     "category": "Productivity",
     "capabilities": [
       "Redacted env inspection",
+      "Request-authorized current-project registration",
       "Request-authorized mutation plans",
       "Safe env file creation",
       "Group and variable structure",
@@ -38,6 +39,8 @@
       "Redacted AWS deployment-value comparison",
       "Encrypted registered Runtime comparison",
       "Personal Provider Pack authoring",
+      "Value-hidden Action Pack execution and authoring",
+      "Opaque stdin value generation and storage",
       "Multi-agent compatible workflow"
     ],
     "defaultPrompt": [
@@ -51,7 +54,9 @@
       "EXPO_PUBLIC 키를 EAS development, preview, production에 값 노출 없이 올려줘.",
       "AWS에 배포된 값이 로컬과 같은지 실제 값 없이 확인해줘.",
       "등록된 서버 Runtime 값이 로컬과 같은지 값 노출 없이 확인해줘.",
-      "이 CLI용 Personal Provider Pack을 만들어줘."
+      "이 CLI용 Personal Provider Pack을 만들어줘.",
+      "설치된 API 체크 Action을 값 노출 없이 실행해줘.",
+      "AUTH_SECRET을 로컬 생성기로 만든 뒤 값 노출 없이 저장해줘."
     ],
     "brandColor": "#16765A"
   },

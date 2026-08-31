@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
@@ -109,6 +110,32 @@ pub struct MutationSummary {
     pub keys: Vec<String>,
 }
 
+/// Value-free state captured before an opaque stdin value write.
+///
+/// The guard deliberately stores filesystem metadata rather than a digest of env
+/// bytes so the short-lived cross-process plan cannot become a durable value
+/// fingerprint.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedOpaqueValueWrite {
+    pub project_id: String,
+    pub file: String,
+    pub key: String,
+    pub affected_files: Vec<String>,
+    file_states: Vec<OpaqueFileState>,
+    manifest_state: OpaqueFileState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct OpaqueFileState {
+    relative_path: String,
+    byte_len: u64,
+    modified_before_epoch: bool,
+    modified_seconds: u64,
+    modified_nanoseconds: u32,
+}
+
 pub struct ProjectService {
     root: PathBuf,
     project_id: String,
@@ -213,15 +240,74 @@ impl ProjectService {
     }
 
     pub fn save_value(&self, request: SaveValueRequest) -> EnvResult<MutationSummary> {
-        validate_key(&request.key)?;
-        let targets = self.value_write_targets(&request.file, &request.key)?;
+        self.save_value_inner(&request.file, &request.key, &request.new_value)
+    }
+
+    /// Prepares a value-free, short-lived write guard for a separate stdin
+    /// producer process. Every linked member and the link manifest are bound to
+    /// the plan without persisting file-content hashes.
+    pub fn prepare_opaque_value_write(
+        &self,
+        file: &str,
+        key: &str,
+    ) -> EnvResult<PreparedOpaqueValueWrite> {
+        validate_key(key)?;
+        let targets = self.checked_value_write_targets(file, key)?;
+        let file_states = targets
+            .iter()
+            .map(|target| self.opaque_file_state(target))
+            .collect::<EnvResult<Vec<_>>>()?;
+        let manifest_state = self.opaque_file_state(MANIFEST_FILE_NAME)?;
+        Ok(PreparedOpaqueValueWrite {
+            project_id: self.project_id.clone(),
+            file: file.to_owned(),
+            key: key.to_owned(),
+            affected_files: targets,
+            file_states,
+            manifest_state,
+        })
+    }
+
+    /// Applies a previously prepared opaque write through the normal linked,
+    /// lossless, optimistic-concurrency transaction.
+    pub fn apply_prepared_opaque_value(
+        &self,
+        prepared: &PreparedOpaqueValueWrite,
+        new_value: &str,
+    ) -> EnvResult<MutationSummary> {
+        if prepared.project_id != self.project_id {
+            return Err(EnvError::unregistered_project(&prepared.project_id));
+        }
+        validate_key(&prepared.key)?;
+        let current_targets = self.checked_value_write_targets(&prepared.file, &prepared.key)?;
+        if current_targets != prepared.affected_files
+            || self.opaque_file_state(MANIFEST_FILE_NAME)? != prepared.manifest_state
+        {
+            return Err(EnvError::changed_externally(Path::new(MANIFEST_FILE_NAME)));
+        }
+        for expected in &prepared.file_states {
+            if self.opaque_file_state(&expected.relative_path)? != *expected {
+                return Err(EnvError::changed_externally(Path::new(
+                    &expected.relative_path,
+                )));
+            }
+        }
+        self.save_value_inner(&prepared.file, &prepared.key, new_value)
+    }
+
+    fn save_value_inner(
+        &self,
+        file: &str,
+        key: &str,
+        new_value: &str,
+    ) -> EnvResult<MutationSummary> {
+        validate_key(key)?;
+        let targets = self.checked_value_write_targets(file, key)?;
         let mut changes = Vec::with_capacity(targets.len());
         for target in &targets {
             let relative = PathBuf::from(target);
-            let loaded = self.load_document(&relative)?;
-            let proposed = loaded
-                .document
-                .replace_value(&request.key, &request.new_value)?;
+            let loaded = self.load_managed_document(target)?;
+            let proposed = loaded.document.replace_value(key, new_value)?;
             changes.push(PlannedFileChange {
                 relative_path: relative,
                 expected_revision: loaded.revision,
@@ -231,7 +317,7 @@ impl ProjectService {
         TransactionPlan::new(changes).commit(&self.root)?;
         Ok(MutationSummary {
             affected_files: targets,
-            keys: vec![request.key],
+            keys: vec![key.to_owned()],
         })
     }
 
@@ -931,6 +1017,39 @@ impl ProjectService {
         Ok(targets)
     }
 
+    fn checked_value_write_targets(&self, file: &str, key: &str) -> EnvResult<Vec<String>> {
+        let targets = self.value_write_targets(file, key)?;
+        for target in &targets {
+            let loaded = self.load_managed_document(target)?;
+            loaded.document.assignment(key)?;
+        }
+        Ok(targets)
+    }
+
+    fn opaque_file_state(&self, relative: &str) -> EnvResult<OpaqueFileState> {
+        let relative_path = Path::new(relative);
+        let target = safe_existing_target(&self.root, relative_path)?;
+        let metadata = fs::metadata(&target).map_err(|error| EnvError::io(relative_path, error))?;
+        let modified = metadata
+            .modified()
+            .map_err(|error| EnvError::io(relative_path, error))?;
+        let (modified_before_epoch, modified_seconds, modified_nanoseconds) =
+            match modified.duration_since(UNIX_EPOCH) {
+                Ok(duration) => (false, duration.as_secs(), duration.subsec_nanos()),
+                Err(error) => {
+                    let duration = error.duration();
+                    (true, duration.as_secs(), duration.subsec_nanos())
+                }
+            };
+        Ok(OpaqueFileState {
+            relative_path: relative.to_owned(),
+            byte_len: metadata.len(),
+            modified_before_epoch,
+            modified_seconds,
+            modified_nanoseconds,
+        })
+    }
+
     fn commit_one(
         &self,
         relative: PathBuf,
@@ -1255,7 +1374,7 @@ fn safe_new_env_target(
         .ok_or_else(|| EnvError::invalid("생성할 env 파일 이름이 올바르지 않습니다."))?;
     if !is_env_candidate(name) {
         return Err(EnvError::invalid(
-            "새 파일은 .env 또는 .env.* 형식이어야 하며 example 파일은 만들 수 없습니다.",
+            "새 파일은 지원되는 env 형식(.env, .env.*, *.env*, .dev.vars, .dev.vars.*)이어야 하며 example 파일은 만들 수 없습니다.",
         ));
     }
     let manifest_path = to_manifest_path(relative);
@@ -1401,10 +1520,23 @@ mod tests {
                 file: "apps/mobile/.env".to_owned(),
             })
             .expect("create env file");
+        service
+            .create_env_file(CreateEnvFileRequest {
+                file: "apps/mobile/.dev.vars.staging".to_owned(),
+            })
+            .expect("create Wrangler env file");
 
         assert_eq!(project.read("apps/mobile/.env"), b"");
+        assert_eq!(project.read("apps/mobile/.dev.vars.staging"), b"");
         let projection = service.scan().expect("scan");
-        assert_eq!(projection.files[0].path, "apps/mobile/.env");
+        assert_eq!(
+            projection
+                .files
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["apps/mobile/.dev.vars.staging", "apps/mobile/.env"]
+        );
     }
 
     #[test]

@@ -18,6 +18,7 @@ age.workspace = true
 blake3.workspace = true
 directories.workspace = true
 env-core = { path = "../crates/env-core" }
+env-registry = { path = "../crates/env-registry" }
 env-provider = { path = "../crates/env-provider" }
 env-team = { path = "../crates/env-team" }
 notify.workspace = true

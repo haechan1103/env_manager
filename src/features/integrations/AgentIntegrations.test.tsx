@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as api from "../../lib/api";
 import type { AgentIntegrationStatus } from "../../lib/types";
 import { AgentIntegrations } from "./AgentIntegrations";
+import { AgentIntegrationStatusProvider } from "./AgentIntegrationStatusProvider";
 
 const integrations: AgentIntegrationStatus[] = [
   {
@@ -64,9 +65,17 @@ vi.mock("../../lib/api", () => ({
   })),
 }));
 
+function renderIntegrations(onError = vi.fn(), onNotice = vi.fn()) {
+  return render(
+    <AgentIntegrationStatusProvider>
+      <AgentIntegrations onError={onError} onNotice={onNotice} />
+    </AgentIntegrationStatusProvider>,
+  );
+}
+
 describe("AgentIntegrations", () => {
   it("shows all supported hosts without exposing env values", async () => {
-    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+    renderIntegrations();
 
     expect(await screen.findByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
@@ -77,7 +86,7 @@ describe("AgentIntegrations", () => {
   it("installs the selected host through the shared integration API", async () => {
     const user = userEvent.setup();
     const onNotice = vi.fn();
-    render(<AgentIntegrations onError={vi.fn()} onNotice={onNotice} />);
+    renderIntegrations(vi.fn(), onNotice);
 
     const claudeCard = (await screen.findByText("Claude Code")).closest("article");
     expect(claudeCard).not.toBeNull();
@@ -88,7 +97,7 @@ describe("AgentIntegrations", () => {
   });
 
   it("explains why an integration action is disabled", async () => {
-    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+    renderIntegrations();
 
     const copilotCard = (await screen.findByText("GitHub Copilot / VS Code")).closest("article");
     expect(copilotCard).not.toBeNull();
@@ -99,7 +108,7 @@ describe("AgentIntegrations", () => {
     vi.mocked(api.listAgentIntegrations).mockResolvedValueOnce([
       { ...integrations[0]!, installedVersion: "0.5.0", legacyVersion: true, updateAvailable: true },
     ]);
-    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+    renderIntegrations();
 
     expect(await screen.findByText("0.5.0 (legacy app-linked) → 1.0.0")).toBeInTheDocument();
   });
@@ -108,7 +117,7 @@ describe("AgentIntegrations", () => {
     vi.mocked(api.listAgentIntegrations).mockResolvedValueOnce([
       { ...integrations[0]!, needsRepair: true, protection: "inactive" },
     ]);
-    render(<AgentIntegrations onError={vi.fn()} onNotice={vi.fn()} />);
+    renderIntegrations();
 
     expect(await screen.findByText("Repair needed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Repair connection" })).toBeEnabled();

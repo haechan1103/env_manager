@@ -1,0 +1,13 @@
+[package]
+name = "env-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+env-core = { path = "../env-core" }
+env-team = { path = "../env-team" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

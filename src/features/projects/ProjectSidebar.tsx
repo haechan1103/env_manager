@@ -9,6 +9,7 @@ import {
   type FontSize,
 } from "../../preferences/DisplayPreferences";
 import { AppUpdater } from "../updater/AppUpdater";
+import { useAgentIntegrationStatus } from "../integrations/AgentIntegrationStatusProvider";
 import { ProjectSwitcherModal } from "./ProjectSwitcherModal";
 
 interface View {
@@ -41,6 +42,7 @@ export function ProjectSidebar({
 }: Props) {
   const { locale, setLocale, t } = useI18n();
   const { fontSize, setFontSize } = useDisplayPreferences();
+  const { needsAttention: agentIntegrationNeedsAttention } = useAgentIntegrationStatus();
   const [switchingProject, setSwitchingProject] = useState(false);
   const [renameTarget, setRenameTarget] = useState<
     { kind: "file"; projectId: string; path: string; name: string }
@@ -129,6 +131,9 @@ export function ProjectSidebar({
           >
             <span>◇</span>
             <span className="agent-nav-label">{t("sidebar.aiConnections")}</span>
+            {agentIntegrationNeedsAttention && (
+              <span className="attention-dot" aria-label={t("integration.attentionNeeded")} />
+            )}
           </button>
         </nav>
         <div className="sidebar-preferences">

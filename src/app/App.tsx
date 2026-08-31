@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { RenameModal } from "../components/RenameModal";
+import { ActionPackModal } from "../features/action-pack/ActionPackModal";
 import { FileEditor } from "../features/file-editor/FileEditor";
 import { ExportEnvModal } from "../features/export/ExportEnvModal";
 import { ImportEnvModal } from "../features/export/ImportEnvModal";
@@ -28,6 +29,7 @@ export function App() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [runningAction, setRunningAction] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [channelPublishing, setChannelPublishing] = useState<string | null>(null);
   const [channelImporting, setChannelImporting] = useState<{ channelId: string; packageId: string } | null>(null);
@@ -37,6 +39,7 @@ export function App() {
     setView({ kind: "overview" });
     setRenamingProject(false);
     setSharing(false);
+    setRunningAction(false);
     setChannelPublishing(null);
     setChannelImporting(null);
   }, [manager.selectedProjectId]);
@@ -152,6 +155,7 @@ export function App() {
                 <code>.env</code>
                 <code>.env.local</code>
                 <code>.env.development</code>
+                <code>.dev.vars</code>
                 <code>apps/*/.env</code>
               </div>
               <p><code>.env.example</code> {t("app.examplesExcluded")}</p>
@@ -177,6 +181,7 @@ export function App() {
                 <button className="quiet-button" onClick={() => setImporting(true)}>{t("import.headerAction")}</button>
                 <button className="quiet-button" onClick={() => setSharing(true)}>{t("teamChannel.headerAction")}</button>
                 <button className="quiet-button" onClick={() => setPushing(true)}>{t("push.headerAction")}</button>
+                <button className="quiet-button" onClick={() => setRunningAction(true)}>{t("action.headerAction")}</button>
                 <button className="quiet-button" onClick={() => void refresh()}>
                   {t("common.refresh")}
                 </button>
@@ -269,6 +274,15 @@ export function App() {
           projectId={manager.selectedProject.id}
           projection={manager.projection}
           onClose={() => setPushing(false)}
+          onError={manager.showError}
+          onNotice={manager.showNotice}
+        />
+      )}
+      {runningAction && manager.selectedProject && manager.projection && (
+        <ActionPackModal
+          projectId={manager.selectedProject.id}
+          projection={manager.projection}
+          onClose={() => setRunningAction(false)}
           onError={manager.showError}
           onNotice={manager.showNotice}
         />

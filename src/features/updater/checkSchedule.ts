@@ -1,0 +1,2 @@
+export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+export const INITIAL_UPDATE_CHECK_DELAY_MS = 1500;

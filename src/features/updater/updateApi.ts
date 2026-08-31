@@ -20,18 +20,18 @@ export async function currentAppVersion(): Promise<string> {
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {
   if (!isTauriRuntime) return null;
 
-  if (pendingUpdate) {
-    await pendingUpdate.close();
-    pendingUpdate = null;
-  }
-
+  const previousUpdate = pendingUpdate;
   const update = await check({ timeout: 10_000 });
   if (!update) {
+    if (previousUpdate) await previousUpdate.close();
     pendingUpdate = null;
     return null;
   }
 
   pendingUpdate = update;
+  if (previousUpdate && previousUpdate !== update) {
+    await previousUpdate.close();
+  }
   return {
     currentVersion: update.currentVersion,
     version: update.version,

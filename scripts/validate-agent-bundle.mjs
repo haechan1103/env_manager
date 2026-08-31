@@ -20,10 +20,17 @@ assert(claudeMarketplace.plugins?.[0]?.version === version, "Claude marketplace 
 assert(mcp.mcpServers?.["env-manager"]?.command === "env-manager-broker", "MCP must use the portable broker command");
 assert(Array.isArray(hooks.hooks?.PreToolUse), "PreToolUse Guard is required");
 assert(normalizedSkill.startsWith("---\nname: manage-project-env\n"), "Skill frontmatter is missing");
+assert(normalizedSkill.includes("plan_register_current_project"), "Skill must route safe current-project registration");
 assert(normalizedSkill.includes("find_reusable_variable_sources"), "Skill must route redacted cross-project source discovery");
 assert(normalizedSkill.includes("plan_copy_variable_from_project"), "Skill must route opaque cross-project copy plans");
 assert(normalizedSkill.includes("plan_provider_push"), "Skill must route opaque provider push plans");
 assert(normalizedSkill.includes("personal-provider-packs.md"), "Skill must route Personal Provider Pack authoring");
+assert(normalizedSkill.includes("list_action_packs"), "Skill must route installed Action Pack discovery");
+assert(normalizedSkill.includes("plan_action"), "Skill must route opaque Action Pack plans");
+assert(normalizedSkill.includes("action-packs.md"), "Skill must route Action Pack authoring");
+assert(normalizedSkill.includes("plan_stdin_value_write"), "Skill must route opaque stdin value plans");
+assert(normalizedSkill.includes("stdin-value-ingest.md"), "Skill must route opaque stdin value guidance");
+assert(normalizedSkill.includes(".dev.vars"), "Skill must route Wrangler .dev.vars files through the broker");
 
 process.stdout.write(`Agent bundle ${version} is internally consistent and versioned independently from the app.\n`);
 

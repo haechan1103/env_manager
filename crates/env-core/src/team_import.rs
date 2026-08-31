@@ -790,6 +790,7 @@ mod tests {
             "# sender comment\nTOKEN=fake_team_import_canary\nPORT=fake_3000\n",
         );
         source.write("apps/web/.env.dev", "PORT=fake_4000\n");
+        source.write(".dev.vars", "WORKER_MODE=fake_local\n");
         let package = source.root().join("team-env.zip.age");
         let passphrase = SecretString::from("fake-team-passphrase-2026".to_owned());
         export_project_env(
@@ -818,10 +819,11 @@ mod tests {
         .expect("import plan");
         let preview_json = serde_json::to_string(plan.preview()).expect("preview json");
 
-        assert_eq!(plan.preview().new_count, 3);
+        assert_eq!(plan.preview().new_count, 4);
         assert!(!preview_json.contains("fake_team_import_canary"));
         let summary = plan.apply(&[]).expect("apply");
-        assert_eq!(summary.added_count, 3);
+        assert_eq!(summary.added_count, 4);
+        assert_eq!(destination.read(".dev.vars"), b"WORKER_MODE=fake_local\n");
         assert!(
             destination
                 .read(".env.local")
@@ -1020,6 +1022,7 @@ mod tests {
 
     #[test]
     fn rejects_traversal_and_non_env_entries() {
+        assert!(validate_package_path("workers/api/.dev.vars.production").is_ok());
         for name in [
             "../.env",
             "/.env",

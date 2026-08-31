@@ -172,6 +172,37 @@ export interface PersonalProviderPackInfo {
   profileId: string | null;
 }
 
+export type ActionKind = "cli" | "http";
+
+export interface ActionPackInfo {
+  id: string;
+  displayName: string;
+  description: string;
+  packVersion: string;
+  kind: ActionKind;
+  available: boolean;
+  bindings: Array<{ id: string; destination: string }>;
+  target: string;
+  cliVersion: string | null;
+  profileId: string | null;
+}
+
+export interface ActionExecutionRequest {
+  packId: string;
+  file: string;
+  bindings: Record<string, string>;
+}
+
+export interface ActionExecutionResult {
+  packId: string;
+  kind: ActionKind;
+  succeeded: boolean;
+  statusCode: number | null;
+  durationMs: number | null;
+  exitCode: number | null;
+  resultCode: string;
+}
+
 export interface GitSafetyProjection {
   state: GitSafetyState;
   ignoredFiles: string[];
@@ -331,7 +362,7 @@ export interface AgentActivityEvent {
   timestampMs: number;
   projectId: string;
   actor: string;
-  category: "structure-inspection" | "value-read" | "provider-compare" | "policy-change" | "mutation";
+  category: "structure-inspection" | "value-read" | "provider-compare" | "action-execution" | "policy-change" | "mutation";
   operation: string;
   relativePaths: string[];
   variableNames: string[];

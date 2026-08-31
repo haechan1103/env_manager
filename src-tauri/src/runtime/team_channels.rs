@@ -34,11 +34,7 @@ impl AppRuntime {
             name: connection.name,
             transport: connection.transport,
         };
-        {
-            let mut registry = self
-                .registry
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.update_registry(|registry| {
             if let Some(existing) = registry
                 .team_channels
                 .iter_mut()
@@ -48,13 +44,14 @@ impl AppRuntime {
             } else {
                 registry.team_channels.push(registration);
             }
-            self.persist(&registry)?;
-        }
+            Ok(())
+        })?;
         self.team_channel(project_id, &local_id)
     }
 
     pub fn list_team_channels(&self, project_id: &str) -> EnvResult<Vec<TeamChannelProjection>> {
         self.root(project_id)?;
+        self.refresh_registry()?;
         let registrations = self
             .registry
             .lock()
@@ -77,18 +74,16 @@ impl AppRuntime {
     }
 
     pub fn remove_team_channel(&self, project_id: &str, registration_id: &str) -> EnvResult<()> {
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let before = registry.team_channels.len();
-        registry
-            .team_channels
-            .retain(|channel| channel.project_id != project_id || channel.id != registration_id);
-        if before == registry.team_channels.len() {
-            return Err(EnvError::invalid("등록된 팀 채널을 찾지 못했습니다."));
-        }
-        self.persist(&registry)
+        self.update_registry(|registry| {
+            let before = registry.team_channels.len();
+            registry.team_channels.retain(|channel| {
+                channel.project_id != project_id || channel.id != registration_id
+            });
+            if before == registry.team_channels.len() {
+                return Err(EnvError::invalid("등록된 팀 채널을 찾지 못했습니다."));
+            }
+            Ok(())
+        })
     }
 
     pub fn prepare_team_channel_operation(
@@ -132,6 +127,7 @@ impl AppRuntime {
         registration_id: &str,
     ) -> EnvResult<TeamChannelRegistration> {
         self.root(project_id)?;
+        self.refresh_registry()?;
         self.registry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

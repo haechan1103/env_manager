@@ -6,6 +6,7 @@ import type {
   AgentIntegrationId,
   AgentIntegrationStatus,
 } from "../../lib/types";
+import { useAgentIntegrationStatus } from "./AgentIntegrationStatusProvider";
 
 interface Props {
   onError: (message: string) => void;
@@ -20,20 +21,16 @@ const marks: Record<AgentIntegrationId, string> = {
 
 export function AgentIntegrations({ onError, onNotice }: Props) {
   const { locale, t } = useI18n();
-  const [items, setItems] = useState<AgentIntegrationStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items, loading, refresh, replace } = useAgentIntegrationStatus();
   const [installing, setInstalling] = useState<AgentIntegrationId | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      setItems(await api.listAgentIntegrations());
+      await refresh();
     } catch (error) {
       onError(localizeError(error, locale, "error.integrationStatus"));
-    } finally {
-      setLoading(false);
     }
-  }, [locale, onError]);
+  }, [locale, onError, refresh]);
 
   useEffect(() => {
     void load();
@@ -43,7 +40,7 @@ export function AgentIntegrations({ onError, onNotice }: Props) {
     setInstalling(item.id);
     try {
       const result = await api.installAgentIntegration(item.id);
-      setItems((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
+      replace(result);
       onNotice(t("integration.installSuccess", { name: item.name, version: result.currentVersion }));
     } catch (error) {
       onError(localizeError(error, locale, "error.integrationInstall", { name: item.name }));

@@ -17,6 +17,7 @@ aws-sdk-sts.workspace = true
 json5.workspace = true
 portable-pty.workspace = true
 semver.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
