@@ -23,7 +23,7 @@
   <a href="SECURITY.md">Security model</a>
 </div>
 
-Env Manager is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
+Env Manager is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
 
 ## Why use it?
 
@@ -32,6 +32,12 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 | Your existing files and commands remain authoritative. Env Manager preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
 | **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
 | Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, Expo EAS, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
+
+## New in 0.7.0
+
+- **Action Packs:** run a narrowly declared local CLI or fixed HTTPS check with one managed value. Values stay out of the UI, AI conversation, command arguments, logs, and response bodies.
+- **Opaque generated values:** let an agent request a five-minute, single-use write plan, then pipe output from `openssl` or another trusted local generator directly into the Broker without exposing the generated value.
+- **Broader env discovery and quieter maintenance:** Wrangler `.dev.vars*` files now receive the same discovery, Git-safety, and direct-access guard coverage as `.env*`; app and installed AI integration updates are checked quietly and surfaced only when action is available.
 
 ## New in 0.6.5
 
@@ -169,6 +175,7 @@ Link GPT_API_KEY across local and development.
 Reuse this registered project's GEMINI_API_KEY here without showing it to me.
 Push the selected deployment keys to AWS Secrets Manager under my-service/staging without showing their values.
 Push EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY to EAS development, preview, and production as Sensitive without showing its value.
+Generate AUTH_SECRET with `openssl rand -base64 32` and save it without showing the value.
 ```
 
 The integration never registers arbitrary projects. Only projects already registered in the desktop app are accepted by the broker.
@@ -181,7 +188,7 @@ The integration never registers arbitrary projects. Only projects already regist
 | `unclassified` | Treated like `protected` until you choose a policy. |
 | `read-write` | A dedicated broker value tool may read or update the value when explicitly invoked. |
 
-Normal structure inspection never returns values, including `read-write` values. Internal operations such as linked saves, cross-project copies, provider pushes, and redacted comparisons do not downgrade this policy.
+Normal structure inspection never returns values, including `read-write` values. Internal operations such as linked saves, cross-project copies, provider pushes, redacted comparisons, and a requested one-time stdin generator do not downgrade this policy.
 
 > Env Manager reduces accidental value exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
 
@@ -234,7 +241,7 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.6.5` ships signed and notarized macOS builds plus an explicitly unsigned Windows x64 beta, and adds Expo EAS deployment through a hidden-value prompt on top of Folder Team Channels, AWS integrations, Remote Runtime verification, Personal Provider Packs, cross-project protected-value reuse, and opaque AI-agent workflows. Windows code signing, ARM64, and additional languages remain planned.
+Env Manager is an early-stage macOS and Windows desktop project. Version `0.7.0` ships signed and notarized macOS builds plus an explicitly unsigned Windows x64 beta, and adds Action Packs, opaque generated-value ingestion, Wrangler `.dev.vars*` support, and background app/AI-integration update checks on top of the existing deploy, share, and redacted-agent workflows. Windows code signing, ARM64, and additional languages remain planned.
 
 ## Community
 

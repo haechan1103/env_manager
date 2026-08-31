@@ -6,7 +6,7 @@ Env Manager edits environment files that may contain credentials. Please treat e
 
 | Version | Security updates |
 | --- | --- |
-| Latest `0.6.x` release | Supported |
+| Latest `0.7.x` release | Supported |
 | Earlier releases | Upgrade before reporting |
 
 ## Report a vulnerability privately
@@ -49,6 +49,10 @@ Env Manager is a local file manager, not a secret vault or operating-system sand
 - Normal agent structure responses redact every value.
 - `protected` and `unclassified` values cannot be returned through broker value tools.
 - A `read-write` value can be returned only through an explicit value operation.
+- A requested local generator can fill one existing occurrence through a five-minute,
+  single-use plan and stdin-only Broker command. The agent receives the key and
+  affected paths but not the generated value; the selected producer and local Rust
+  process necessarily receive it.
 - Claude Code and GitHub Copilot integrations install a direct `.env*` access guard, but tool prompts and hooks are not an OS-level isolation boundary.
 - Codex direct-file protection depends on the host's permissions and sandbox configuration.
 - Provider push runs only after a user or an explicitly requested agent plan starts
