@@ -132,6 +132,9 @@ jobs:
             - Apple Silicon: download the aarch64 DMG
             - Intel Mac: download the x86_64 DMG
             - The app opens in English by default and also supports Korean.
+            - Run locally reviewed Action Packs against a fixed CLI or HTTPS target without returning managed values to the UI, agent, logs, or response body.
+            - Pipe a generated value through a five-minute, single-use Broker plan without putting it in command arguments or agent output.
+            - Discover Wrangler `.dev.vars*` alongside `.env*`, and surface app or installed AI-integration updates through quiet background checks.
             - Exchange immutable encrypted packages through a mounted NAS or existing sync folder, then review conflicts before applying.
             - Push selected values to AWS Secrets Manager or SSM Parameter Store with optional KMS keys.
             - Compare supported AWS and allowlisted SSH Runtime targets without returning values or fingerprints to the UI.
@@ -148,6 +151,9 @@ jobs:
             - Apple Silicon: aarch64 DMG
             - Intel Mac: x86_64 DMG
             - 앱은 영어를 기본으로 열리며 한국어도 지원합니다.
+            - 검토한 Action Pack으로 고정 CLI 또는 HTTPS 대상을 실행하되 관리 값을 UI, 에이전트, 로그나 응답 본문에 반환하지 않습니다.
+            - 생성값을 명령 인자나 에이전트 출력에 넣지 않고 5분·1회용 Broker 계획으로 바로 저장할 수 있습니다.
+            - Wrangler `.dev.vars*`를 `.env*`와 함께 탐색하고 앱·설치된 AI 연동 업데이트를 조용히 백그라운드에서 확인합니다.
             - 마운트한 NAS나 기존 동기화 폴더에서 변경 불가능한 암호화 패키지를 주고받고, 충돌 검토 후 적용할 수 있습니다.
             - 선택한 값을 KMS 키 옵션과 함께 AWS Secrets Manager 또는 SSM Parameter Store로 전송할 수 있습니다.
             - 지원 AWS 대상과 허용된 SSH Runtime을 실제 값이나 해시를 UI에 반환하지 않고 비교할 수 있습니다.
@@ -253,6 +259,9 @@ jobs:
             - Apple Silicon: download the aarch64 DMG
             - Intel Mac: download the x86_64 DMG
             - The app opens in English by default and also supports Korean.
+            - Run locally reviewed Action Packs against a fixed CLI or HTTPS target without returning managed values to the UI, agent, logs, or response body.
+            - Pipe a generated value through a five-minute, single-use Broker plan without putting it in command arguments or agent output.
+            - Discover Wrangler `.dev.vars*` alongside `.env*`, and surface app or installed AI-integration updates through quiet background checks.
             - Exchange immutable encrypted packages through a mounted NAS or existing sync folder, then review conflicts before applying.
             - Push selected values to AWS Secrets Manager or SSM Parameter Store with optional KMS keys.
             - Compare supported AWS and allowlisted SSH Runtime targets without returning values or fingerprints to the UI.
@@ -269,6 +278,9 @@ jobs:
             - Apple Silicon: aarch64 DMG
             - Intel Mac: x86_64 DMG
             - 앱은 영어를 기본으로 열리며 한국어도 지원합니다.
+            - 검토한 Action Pack으로 고정 CLI 또는 HTTPS 대상을 실행하되 관리 값을 UI, 에이전트, 로그나 응답 본문에 반환하지 않습니다.
+            - 생성값을 명령 인자나 에이전트 출력에 넣지 않고 5분·1회용 Broker 계획으로 바로 저장할 수 있습니다.
+            - Wrangler `.dev.vars*`를 `.env*`와 함께 탐색하고 앱·설치된 AI 연동 업데이트를 조용히 백그라운드에서 확인합니다.
             - 마운트한 NAS나 기존 동기화 폴더에서 변경 불가능한 암호화 패키지를 주고받고, 충돌 검토 후 적용할 수 있습니다.
             - 선택한 값을 KMS 키 옵션과 함께 AWS Secrets Manager 또는 SSM Parameter Store로 전송할 수 있습니다.
             - 지원 AWS 대상과 허용된 SSH Runtime을 실제 값이나 해시를 UI에 반환하지 않고 비교할 수 있습니다.

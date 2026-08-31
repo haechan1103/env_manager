@@ -23,7 +23,7 @@
   <a href="SECURITY.md">보안 모델</a>
 </div>
 
-Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 그 프로젝트가 실제로 사용하는 `.env`, `.env.local`, `.env.development`, `runtime.env`, 하위 앱 env 파일을 찾아줍니다. 값은 원래 파일에 남으며, 계정이나 호스팅된 vault, 새로운 실행 명령을 도입하지 않습니다.
+Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 그 프로젝트가 실제로 사용하는 `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, 하위 앱 env 파일을 찾아줍니다. 값은 원래 파일에 남으며, 계정이나 호스팅된 vault, 새로운 실행 명령을 도입하지 않습니다.
 
 ## 왜 Env Manager인가요?
 
@@ -32,6 +32,12 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
 | 기존 파일과 실행 명령이 계속 기준입니다. 경로, 주석, 순서와 관련 없는 형식을 보존합니다. | 같은 키를 2개, 3개 이상의 파일에서 명시적으로 연결합니다. 어느 파일에서 수정해도 연결된 모든 위치에 한 번에 저장합니다. | Codex, Claude Code, Copilot이 값이 제거된 로컬 Broker를 통해 구조를 확인하고 허용된 작업을 수행합니다. 보호된 값은 일반 조회 응답에 포함되지 않습니다. |
 | **env 파일을 커밋하지 않고 공유** | **고른 값만 배포** | **Git 실수를 먼저 발견** |
 | 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, Expo EAS, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
+
+## 0.7.0의 새로운 기능
+
+- **Action Pack:** 범위를 좁혀 선언한 로컬 CLI 또는 고정 HTTPS 점검에 관리 값을 사용합니다. 값은 UI, AI 대화, 명령 인자, 로그와 응답 본문에 나타나지 않습니다.
+- **생성값 비노출 저장:** 에이전트가 5분·1회용 저장 계획을 요청한 뒤 `openssl` 같은 신뢰할 수 있는 로컬 생성기의 출력을 Broker로 바로 전달합니다. 생성값은 에이전트에게 돌아오지 않습니다.
+- **더 넓은 env 탐색과 조용한 유지관리:** Wrangler `.dev.vars*`도 `.env*`와 같은 탐색·Git 안전 검사·직접 접근 Guard를 적용하며, 앱과 설치된 AI 연동 업데이트는 백그라운드에서 확인해 조치할 때만 표시합니다.
 
 ## 0.6.5의 새로운 기능
 
@@ -169,6 +175,7 @@ GPT_API_KEY를 local과 development에서 연결해줘.
 다른 등록 프로젝트의 GEMINI_API_KEY를 값을 보여주지 말고 여기서 재사용해줘.
 선택한 배포 키를 값은 보지 말고 AWS Secrets Manager의 my-service/staging 아래에 올려줘.
 EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 값은 보지 말고 EAS development, preview, production에 Sensitive로 올려줘.
+AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고 저장해줘.
 ```
 
 연동 도구가 프로젝트를 임의로 등록하지는 않습니다. 데스크톱 앱에 이미 등록된 프로젝트만 Broker가 허용합니다.
@@ -181,7 +188,7 @@ EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 값은 보지 말고 EAS development, previe
 | `unclassified` | 정책을 정하기 전까지 `protected`와 동일하게 처리합니다. |
 | `read-write` | 전용 Broker 값 도구가 명시적으로 호출될 때 값을 읽거나 수정할 수 있습니다. |
 
-일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 연결 저장, 프로젝트 간 복사, Provider 전송, 값 없는 비교 같은 Rust 내부 작업은 접근 정책을 낮추지 않습니다.
+일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 연결 저장, 프로젝트 간 복사, Provider 전송, 값 없는 비교, 요청받은 일회용 stdin 생성 작업은 접근 정책을 낮추지 않습니다.
 
 > Env Manager는 실수로 값이 노출될 가능성을 줄여주지만 운영체제 수준의 샌드박스나 운영용 Secret Manager의 대체재는 아닙니다. 값은 원래 env 파일에 남습니다. 전체 경계는 [SECURITY.md](SECURITY.md)를 확인하세요.
 
@@ -234,7 +241,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.6.5`는 서명·공증된 macOS 빌드와 명확히 표시된 Windows x64 미서명 베타를 배포하고, Folder Team Channel, AWS 연동, Remote Runtime 검증, Personal Provider Pack, 프로젝트 간 보호 값 재사용과 AI 값 비노출 흐름에 숨김 입력 기반 Expo EAS 배포를 추가합니다. Windows 코드 서명, ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
+Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.7.0`은 서명·공증된 macOS 빌드와 명확히 표시된 Windows x64 미서명 베타를 배포하고, 기존 배포·공유·AI 값 비노출 흐름 위에 Action Pack, 생성값 비노출 저장, Wrangler `.dev.vars*` 지원, 앱·AI 연동 백그라운드 업데이트 확인을 추가합니다. Windows 코드 서명, ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 
