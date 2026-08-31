@@ -48,7 +48,10 @@ const credentialPatterns = [
 function classifyPath(normalized) {
   const basename = path.posix.basename(normalized).toLowerCase();
   const extension = path.posix.extname(basename);
-  const isEnvFile = basename === ".env" || basename.startsWith(".env.");
+  const isEnvFile = basename === ".env"
+    || basename.startsWith(".env.")
+    || basename === ".dev.vars"
+    || basename.startsWith(".dev.vars.");
   const isSyntheticEnv = SYNTHETIC_ENV_DIRECTORIES.some((directory) =>
     normalized.startsWith(directory),
   );
@@ -70,6 +73,7 @@ function credentialRules(content) {
 
 function runSelfTest() {
   assert.equal(classifyPath("apps/web/.env.local"), "tracked-env-file");
+  assert.equal(classifyPath("workers/api/.dev.vars.production"), "tracked-env-file");
   assert.equal(classifyPath("tests/fixtures/.env.local"), null);
   assert.equal(classifyPath("release/signing.key"), "private-credential-file");
   assert.deepEqual(credentialRules(`prefix ${"AKIA" + "FAKE".repeat(4)} suffix`), [

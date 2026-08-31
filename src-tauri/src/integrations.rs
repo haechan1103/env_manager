@@ -12,6 +12,7 @@ use tauri::{AppHandle, Manager};
 
 const PLUGIN_NAME: &str = "env-manager";
 const MARKETPLACE_NAME: &str = "env-manager";
+const CODEX_MARKETPLACE_NAME: &str = "env-manager-desktop";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const AGENT_BUNDLE_VERSION: &str = include_str!("../../plugins/env-manager/VERSION");
 
@@ -85,32 +86,47 @@ pub fn install(
     })?;
     let broker = ensure_current_broker(app)?;
     let catalog = materialize_catalog(app, &broker, id)?;
+    let installed_before_update = installed_version(app, id);
+    let owns_existing_installation =
+        marker_version(app, id).is_some() || cached_bundle_is_official(id);
+    let migrate_legacy_codex_alias = id == AgentIntegrationId::Codex
+        && (legacy_codex_bundle_is_official()
+            || installed_before_update
+                .as_deref()
+                .is_some_and(|version| is_update_available(version, "1.8.0")));
 
-    let _ = run_agent_command(
-        &executable,
-        marketplace_add_args(id, catalog.as_os_str().to_owned()),
-    );
-    let command_succeeded = install_or_update(&executable, id);
-    if !command_succeeded {
-        return Err(IntegrationError {
-            code: "AGENT_INSTALL_FAILED",
-            message: "플러그인을 설치하지 못했습니다. 해당 도구의 로그인과 플러그인 정책을 확인해주세요.",
-        });
-    }
-
-    if !current_bundle_is_cached(id) || !connection_configuration_is_current(app, id, &broker) {
-        if marker_version(app, id).is_none() && !cached_bundle_is_official(id) {
-            return Err(IntegrationError {
-                code: "AGENT_MARKETPLACE_CONFLICT",
-                message: "같은 이름의 다른 Env Manager marketplace가 연결되어 있습니다. 해당 연결을 제거한 뒤 다시 시도해주세요.",
-            });
-        }
-        reconnect_owned_marketplace(&executable, id, catalog.as_os_str().to_owned())?;
+    if id == AgentIntegrationId::Codex && owns_existing_installation {
+        refresh_owned_codex_marketplace(
+            &executable,
+            catalog.as_os_str().to_owned(),
+            migrate_legacy_codex_alias,
+        )?;
+    } else {
+        let _ = run_agent_command(
+            &executable,
+            marketplace_add_args(id, catalog.as_os_str().to_owned()),
+        );
         if !install_or_update(&executable, id) {
             return Err(IntegrationError {
                 code: "AGENT_INSTALL_FAILED",
                 message: "플러그인을 설치하지 못했습니다. 해당 도구의 로그인과 플러그인 정책을 확인해주세요.",
             });
+        }
+
+        if !current_bundle_is_cached(id) || !connection_configuration_is_current(app, id, &broker) {
+            if !owns_existing_installation && !cached_bundle_is_official(id) {
+                return Err(IntegrationError {
+                    code: "AGENT_MARKETPLACE_CONFLICT",
+                    message: "같은 이름의 다른 Env Manager marketplace가 연결되어 있습니다. 해당 연결을 제거한 뒤 다시 시도해주세요.",
+                });
+            }
+            reconnect_owned_marketplace(&executable, id, catalog.as_os_str().to_owned())?;
+            if !refresh_after_marketplace_reconnect(&executable, id) {
+                return Err(IntegrationError {
+                    code: "AGENT_INSTALL_FAILED",
+                    message: "플러그인을 설치하지 못했습니다. 해당 도구의 로그인과 플러그인 정책을 확인해주세요.",
+                });
+            }
         }
     }
     if !current_bundle_is_cached(id) {
@@ -126,6 +142,7 @@ pub fn install(
         });
     }
 
+    remove_legacy_codex_plugin(&executable, id);
     persist_marker(app, id)?;
     Ok(status(app, id, Some(&broker), true))
 }
@@ -141,14 +158,16 @@ fn status(
     let detected = cli_detected || vscode_detected;
     let installed_version = installed_version(app, id);
     let installed = installed_version.is_some();
-    let needs_repair = installed
-        && broker.is_none_or(|broker| !connection_configuration_is_current(app, id, broker));
     let legacy_version = installed_version
         .as_deref()
         .is_some_and(is_legacy_bundle_version);
     let update_available = installed_version
         .as_deref()
         .is_some_and(|version| is_update_available(version, agent_bundle_version()));
+    let configuration_current =
+        broker.is_some_and(|broker| connection_configuration_is_current(app, id, broker));
+    let needs_repair =
+        integration_requires_repair(installed, update_available, configuration_current);
     let action_blocker = if !cli_detected {
         Some(AgentIntegrationBlocker::ToolNotFound)
     } else if broker.is_none() {
@@ -206,6 +225,14 @@ fn status(
         can_install: action_blocker.is_none(),
         action_blocker,
     }
+}
+
+fn integration_requires_repair(
+    installed: bool,
+    update_available: bool,
+    configuration_current: bool,
+) -> bool {
+    installed && !update_available && !configuration_current
 }
 
 fn agent_bundle_version() -> &'static str {
@@ -581,6 +608,12 @@ fn materialize_catalog(
         &source.join(".claude-plugin"),
         &target.join(".claude-plugin"),
     )?;
+    if id == AgentIntegrationId::Codex {
+        rewrite_marketplace_name(
+            &target.join(".agents/plugins/marketplace.json"),
+            marketplace_name(id),
+        )?;
+    }
 
     let plugin = target.join("plugins/env-manager");
     let mcp_path = plugin.join(".mcp.json");
@@ -661,17 +694,27 @@ fn write_json(path: &Path, value: &Value) -> Result<(), IntegrationError> {
     })
 }
 
+fn rewrite_marketplace_name(path: &Path, name: &str) -> Result<(), IntegrationError> {
+    let mut marketplace = read_json(path)?;
+    marketplace["name"] = Value::String(name.to_owned());
+    write_json(path, &marketplace)
+}
+
 fn marketplace_add_args(id: AgentIntegrationId, catalog: OsString) -> Vec<OsString> {
     let _ = id;
     vec!["plugin".into(), "marketplace".into(), "add".into(), catalog]
 }
 
-fn marketplace_remove_args() -> Vec<OsString> {
+fn marketplace_remove_args(id: AgentIntegrationId) -> Vec<OsString> {
+    marketplace_remove_named_args(marketplace_name(id))
+}
+
+fn marketplace_remove_named_args(name: &str) -> Vec<OsString> {
     vec![
         "plugin".into(),
         "marketplace".into(),
         "remove".into(),
-        MARKETPLACE_NAME.into(),
+        name.into(),
     ]
 }
 
@@ -682,7 +725,7 @@ fn reconnect_owned_marketplace(
 ) -> Result<(), IntegrationError> {
     // Call only after finding an app-owned marker or validating the cached bundle as
     // this project's official plugin. An unrelated marketplace is never removed.
-    let _ = run_agent_command(executable, marketplace_remove_args());
+    let _ = run_agent_command(executable, marketplace_remove_args(id));
     if run_agent_command(executable, marketplace_add_args(id, catalog)) {
         Ok(())
     } else {
@@ -698,8 +741,80 @@ fn install_or_update(executable: &Path, id: AgentIntegrationId) -> bool {
         || run_agent_command(executable, update_args(id))
 }
 
+fn refresh_owned_codex_marketplace(
+    executable: &Path,
+    catalog: OsString,
+    remove_legacy_alias: bool,
+) -> Result<(), IntegrationError> {
+    let remove_legacy_plugin = legacy_codex_bundle_is_official();
+    if refresh_owned_codex_marketplace_with(
+        catalog,
+        remove_legacy_alias,
+        remove_legacy_plugin,
+        |args| run_agent_command(executable, args),
+    ) {
+        Ok(())
+    } else {
+        Err(IntegrationError {
+            code: "AGENT_MARKETPLACE_FAILED",
+            message: "Codex의 기존 Env Manager 연결을 새 연동 번들로 교체하지 못했습니다.",
+        })
+    }
+}
+
+fn refresh_owned_codex_marketplace_with(
+    catalog: OsString,
+    remove_legacy_alias: bool,
+    remove_legacy_plugin: bool,
+    mut run: impl FnMut(Vec<OsString>) -> bool,
+) -> bool {
+    let id = AgentIntegrationId::Codex;
+
+    // A Codex marketplace is configured by the CLI's config key, while plugin
+    // resolution uses the marketplace name inside marketplace.json. Older Env
+    // Manager builds used the legacy config key and versioned catalog paths. If
+    // both sources survive an update, they expose the same internal marketplace
+    // name and Codex can reinstall the older snapshot. Remove the installed plugin
+    // first, remove the current config source plus the legacy alias only during
+    // migration, and finally add exactly one source.
+    let _ = run(remove_args(id));
+    if remove_legacy_plugin {
+        let legacy = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
+        let _ = run(vec!["plugin".into(), "remove".into(), legacy.into()]);
+    }
+    let _ = run(marketplace_remove_named_args(CODEX_MARKETPLACE_NAME));
+    if remove_legacy_alias {
+        let _ = run(marketplace_remove_named_args(MARKETPLACE_NAME));
+    }
+
+    run(marketplace_add_args(id, catalog)) && run(install_args(id))
+}
+
+fn refresh_after_marketplace_reconnect(executable: &Path, id: AgentIntegrationId) -> bool {
+    refresh_after_marketplace_reconnect_with(id, |args| run_agent_command(executable, args))
+}
+
+fn refresh_after_marketplace_reconnect_with(
+    id: AgentIntegrationId,
+    mut run: impl FnMut(Vec<OsString>) -> bool,
+) -> bool {
+    if id == AgentIntegrationId::Codex {
+        // Codex caches a local plugin by marketplace, plugin, and manifest version.
+        // Re-adding the same version after changing the marketplace source can reuse
+        // stale machine-specific MCP and hook files. The supported remove command
+        // evicts that exact app-owned installation and its cache before reinstall.
+        // Ignore a missing-install result so an orphaned cache can still be repaired
+        // by the following exact marketplace install and post-install validation.
+        let _ = run(remove_args(id));
+    }
+    run(install_args(id)) || run(update_args(id))
+}
+
 fn current_bundle_is_cached(id: AgentIntegrationId) -> bool {
-    cache_version(id).as_deref() == Some(agent_bundle_version())
+    current_cached_bundle(id)
+        .map(|(version, _)| version)
+        .as_deref()
+        == Some(agent_bundle_version())
 }
 
 fn connection_configuration_is_current(
@@ -707,7 +822,7 @@ fn connection_configuration_is_current(
     id: AgentIntegrationId,
     broker: &Path,
 ) -> bool {
-    let Some((version, root)) = cached_bundle(id) else {
+    let Some((version, root)) = current_cached_bundle(id) else {
         return false;
     };
     if version != agent_bundle_version() {
@@ -766,7 +881,7 @@ fn cached_bundle_is_official(id: AgentIntegrationId) -> bool {
 }
 
 fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
-    let plugin = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
+    let plugin = plugin_selector(id);
     match id {
         AgentIntegrationId::Codex => vec!["plugin".into(), "add".into(), plugin.into()],
         AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot => {
@@ -776,13 +891,45 @@ fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
 }
 
 fn update_args(id: AgentIntegrationId) -> Vec<OsString> {
-    let plugin = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
+    let plugin = plugin_selector(id);
     match id {
         AgentIntegrationId::Codex => vec!["plugin".into(), "add".into(), plugin.into()],
         AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot => {
             vec!["plugin".into(), "update".into(), plugin.into()]
         }
     }
+}
+
+fn remove_args(id: AgentIntegrationId) -> Vec<OsString> {
+    let plugin = plugin_selector(id);
+    match id {
+        AgentIntegrationId::Codex => vec!["plugin".into(), "remove".into(), plugin.into()],
+        AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot => {
+            vec!["plugin".into(), "uninstall".into(), plugin.into()]
+        }
+    }
+}
+
+fn plugin_selector(id: AgentIntegrationId) -> String {
+    format!("{PLUGIN_NAME}@{}", marketplace_name(id))
+}
+
+fn marketplace_name(id: AgentIntegrationId) -> &'static str {
+    match id {
+        AgentIntegrationId::Codex => CODEX_MARKETPLACE_NAME,
+        AgentIntegrationId::ClaudeCode | AgentIntegrationId::GithubCopilot => MARKETPLACE_NAME,
+    }
+}
+
+fn remove_legacy_codex_plugin(executable: &Path, id: AgentIntegrationId) {
+    if id != AgentIntegrationId::Codex || !legacy_codex_bundle_is_official() {
+        return;
+    }
+    let legacy = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
+    let _ = run_agent_command(
+        executable,
+        vec!["plugin".into(), "remove".into(), legacy.into()],
+    );
 }
 
 fn run_agent_command(executable: &Path, args: Vec<OsString>) -> bool {
@@ -857,25 +1004,58 @@ fn cache_version(id: AgentIntegrationId) -> Option<String> {
 }
 
 fn cached_bundle(id: AgentIntegrationId) -> Option<(String, PathBuf)> {
+    current_cached_bundle(id).or_else(|| legacy_cached_bundle(id))
+}
+
+fn current_cached_bundle(id: AgentIntegrationId) -> Option<(String, PathBuf)> {
+    cached_bundle_in_marketplace(id, marketplace_name(id))
+}
+
+fn legacy_cached_bundle(id: AgentIntegrationId) -> Option<(String, PathBuf)> {
+    (id == AgentIntegrationId::Codex)
+        .then(|| cached_bundle_in_marketplace(id, MARKETPLACE_NAME))
+        .flatten()
+}
+
+fn cached_bundle_in_marketplace(
+    id: AgentIntegrationId,
+    marketplace: &str,
+) -> Option<(String, PathBuf)> {
     let base = BaseDirs::new()?;
     let (root, manifest) = match id {
         AgentIntegrationId::Codex => (
             base.home_dir()
-                .join(".codex/plugins/cache/env-manager/env-manager"),
+                .join(".codex/plugins/cache")
+                .join(marketplace)
+                .join(PLUGIN_NAME),
             ".codex-plugin/plugin.json",
         ),
         AgentIntegrationId::ClaudeCode => (
             base.home_dir()
-                .join(".claude/plugins/cache/env-manager/env-manager"),
+                .join(".claude/plugins/cache")
+                .join(marketplace)
+                .join(PLUGIN_NAME),
             ".claude-plugin/plugin.json",
         ),
         AgentIntegrationId::GithubCopilot => (
             base.home_dir()
-                .join(".copilot/installed-plugins/env-manager/env-manager"),
+                .join(".copilot/installed-plugins")
+                .join(marketplace)
+                .join(PLUGIN_NAME),
             ".claude-plugin/plugin.json",
         ),
     };
     newest_manifest_bundle(&root, manifest)
+}
+
+fn legacy_codex_bundle_is_official() -> bool {
+    let Some((_, root)) = legacy_cached_bundle(AgentIntegrationId::Codex) else {
+        return false;
+    };
+    read_json(&root.join(".codex-plugin/plugin.json")).is_ok_and(|manifest| {
+        manifest["name"].as_str() == Some(PLUGIN_NAME)
+            && manifest["repository"].as_str() == Some("https://github.com/haechan1103/env_manager")
+    })
 }
 
 fn newest_manifest_bundle(root: &Path, manifest: &str) -> Option<(String, PathBuf)> {
@@ -936,15 +1116,180 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_integration_uses_the_shared_marketplace_plugin_name() {
+    fn codex_uses_an_app_owned_marketplace_identity() {
+        assert_eq!(
+            plugin_selector(AgentIntegrationId::Codex),
+            "env-manager@env-manager-desktop"
+        );
+        assert_eq!(
+            marketplace_name(AgentIntegrationId::Codex),
+            "env-manager-desktop"
+        );
+    }
+
+    #[test]
+    fn claude_and_copilot_keep_the_shared_marketplace_identity() {
         for id in [
-            AgentIntegrationId::Codex,
             AgentIntegrationId::ClaudeCode,
             AgentIntegrationId::GithubCopilot,
         ] {
-            let install = install_args(id);
-            assert!(install.iter().any(|arg| arg == "env-manager@env-manager"));
+            assert_eq!(plugin_selector(id), "env-manager@env-manager");
         }
+    }
+
+    #[test]
+    fn codex_materialized_marketplace_gets_the_app_owned_name() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let marketplace = directory.path().join("marketplace.json");
+        fs::write(&marketplace, r#"{"name":"env-manager","plugins":[]}"#)
+            .expect("marketplace fixture");
+
+        rewrite_marketplace_name(&marketplace, CODEX_MARKETPLACE_NAME)
+            .expect("marketplace name rewrite");
+
+        let rewritten = read_json(&marketplace).expect("rewritten marketplace");
+        assert_eq!(rewritten["name"], CODEX_MARKETPLACE_NAME);
+    }
+
+    #[test]
+    fn codex_repair_evicts_the_exact_plugin_cache_before_reinstalling() {
+        let mut commands = Vec::new();
+        let refreshed =
+            refresh_after_marketplace_reconnect_with(AgentIntegrationId::Codex, |args| {
+                commands.push(args);
+                true
+            });
+
+        assert!(refreshed);
+        assert_eq!(
+            commands,
+            vec![
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("remove"),
+                    OsString::from("env-manager@env-manager-desktop"),
+                ],
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("add"),
+                    OsString::from("env-manager@env-manager-desktop"),
+                ],
+            ]
+        );
+    }
+
+    #[test]
+    fn codex_repair_continues_when_only_the_stale_cache_remains() {
+        let mut commands = Vec::new();
+        let refreshed =
+            refresh_after_marketplace_reconnect_with(AgentIntegrationId::Codex, |args| {
+                let succeeds = args.get(1).is_some_and(|value| value == "add");
+                commands.push(args);
+                succeeds
+            });
+
+        assert!(refreshed);
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0][1], "remove");
+        assert_eq!(commands[1][1], "add");
+    }
+
+    #[test]
+    fn codex_update_replaces_all_app_owned_marketplace_aliases_before_installing() {
+        let catalog = OsString::from("/catalogs/1.9.0/codex");
+        let mut commands = Vec::new();
+
+        let refreshed =
+            refresh_owned_codex_marketplace_with(catalog.clone(), true, false, |args| {
+                commands.push(args);
+                true
+            });
+
+        assert!(refreshed);
+        assert_eq!(
+            commands,
+            vec![
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("remove"),
+                    OsString::from("env-manager@env-manager-desktop"),
+                ],
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("marketplace"),
+                    OsString::from("remove"),
+                    OsString::from("env-manager-desktop"),
+                ],
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("marketplace"),
+                    OsString::from("remove"),
+                    OsString::from("env-manager"),
+                ],
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("marketplace"),
+                    OsString::from("add"),
+                    catalog,
+                ],
+                vec![
+                    OsString::from("plugin"),
+                    OsString::from("add"),
+                    OsString::from("env-manager@env-manager-desktop"),
+                ],
+            ]
+        );
+    }
+
+    #[test]
+    fn codex_update_preserves_the_legacy_name_after_migration_is_complete() {
+        let mut commands = Vec::new();
+        let refreshed = refresh_owned_codex_marketplace_with(
+            OsString::from("/catalogs/1.6.2/codex"),
+            false,
+            false,
+            |args| {
+                commands.push(args);
+                true
+            },
+        );
+
+        assert!(refreshed);
+        assert!(!commands.iter().any(|args| {
+            args.get(1).is_some_and(|value| value == "marketplace")
+                && args.get(2).is_some_and(|value| value == "remove")
+                && args.get(3).is_some_and(|value| value == MARKETPLACE_NAME)
+        }));
+    }
+
+    #[test]
+    fn codex_update_requires_the_new_marketplace_and_plugin_install_to_succeed() {
+        let mut add_marketplace_succeeds = false;
+        let refreshed = refresh_owned_codex_marketplace_with(
+            OsString::from("/catalogs/1.9.0/codex"),
+            false,
+            false,
+            |args| {
+                if args.get(1).is_some_and(|value| value == "marketplace")
+                    && args.get(2).is_some_and(|value| value == "add")
+                {
+                    add_marketplace_succeeds = true;
+                    return false;
+                }
+                true
+            },
+        );
+
+        assert!(!refreshed);
+        assert!(add_marketplace_succeeds);
+    }
+
+    #[test]
+    fn an_outdated_bundle_is_an_update_not_a_repair() {
+        assert!(!integration_requires_repair(true, true, false));
+        assert!(integration_requires_repair(true, false, false));
+        assert!(!integration_requires_repair(true, false, true));
+        assert!(!integration_requires_repair(false, false, false));
     }
 
     #[test]
@@ -957,7 +1302,7 @@ mod tests {
 
     #[test]
     fn agent_bundle_version_is_independent_from_the_app_release() {
-        assert_eq!(agent_bundle_version(), "1.6.0");
+        assert_eq!(agent_bundle_version(), "1.9.0");
         assert_ne!(agent_bundle_version(), env!("CARGO_PKG_VERSION"));
     }
 

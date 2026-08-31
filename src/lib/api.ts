@@ -35,6 +35,9 @@ import type {
   ProviderPushReceipt,
   PersonalProviderPackInfo,
   RuntimeTarget,
+  ActionPackInfo,
+  ActionExecutionRequest,
+  ActionExecutionResult,
 } from "./types";
 
 export const isTauriRuntime = "__TAURI_INTERNALS__" in window;
@@ -217,6 +220,61 @@ export async function chooseAndInstallPersonalProviderPack(
 export async function removePersonalProviderPack(id: string): Promise<void> {
   if (!isTauriRuntime) return;
   return call("remove_personal_provider_pack", { request: { id } });
+}
+
+export async function listActionPacks(projectId: string): Promise<ActionPackInfo[]> {
+  if (!isTauriRuntime) {
+    return [{
+      id: "local.demo.api-check",
+      displayName: "API health check",
+      description: "Call a fixed API endpoint without exposing its token.",
+      packVersion: "1.0.0",
+      kind: "http",
+      available: true,
+      bindings: [{ id: "Authorization", destination: "Authorization" }],
+      target: "https://api.example.com/health",
+      cliVersion: null,
+      profileId: null,
+    }];
+  }
+  return call("list_action_packs", { request: { projectId } });
+}
+
+export async function chooseAndInstallActionPack(
+  dialogTitle: string,
+): Promise<ActionPackInfo | null> {
+  if (!isTauriRuntime) return null;
+  const path = await open({
+    directory: false,
+    multiple: false,
+    title: dialogTitle,
+    filters: [{ name: "Env Manager Action Pack", extensions: ["json"] }],
+  });
+  if (typeof path !== "string") return null;
+  return call("install_action_pack", { request: { path, replace: true } });
+}
+
+export async function removeActionPack(id: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("remove_action_pack", { request: { id } });
+}
+
+export async function executeActionPack(
+  projectId: string,
+  request: ActionExecutionRequest,
+): Promise<ActionExecutionResult> {
+  if (!isTauriRuntime) {
+    return {
+      packId: request.packId,
+      kind: "http",
+      succeeded: true,
+      statusCode: 200,
+      durationMs: 84,
+      exitCode: null,
+      resultCode: "ACTION_SUCCEEDED",
+    };
+  }
+  return call("execute_action_pack", { payload: { projectId, request } });
 }
 
 export async function listGitHubRepositories(

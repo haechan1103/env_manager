@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { localizeError, useI18n } from "../../i18n";
 import { APP_VERSION } from "../../lib/version";
@@ -8,6 +8,10 @@ import {
   installAppUpdate,
   type AppUpdateInfo,
 } from "./updateApi";
+import {
+  INITIAL_UPDATE_CHECK_DELAY_MS,
+  UPDATE_CHECK_INTERVAL_MS,
+} from "./checkSchedule";
 
 type UpdateState = "idle" | "checking" | "available" | "installing" | "current" | "error";
 
@@ -30,27 +34,39 @@ export function AppUpdater() {
   const [state, setState] = useState<UpdateState>("idle");
   const [update, setUpdate] = useState<AppUpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const checkingRef = useRef(false);
   const updateNotes = localizedUpdateNotes(update?.notes ?? null, locale);
 
   const runCheck = useCallback(async (manual: boolean) => {
-    setState("checking");
-    setError(null);
+    if (checkingRef.current) return;
+    checkingRef.current = true;
+    if (manual) {
+      setState("checking");
+      setError(null);
+    }
     try {
       const next = await checkForAppUpdate();
       setUpdate(next);
       setState(next ? "available" : manual ? "current" : "idle");
     } catch (reason) {
-      setState(manual ? "error" : "idle");
       if (manual) {
+        setState("error");
         setError(localizeError(reason, locale, "error.updateCheck"));
       }
+    } finally {
+      checkingRef.current = false;
     }
   }, [locale]);
 
   useEffect(() => {
     void currentAppVersion().then(setVersion).catch(() => undefined);
-    const timer = window.setTimeout(() => void runCheck(false), 1500);
-    return () => window.clearTimeout(timer);
+    const checkQuietly = () => void runCheck(false);
+    const timer = window.setTimeout(checkQuietly, INITIAL_UPDATE_CHECK_DELAY_MS);
+    const interval = window.setInterval(checkQuietly, UPDATE_CHECK_INTERVAL_MS);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
   }, [runCheck]);
 
   const install = async () => {

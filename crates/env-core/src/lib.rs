@@ -40,8 +40,9 @@ pub use policy::{
 pub use provider_push::ProviderValue;
 pub use service::{
     AddVariableRequest, CreateEnvFileRequest, CreateGroupRequest, DeleteVariableRequest,
-    LinkRequest, MoveVariableRequest, MutationSummary, OpaqueValueCopyRequest, ProjectService,
-    RedactedOccurrenceReference, RenameGroupRequest, SaveDescriptionRequest, SaveValueRequest,
+    LinkRequest, MoveVariableRequest, MutationSummary, OpaqueValueCopyRequest,
+    PreparedOpaqueValueWrite, ProjectService, RedactedOccurrenceReference, RenameGroupRequest,
+    SaveDescriptionRequest, SaveValueRequest,
 };
 pub use team_import::{
     TeamImportFileProjection, TeamImportOccurrenceProjection, TeamImportOccurrenceState,

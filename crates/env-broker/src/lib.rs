@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -12,9 +13,15 @@ use env_core::{
     OpaqueValueCopyRequest, ProjectService, RedactedValueState, RenameGroupRequest,
     SaveDescriptionRequest, SaveValueRequest,
 };
+use env_provider::action_pack::ActionExecutionRequest;
 use env_provider::provider_push::{ProviderCompareRequest, ProviderPushRequest};
+use env_registry::ProjectRegistration;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+mod stdin_value;
+
+pub use stdin_value::{StdinValueApplyProjection, StdinValueError};
 
 const PLAN_TTL: Duration = Duration::from_secs(300);
 
@@ -23,6 +30,7 @@ pub struct Broker {
     next_plan_id: AtomicU64,
     registered_roots_override: Option<Vec<PathBuf>>,
     provider_app_data_override: Option<PathBuf>,
+    workspace_root_override: Option<PathBuf>,
     agent_host: Mutex<Option<&'static str>>,
     #[cfg(test)]
     _test_app_data: Option<tempfile::TempDir>,
@@ -35,6 +43,7 @@ impl Default for Broker {
             next_plan_id: AtomicU64::new(1),
             registered_roots_override: None,
             provider_app_data_override: None,
+            workspace_root_override: None,
             agent_host: Mutex::new(
                 std::env::var("ENV_MANAGER_AGENT_HOST")
                     .ok()
@@ -58,6 +67,7 @@ struct StoredPlan {
 }
 
 enum PlannedOperation {
+    RegisterProject,
     SetAllowedValue(SaveValueRequest),
     CreateEnvFile(CreateEnvFileRequest),
     AddVariable(AddVariableRequest),
@@ -81,6 +91,7 @@ enum PlannedOperation {
         request: OpaqueValueCopyRequest,
     },
     ProviderPush(ProviderPushRequest),
+    ActionPack(ActionExecutionRequest),
 }
 
 #[derive(Debug, Serialize)]
@@ -101,6 +112,10 @@ struct PlanProjection {
 struct InspectArgs {
     project_path: String,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanRegisterProjectArgs {}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -143,6 +158,16 @@ struct PlanValueArgs {
     file: String,
     key: String,
     new_value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanStdinValueArgs {
+    project_path: String,
+    file: String,
+    key: String,
+    #[serde(default)]
+    trim_final_newline: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,6 +259,15 @@ struct PlanMigrationArgs {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ListProvidersArgs {
     project_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanActionArgs {
+    project_path: String,
+    pack_id: String,
+    file: String,
+    bindings: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -330,14 +364,27 @@ impl Broker {
         }
     }
 
+    #[cfg(test)]
+    fn with_workspace_and_app_data(workspace: PathBuf, app_data: PathBuf) -> Self {
+        Self {
+            provider_app_data_override: Some(app_data),
+            workspace_root_override: Some(workspace),
+            ..Self::default()
+        }
+    }
+
     pub fn call_tool(&self, name: &str, arguments: Value) -> Result<Value, EnvError> {
         match name {
+            "plan_register_current_project" => {
+                self.plan_register_current_project(parse(arguments)?)
+            }
             "inspect_project" => self.inspect(parse(arguments)?),
             "find_reusable_variable_sources" => {
                 self.find_reusable_variable_sources(parse(arguments)?)
             }
             "read_allowed_value" => self.read_allowed(parse(arguments)?),
             "plan_set_allowed_value" => self.plan_value(parse(arguments)?),
+            "plan_stdin_value_write" => self.plan_stdin_value(parse(arguments)?),
             "plan_create_env_file" => self.plan_create_env_file(parse(arguments)?),
             "plan_add_variable" => self.plan_add_variable(parse(arguments)?),
             "plan_create_group" => self.plan_create_group(parse(arguments)?),
@@ -352,10 +399,12 @@ impl Broker {
                 self.plan_copy_variable_from_project(parse(arguments)?)
             }
             "list_deployment_providers" => self.list_deployment_providers(parse(arguments)?),
+            "list_action_packs" => self.list_action_packs(parse(arguments)?),
             "list_runtime_targets" => self.list_runtime_targets(parse(arguments)?),
             "list_team_channels" => self.list_team_channels(parse(arguments)?),
             "compare_deployment_values" => self.compare_deployment_values(parse(arguments)?),
             "plan_provider_push" => self.plan_provider_push(parse(arguments)?),
+            "plan_action" => self.plan_action(parse(arguments)?),
             "apply_plan" => self.apply(parse(arguments)?),
             _ => Err(EnvError::invalid("지원하지 않는 Env Manager 도구입니다.")),
         }
@@ -374,6 +423,32 @@ impl Broker {
         if current.is_none() {
             *current = Some(agent_host);
         }
+    }
+
+    fn plan_register_current_project(
+        &self,
+        _args: PlanRegisterProjectArgs,
+    ) -> Result<Value, EnvError> {
+        let service = self.open_current_workspace_candidate()?;
+        if self.is_registered_root(service.root())?
+            && service.root().join(env_core::MANIFEST_FILE_NAME).is_file()
+        {
+            return Err(EnvError::invalid(
+                "현재 작업 프로젝트는 이미 Env Manager에 등록되고 초기화되어 있습니다.",
+            ));
+        }
+        self.store_plan(
+            &service,
+            PlannedOperation::RegisterProject,
+            format!(
+                "현재 작업 프로젝트 {}을(를) Env Manager에 등록하고 값 없이 구조를 초기화합니다.",
+                service.root().display()
+            ),
+            Vec::new(),
+            Vec::new(),
+            "local-project-registration",
+            None,
+        )
     }
 
     fn inspect(&self, args: InspectArgs) -> Result<Value, EnvError> {
@@ -485,6 +560,35 @@ impl Broker {
             "value-write",
             None,
         )
+    }
+
+    fn plan_stdin_value(&self, args: PlanStdinValueArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let actor = self
+            .agent_host
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or("unknown-agent")
+            .to_owned();
+        let projection = stdin_value::create_plan(
+            &self.provider_app_data()?,
+            &service,
+            &args.file,
+            &args.key,
+            args.trim_final_newline,
+            &actor,
+            &std::env::current_exe()
+                .map_err(|error| EnvError::io(Path::new("env-manager-broker"), error))?,
+        )?;
+        self.audit(
+            service.project_id(),
+            "create_stdin_value_plan",
+            &projection.affected_files,
+            &projection.keys,
+            projection.risk,
+            "OK",
+        );
+        serde_json::to_value(projection).map_err(EnvError::serialization)
     }
 
     fn plan_create_env_file(&self, args: PlanCreateEnvFileArgs) -> Result<Value, EnvError> {
@@ -730,6 +834,21 @@ impl Broker {
         serde_json::to_value(providers).map_err(EnvError::serialization)
     }
 
+    fn list_action_packs(&self, args: ListProvidersArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let app_data = self.provider_app_data()?;
+        let packs = env_provider::action_pack::list(service.root(), &app_data);
+        self.audit(
+            service.project_id(),
+            "list_action_packs",
+            &[],
+            &[],
+            "redacted-action-metadata",
+            "OK",
+        );
+        serde_json::to_value(packs).map_err(EnvError::serialization)
+    }
+
     fn list_runtime_targets(&self, args: ListProvidersArgs) -> Result<Value, EnvError> {
         let service = self.open_registered(&args.project_path)?;
         let targets = env_provider::runtime_target::list(service.root())
@@ -757,7 +876,7 @@ impl Broker {
 
     fn list_team_channels(&self, args: ListTeamChannelsArgs) -> Result<Value, EnvError> {
         let service = self.open_registered(&args.project_path)?;
-        let registry = load_registry_data(&self.provider_app_data()?.join("projects.json"))?;
+        let registry = load_registry_data(&self.registry_path()?)?;
         let channels = registry
             .team_channels
             .into_iter()
@@ -854,6 +973,39 @@ impl Broker {
             vec![args.file],
             keys,
             "opaque-provider-push",
+            None,
+        )
+    }
+
+    fn plan_action(&self, args: PlanActionArgs) -> Result<Value, EnvError> {
+        let service = self.open_registered(&args.project_path)?;
+        let request = ActionExecutionRequest {
+            pack_id: args.pack_id,
+            file: args.file.clone(),
+            bindings: args.bindings,
+        };
+        let app_data = self.provider_app_data()?;
+        let pack = env_provider::action_pack::prepare(service.root(), &app_data, &request)
+            .map_err(action_pack_error)?;
+        let keys = request
+            .bindings
+            .values()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        self.store_plan(
+            &service,
+            PlannedOperation::ActionPack(request),
+            format!(
+                "{} Action을 {}의 환경변수 {}개로 값 노출 없이 실행합니다.",
+                pack.display_name,
+                args.file,
+                keys.len()
+            ),
+            vec![args.file],
+            keys,
+            "opaque-action-pack",
             None,
         )
     }
@@ -956,6 +1108,10 @@ impl Broker {
             return Err(plan_expired());
         }
 
+        if matches!(stored.operation, PlannedOperation::RegisterProject) {
+            return self.apply_project_registration(stored);
+        }
+
         let service = self.open_registered_root(&stored.root)?;
         if service.project_id() != stored.project_id {
             return Err(EnvError::unregistered_project(&stored.project_id));
@@ -964,6 +1120,7 @@ impl Broker {
         let keys = stored.keys.clone();
         let risk = stored.risk;
         let result: Result<Value, EnvError> = match stored.operation {
+            PlannedOperation::RegisterProject => unreachable!("registration handled above"),
             PlannedOperation::SetAllowedValue(request) => {
                 if service.codex_access(&request.key)? != CodexAccess::ReadWrite {
                     let error = EnvError::access_blocked(&request.key);
@@ -1038,6 +1195,14 @@ impl Broker {
                         serde_json::to_value(result).map_err(EnvError::serialization)
                     })
             }
+            PlannedOperation::ActionPack(request) => {
+                let app_data = self.provider_app_data()?;
+                env_provider::action_pack::execute(&service, &app_data, request)
+                    .map_err(action_pack_error)
+                    .and_then(|result| {
+                        serde_json::to_value(result).map_err(EnvError::serialization)
+                    })
+            }
         };
         let result_code = result
             .as_ref()
@@ -1053,6 +1218,63 @@ impl Broker {
         result
     }
 
+    fn apply_project_registration(&self, stored: StoredPlan) -> Result<Value, EnvError> {
+        let service = self.open_current_workspace_candidate()?;
+        if service.root() != stored.root || service.project_id() != stored.project_id {
+            return Err(EnvError::invalid(
+                "계획을 만든 작업 프로젝트가 변경되었습니다. 등록 계획을 다시 만들어주세요.",
+            ));
+        }
+
+        // Initialization may inspect values inside privileged Rust, but its projection is
+        // deliberately discarded so no value crosses the broker boundary.
+        service.initialize()?;
+        let name = service.root().file_name().map_or_else(
+            || "Project".to_owned(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let registration = ProjectRegistration {
+            id: service.project_id().to_owned(),
+            name: name.clone(),
+            display_path: service.root().to_string_lossy().into_owned(),
+            root: service.root().to_path_buf(),
+            file_labels: Default::default(),
+        };
+        let registry_path = self.registry_path()?;
+        env_registry::update(&registry_path, |registry| {
+            if let Some(existing) = registry
+                .projects
+                .iter_mut()
+                .find(|project| project.id == registration.id)
+            {
+                existing.display_path = registration.display_path.clone();
+                existing.root = registration.root.clone();
+            } else {
+                registry.projects.push(registration.clone());
+                registry.projects.sort_by(|left, right| {
+                    left.name
+                        .to_ascii_lowercase()
+                        .cmp(&right.name.to_ascii_lowercase())
+                });
+            }
+            Ok(())
+        })?;
+        self.audit(
+            service.project_id(),
+            "register_current_project",
+            &[],
+            &[],
+            stored.risk,
+            "OK",
+        );
+        Ok(json!({
+            "projectId": service.project_id(),
+            "name": name,
+            "displayPath": service.root(),
+            "registered": true
+        }))
+    }
+
     fn open_registered(&self, project_path: &str) -> Result<ProjectService, EnvError> {
         let path = Path::new(project_path);
         let root = path
@@ -1062,13 +1284,7 @@ impl Broker {
     }
 
     fn open_registered_root(&self, root: &Path) -> Result<ProjectService, EnvError> {
-        let registered = self.registered_projects()?.into_iter().any(|candidate| {
-            candidate
-                .root
-                .canonicalize()
-                .is_ok_and(|candidate| candidate == root)
-        });
-        if !registered {
+        if !self.is_registered_root(root)? {
             return Err(EnvError::unregistered_project(
                 "active-registration-required",
             ));
@@ -1076,6 +1292,38 @@ impl Broker {
         if !root.join(env_core::MANIFEST_FILE_NAME).is_file() {
             return Err(EnvError::unregistered_project("manifest-missing"));
         }
+        ProjectService::open(root)
+    }
+
+    fn is_registered_root(&self, root: &Path) -> Result<bool, EnvError> {
+        Ok(self.registered_projects()?.into_iter().any(|candidate| {
+            candidate
+                .root
+                .canonicalize()
+                .is_ok_and(|candidate| candidate == root)
+        }))
+    }
+
+    fn open_current_workspace_candidate(&self) -> Result<ProjectService, EnvError> {
+        let start = self
+            .workspace_root_override
+            .clone()
+            .map_or_else(std::env::current_dir, Ok)
+            .map_err(|error| EnvError::io(Path::new("."), error))?;
+        let canonical = start
+            .canonicalize()
+            .map_err(|error| EnvError::io(&start, error))?;
+        let root = if let Some(root) = git_worktree_root(&canonical) {
+            root
+        } else {
+            if !looks_like_project_root(&canonical) {
+                return Err(EnvError::invalid(
+                    "현재 Broker 작업 폴더를 프로젝트로 확인하지 못했습니다. Codex에서 프로젝트 폴더를 작업 공간으로 연 뒤 다시 요청해주세요.",
+                ));
+            }
+            canonical
+        };
+        reject_unsafe_registration_root(&root)?;
         ProjectService::open(root)
     }
 
@@ -1107,7 +1355,14 @@ impl Broker {
                 })
                 .collect());
         }
-        load_registered_projects()
+        load_registered_projects(&self.registry_path()?)
+    }
+
+    fn registry_path(&self) -> Result<PathBuf, EnvError> {
+        if let Some(path) = std::env::var_os("ENV_MANAGER_REGISTRY_PATH") {
+            return Ok(PathBuf::from(path));
+        }
+        Ok(self.provider_app_data()?.join("projects.json"))
     }
 
     fn provider_app_data(&self) -> Result<PathBuf, EnvError> {
@@ -1132,50 +1387,87 @@ impl Broker {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .unwrap_or("unknown-agent")
             .to_owned();
-        let event = AuditEvent {
-            timestamp_ms: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |duration| duration.as_millis() as u64),
+        append_audit_event(
+            self.provider_app_data().ok().as_deref(),
             project_id,
             actor,
-            category: audit_category(operation, policy_decision),
             operation,
             relative_paths,
             variable_names,
             policy_decision,
-            outcome: if result_code == "OK" {
-                "allowed"
-            } else if result_code == "CODEX_ACCESS_BLOCKED" {
-                "blocked"
-            } else {
-                "failed"
-            },
             result_code,
-        };
-        let directory = std::env::var_os("ENV_MANAGER_AUDIT_DIR")
-            .map(PathBuf::from)
-            .or_else(|| {
-                self.provider_app_data()
-                    .ok()
-                    .map(|path| path.join("agent-activity"))
-            })
-            .unwrap_or_else(|| std::env::temp_dir().join("env-manager-audit"));
-        if fs::create_dir_all(&directory).is_err() {
-            return;
-        }
-        let path = directory.join(format!("{project_id}.jsonl"));
-        if fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 2 * 1024 * 1024) {
-            let previous = directory.join(format!("{project_id}.previous.jsonl"));
-            let _ = fs::remove_file(&previous);
-            let _ = fs::rename(&path, previous);
-        }
-        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
-            return;
-        };
-        if serde_json::to_writer(&mut file, &event).is_ok() {
-            let _ = file.write_all(b"\n");
-        }
+        );
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_audit_event(
+    app_data: Option<&Path>,
+    project_id: &str,
+    actor: String,
+    operation: &str,
+    relative_paths: &[String],
+    variable_names: &[String],
+    policy_decision: &str,
+    result_code: &str,
+) {
+    let event = AuditEvent {
+        timestamp_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_millis() as u64),
+        project_id,
+        actor,
+        category: audit_category(operation, policy_decision),
+        operation,
+        relative_paths,
+        variable_names,
+        policy_decision,
+        outcome: if result_code == "OK" {
+            "allowed"
+        } else if result_code == "CODEX_ACCESS_BLOCKED" {
+            "blocked"
+        } else {
+            "failed"
+        },
+        result_code,
+    };
+    let directory = std::env::var_os("ENV_MANAGER_AUDIT_DIR")
+        .map(PathBuf::from)
+        .or_else(|| app_data.map(|path| path.join("agent-activity")))
+        .unwrap_or_else(|| std::env::temp_dir().join("env-manager-audit"));
+    if fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join(format!("{project_id}.jsonl"));
+    if fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 2 * 1024 * 1024) {
+        let previous = directory.join(format!("{project_id}.previous.jsonl"));
+        let _ = fs::remove_file(&previous);
+        let _ = fs::rename(&path, previous);
+    }
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    if serde_json::to_writer(&mut file, &event).is_ok() {
+        let _ = file.write_all(b"\n");
+    }
+}
+
+pub fn apply_stdin_value_from_default_paths<R: std::io::Read>(
+    plan_id: &str,
+    trim_final_newline: bool,
+    reader: R,
+) -> Result<StdinValueApplyProjection, StdinValueError> {
+    let app_data = provider_app_data().map_err(StdinValueError::from)?;
+    let registry_path = std::env::var_os("ENV_MANAGER_REGISTRY_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| app_data.join("projects.json"));
+    stdin_value::apply_plan(
+        &app_data,
+        &registry_path,
+        plan_id,
+        trim_final_newline,
+        reader,
+    )
 }
 
 fn parse<T: for<'de> Deserialize<'de>>(value: Value) -> Result<T, EnvError> {
@@ -1194,7 +1486,7 @@ pub fn guard_hook_decision(input: &Value) -> Value {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": "Direct .env access is blocked by Env Manager. Use the env-manager MCP tools instead."
+                "permissionDecisionReason": "Direct env-file access is blocked by Env Manager. Use the env-manager MCP tools instead."
             }
         });
     }
@@ -1278,9 +1570,14 @@ fn value_contains_env_reference(value: &Value) -> bool {
 }
 
 fn contains_env_reference(text: &str) -> bool {
-    text.match_indices(".env").any(|(index, _)| {
+    contains_bounded_env_reference(text, ".env")
+        || contains_bounded_env_reference(text, ".dev.vars")
+}
+
+fn contains_bounded_env_reference(text: &str, marker: &str) -> bool {
+    text.match_indices(marker).any(|(index, _)| {
         let previous = text[..index].chars().next_back();
-        let next = text[index + 4..].chars().next();
+        let next = text[index + marker.len()..].chars().next();
         is_env_boundary_before(previous) && is_env_boundary_after(next)
     })
 }
@@ -1305,64 +1602,27 @@ fn is_env_boundary_after(character: Option<char>) -> bool {
     })
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RegistryData {
-    #[serde(default)]
-    projects: Vec<RegistryProject>,
-    #[serde(default)]
-    #[serde(deserialize_with = "env_team::deserialize_team_channel_registrations")]
-    team_channels: Vec<env_team::TeamChannelRegistration>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RegistryProject {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    display_path: Option<String>,
-    root: PathBuf,
-}
-
 struct RegisteredProject {
     name: String,
     display_path: String,
     root: PathBuf,
 }
 
-fn load_registered_projects() -> Result<Vec<RegisteredProject>, EnvError> {
-    let path = if let Some(path) = std::env::var_os("ENV_MANAGER_REGISTRY_PATH") {
-        PathBuf::from(path)
-    } else {
-        let base = directories::BaseDirs::new()
-            .ok_or_else(|| EnvError::invalid("앱 데이터 경로를 확인하지 못했습니다."))?;
-        base.data_dir()
-            .join("dev.hgc.env-manager")
-            .join("projects.json")
-    };
-    let registry = load_registry_data(&path)?;
+fn load_registered_projects(path: &Path) -> Result<Vec<RegisteredProject>, EnvError> {
+    let registry = load_registry_data(path)?;
     Ok(registry
         .projects
         .into_iter()
         .map(|project| RegisteredProject {
-            name: project.name.unwrap_or_else(|| {
-                project.root.file_name().map_or_else(
-                    || "Project".to_owned(),
-                    |name| name.to_string_lossy().into_owned(),
-                )
-            }),
-            display_path: project
-                .display_path
-                .unwrap_or_else(|| project.root.to_string_lossy().into_owned()),
+            name: project.name,
+            display_path: project.display_path,
             root: project.root,
         })
         .collect())
 }
 
-fn load_registry_data(path: &Path) -> Result<RegistryData, EnvError> {
-    let bytes = fs::read(path).map_err(|error| EnvError::io(path, error))?;
-    serde_json::from_slice::<RegistryData>(&bytes).map_err(EnvError::serialization)
+fn load_registry_data(path: &Path) -> Result<env_registry::RegistryData, EnvError> {
+    env_registry::read(path)
 }
 
 fn plan_expired() -> EnvError {
@@ -1378,20 +1638,86 @@ fn provider_app_data() -> Result<PathBuf, EnvError> {
     Ok(base.data_dir().join("dev.hgc.env-manager"))
 }
 
+fn git_worktree_root(start: &Path) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(start)
+        .args(["rev-parse", "--show-toplevel"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() || output.stdout.len() > 32 * 1024 {
+        return None;
+    }
+    let root = PathBuf::from(String::from_utf8(output.stdout).ok()?.trim());
+    let root = root.canonicalize().ok()?;
+    start.starts_with(&root).then_some(root)
+}
+
+fn looks_like_project_root(root: &Path) -> bool {
+    const MARKERS: &[&str] = &[
+        "package.json",
+        "Cargo.toml",
+        "pyproject.toml",
+        "go.mod",
+        "Gemfile",
+        "composer.json",
+        ".env-manager.json",
+    ];
+    if MARKERS.iter().any(|marker| root.join(marker).is_file()) {
+        return true;
+    }
+    fs::read_dir(root).is_ok_and(|entries| {
+        entries.filter_map(Result::ok).any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(env_core::is_env_candidate)
+        })
+    })
+}
+
+fn reject_unsafe_registration_root(root: &Path) -> Result<(), EnvError> {
+    if root.parent().is_none() {
+        return Err(EnvError::invalid(
+            "파일시스템 루트는 프로젝트로 등록할 수 없습니다.",
+        ));
+    }
+    if directories::BaseDirs::new().is_some_and(|base| {
+        base.home_dir()
+            .canonicalize()
+            .is_ok_and(|home| home == root)
+    }) {
+        return Err(EnvError::invalid(
+            "사용자 홈 전체는 프로젝트로 등록할 수 없습니다.",
+        ));
+    }
+    Ok(())
+}
+
 fn provider_error(error: env_provider::provider_push::ProviderPushError) -> EnvError {
     EnvError::invalid(format!("{}: {}", error.code, error.message))
 }
 
+fn action_pack_error(error: env_provider::action_pack::ActionPackError) -> EnvError {
+    EnvError::invalid(format!("{}: {}", error.code, error.message))
+}
+
 fn audit_category(operation: &str, policy_decision: &str) -> &'static str {
-    if matches!(
+    if operation == "register_current_project" {
+        "project-registration"
+    } else if matches!(
         operation,
-        "inspect_project" | "list_team_channels" | "list_runtime_targets"
+        "inspect_project" | "list_team_channels" | "list_runtime_targets" | "list_action_packs"
     ) {
         "structure-inspection"
     } else if operation == "read_allowed_value" {
         "value-read"
     } else if operation == "compare_deployment_values" {
         "provider-compare"
+    } else if policy_decision == "opaque-action-pack" {
+        "action-execution"
     } else if policy_decision == "policy-change" || policy_decision == "protection-downgrade" {
         "policy-change"
     } else {
@@ -1414,6 +1740,13 @@ fn normalize_agent_host(client_name: &str) -> Option<&'static str> {
 
 pub fn tool_definitions() -> Value {
     json!([
+        tool(
+            "plan_register_current_project",
+            "Plan local registration of the broker's current Git worktree or recognized project workspace. Takes no path, never returns env values, and never changes env files.",
+            json!({
+                "type": "object", "properties": {}, "additionalProperties": false
+            })
+        ),
         tool(
             "inspect_project",
             "Return redacted env structure and value presence for a registered project.",
@@ -1449,8 +1782,22 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "plan_stdin_value_write",
+            "Create a five-minute, single-use, value-free plan for writing one managed occurrence from the returned trusted Broker executable's stdin. Protected and unclassified values remain unreadable, and linked members are included in the impact.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" },
+                    "file": { "type": "string" },
+                    "key": { "type": "string" },
+                    "trimFinalNewline": { "type": "boolean", "default": false }
+                },
+                "required": ["projectPath", "file", "key"],
+                "additionalProperties": false
+            })
+        ),
+        tool(
             "plan_create_env_file",
-            "Plan creating one empty env file inside an existing registered-project directory. Existing files and example variants are rejected.",
+            "Plan creating one empty supported env file (.env*, *.env*, or Wrangler .dev.vars*) inside an existing registered-project directory. Existing files and example variants are rejected.",
             json!({
                 "type": "object", "properties": {
                     "projectPath": { "type": "string" }, "file": { "type": "string" }
@@ -1572,6 +1919,15 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "list_action_packs",
+            "List locally installed Action Packs, their required secret bindings, target metadata, and CLI compatibility. Never returns values, commands, arguments, or response bodies.",
+            json!({
+                "type": "object", "properties": {
+                    "projectPath": { "type": "string" }
+                }, "required": ["projectPath"], "additionalProperties": false
+            })
+        ),
+        tool(
             "list_runtime_targets",
             "List registered fixed-verifier Runtime targets for a project. Returns target IDs, display names, source files, and transport labels only; never returns recipients, destinations, remote paths, values, or commands.",
             json!({
@@ -1652,6 +2008,26 @@ pub fn tool_definitions() -> Value {
             })
         ),
         tool(
+            "plan_action",
+            "Create a redacted plan for one locally installed Action Pack. Bindings map pack binding IDs to managed variable names; raw values, commands, output, and response bodies are never accepted or returned.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "packId": { "type": "string" },
+                    "file": { "type": "string" },
+                    "bindings": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" },
+                        "minProperties": 1,
+                        "maxProperties": 16
+                    }
+                },
+                "required": ["projectPath", "packId", "file", "bindings"],
+                "additionalProperties": false
+            })
+        ),
+        tool(
             "apply_plan",
             "Apply one unexpired redacted plan authorized by the current user request.",
             json!({
@@ -1669,6 +2045,9 @@ fn tool(name: &str, description: &str, input_schema: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
     use env_test_support::SyntheticProject;
 
     use super::*;
@@ -1687,6 +2066,498 @@ mod tests {
             .set_codex_access("PORT", CodexAccess::ReadWrite)
             .expect("explicitly allow synthetic runtime setting");
         (project, service)
+    }
+
+    fn register_for_stdin_apply(app_data: &Path, service: &ProjectService) -> PathBuf {
+        let registry_path = app_data.join("projects.json");
+        env_registry::write(
+            &registry_path,
+            &env_registry::RegistryData {
+                projects: vec![ProjectRegistration {
+                    id: service.project_id().to_owned(),
+                    name: "Synthetic".to_owned(),
+                    display_path: service.root().to_string_lossy().into_owned(),
+                    root: service.root().to_path_buf(),
+                    file_labels: Default::default(),
+                }],
+                ..env_registry::RegistryData::default()
+            },
+        )
+        .expect("stdin registry");
+        registry_path
+    }
+
+    #[test]
+    fn opaque_stdin_plan_updates_protected_linked_values_without_exposing_them() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", "AUTH_SECRET=fake_old_secret\n");
+        project.write(".env.staging", "AUTH_SECRET=fake_old_secret\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        service
+            .create_link(LinkRequest {
+                key: "AUTH_SECRET".to_owned(),
+                files: vec![".env.local".to_owned(), ".env.staging".to_owned()],
+                source_file: None,
+            })
+            .expect("link");
+        assert_eq!(
+            service.codex_access("AUTH_SECRET").expect("access"),
+            CodexAccess::Protected
+        );
+        let app_data = tempfile::tempdir().expect("app data");
+        let registry_path = register_for_stdin_apply(app_data.path(), &service);
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![service.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+        broker.identify_client("codex");
+
+        let plan = broker
+            .call_tool(
+                "plan_stdin_value_write",
+                json!({
+                    "projectPath": project.root(),
+                    "file": ".env.local",
+                    "key": "AUTH_SECRET",
+                    "trimFinalNewline": true
+                }),
+            )
+            .expect("stdin plan");
+        let plan_id = plan["planId"].as_str().expect("plan id");
+        assert_eq!(plan["affectedFiles"].as_array().map(Vec::len), Some(2));
+        assert!(!plan.to_string().contains("fake_old_secret"));
+        let stored_plan_path = app_data
+            .path()
+            .join("stdin-value-plans")
+            .join(format!("{plan_id}.json"));
+        let stored_plan = fs::read_to_string(&stored_plan_path).expect("stored stdin plan");
+        assert!(!stored_plan.contains("fake_old_secret"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            assert_eq!(
+                fs::metadata(&stored_plan_path)
+                    .expect("plan metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+
+        let new_canary = "fake_new_stdin_canary_82a1\n";
+        let result = stdin_value::apply_plan(
+            app_data.path(),
+            &registry_path,
+            plan_id,
+            true,
+            new_canary.as_bytes(),
+        )
+        .expect("stdin apply");
+        let serialized = serde_json::to_string(&result).expect("serialize result");
+        assert!(!serialized.contains("fake_new_stdin_canary_82a1"));
+        assert_eq!(
+            project.read(".env.local"),
+            b"AUTH_SECRET=fake_new_stdin_canary_82a1\n"
+        );
+        assert_eq!(
+            project.read(".env.staging"),
+            b"AUTH_SECRET=fake_new_stdin_canary_82a1\n"
+        );
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                plan_id,
+                true,
+                &b"fake_replay"[..]
+            )
+            .expect_err("single use")
+            .code(),
+            "PLAN_EXPIRED"
+        );
+        let audit = fs::read_to_string(
+            app_data
+                .path()
+                .join("agent-activity")
+                .join(format!("{}.jsonl", service.project_id())),
+        )
+        .expect("stdin audit");
+        assert!(audit.contains("apply_stdin_value"));
+        assert!(!audit.contains("fake_new_stdin_canary_82a1"));
+        assert!(!audit.contains("fake_old_secret"));
+    }
+
+    #[test]
+    fn opaque_stdin_plan_rejects_stale_files_and_consumes_the_plan() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", "AUTH_SECRET=fake_before\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        let app_data = tempfile::tempdir().expect("app data");
+        let registry_path = register_for_stdin_apply(app_data.path(), &service);
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![service.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+        let plan = broker
+            .call_tool(
+                "plan_stdin_value_write",
+                json!({
+                    "projectPath": project.root(),
+                    "file": ".env.local",
+                    "key": "AUTH_SECRET"
+                }),
+            )
+            .expect("stdin plan");
+        let plan_id = plan["planId"].as_str().expect("plan id");
+        project.write(".env.local", "AUTH_SECRET=fake_external_change_longer\n");
+
+        let error = stdin_value::apply_plan(
+            app_data.path(),
+            &registry_path,
+            plan_id,
+            false,
+            &b"fake_should_not_apply"[..],
+        )
+        .expect_err("stale plan");
+        assert_eq!(error.code(), "FILE_CHANGED_EXTERNALLY");
+        assert_eq!(
+            project.read(".env.local"),
+            b"AUTH_SECRET=fake_external_change_longer\n"
+        );
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                plan_id,
+                false,
+                &b"fake_replay"[..]
+            )
+            .expect_err("consumed stale plan")
+            .code(),
+            "PLAN_EXPIRED"
+        );
+    }
+
+    #[test]
+    fn opaque_stdin_plan_rejects_empty_oversized_and_mismatched_input() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", "AUTH_SECRET=fake_before\n");
+        let service = ProjectService::open(project.root()).expect("service");
+        service.initialize().expect("initialize");
+        let app_data = tempfile::tempdir().expect("app data");
+        let registry_path = register_for_stdin_apply(app_data.path(), &service);
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![service.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+        let create_plan = |trim_final_newline| {
+            broker
+                .call_tool(
+                    "plan_stdin_value_write",
+                    json!({
+                        "projectPath": project.root(),
+                        "file": ".env.local",
+                        "key": "AUTH_SECRET",
+                        "trimFinalNewline": trim_final_newline
+                    }),
+                )
+                .expect("stdin plan")["planId"]
+                .as_str()
+                .expect("plan id")
+                .to_owned()
+        };
+
+        let empty_plan = create_plan(true);
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &empty_plan,
+                true,
+                &b"\n"[..]
+            )
+            .expect_err("empty after trim")
+            .code(),
+            "STDIN_VALUE_EMPTY"
+        );
+
+        let oversized_plan = create_plan(false);
+        let oversized = vec![b'x'; 64 * 1024 + 1];
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &oversized_plan,
+                false,
+                oversized.as_slice()
+            )
+            .expect_err("oversized")
+            .code(),
+            "STDIN_VALUE_TOO_LARGE"
+        );
+
+        let mismatch_plan = create_plan(true);
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &mismatch_plan,
+                false,
+                &b"fake_not_applied"[..]
+            )
+            .expect_err("normalization mismatch")
+            .code(),
+            "STDIN_NORMALIZATION_MISMATCH"
+        );
+
+        let nul_plan = create_plan(false);
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &nul_plan,
+                false,
+                &b"fake_nul\0value"[..]
+            )
+            .expect_err("NUL")
+            .code(),
+            "STDIN_VALUE_INVALID"
+        );
+
+        let utf8_plan = create_plan(false);
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &utf8_plan,
+                false,
+                &[0xff_u8][..]
+            )
+            .expect_err("invalid UTF-8")
+            .code(),
+            "STDIN_VALUE_INVALID_UTF8"
+        );
+
+        let expired_plan = create_plan(false);
+        let expired_path = app_data
+            .path()
+            .join("stdin-value-plans")
+            .join(format!("{expired_plan}.json"));
+        let mut expired_json: Value =
+            serde_json::from_slice(&fs::read(&expired_path).expect("read expiring plan"))
+                .expect("expiring plan JSON");
+        expired_json["expiresAtMs"] = json!(0);
+        fs::write(
+            &expired_path,
+            serde_json::to_vec(&expired_json).expect("expired plan JSON"),
+        )
+        .expect("expire plan");
+        assert_eq!(
+            stdin_value::apply_plan(
+                app_data.path(),
+                &registry_path,
+                &expired_plan,
+                false,
+                &b"fake_not_applied"[..]
+            )
+            .expect_err("expired")
+            .code(),
+            "PLAN_EXPIRED"
+        );
+        assert_eq!(project.read(".env.local"), b"AUTH_SECRET=fake_before\n");
+    }
+
+    #[test]
+    fn action_pack_plan_and_result_never_cross_the_broker_with_the_secret() {
+        let (project, service) = registered_project();
+        let app_data = tempfile::tempdir().expect("app data");
+        let pack_source = tempfile::tempdir().expect("pack source");
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let address = listener.local_addr().expect("address");
+        let manifest = json!({
+            "schemaVersion": 1,
+            "id": "local.test.api-check",
+            "displayName": "API check",
+            "description": "Synthetic action",
+            "packVersion": "1.0.0",
+            "actionProtocolVersion": "0.1.0",
+            "type": "http",
+            "method": "GET",
+            "url": format!("http://{address}/health"),
+            "secretBindings": {
+                "Authorization": {
+                    "source": "header",
+                    "format": "Bearer {value}"
+                }
+            },
+            "resultPolicy": {
+                "status": true,
+                "duration": true,
+                "body": false,
+                "successStatusCodes": [200]
+            },
+            "timeoutSeconds": 5
+        });
+        serde_json::from_value::<env_provider::action_pack::ActionPackManifest>(manifest.clone())
+            .expect("manifest shape");
+        fs::write(
+            pack_source.path().join("action.json"),
+            serde_json::to_vec_pretty(&manifest).expect("manifest"),
+        )
+        .expect("write manifest");
+        env_provider::action_pack::install(pack_source.path(), app_data.path(), false)
+            .expect("install");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request = [0_u8; 4096];
+            let size = stream.read(&mut request).expect("read");
+            let request = String::from_utf8_lossy(&request[..size]).to_ascii_lowercase();
+            assert!(
+                request.contains(&format!("authorization: bearer {CANARY}").to_ascii_lowercase())
+            );
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                CANARY.len(),
+                CANARY
+            )
+            .expect("respond");
+        });
+        let broker = Broker::with_registered_roots_and_app_data(
+            vec![service.root().to_path_buf()],
+            app_data.path().to_path_buf(),
+        );
+
+        let packs = broker
+            .call_tool(
+                "list_action_packs",
+                json!({ "projectPath": project.root() }),
+            )
+            .expect("list packs");
+        assert!(!packs.to_string().contains(CANARY));
+        let plan = broker
+            .call_tool(
+                "plan_action",
+                json!({
+                    "projectPath": project.root(),
+                    "packId": "local.test.api-check",
+                    "file": ".env.local",
+                    "bindings": { "Authorization": "GPT_API_KEY" }
+                }),
+            )
+            .expect("plan action");
+        assert!(!plan.to_string().contains(CANARY));
+        let plan_id = plan["planId"].as_str().expect("plan id");
+        let result = broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("apply action");
+        server.join().expect("server");
+
+        assert_eq!(result["succeeded"], true);
+        assert_eq!(result["statusCode"], 200);
+        assert!(!result.to_string().contains(CANARY));
+    }
+
+    #[test]
+    fn current_workspace_registration_is_redacted_and_immediately_inspectable() {
+        let project = SyntheticProject::new();
+        project.write(
+            ".env.local",
+            &format!("DATABASE_PASSWORD={CANARY}\nPUBLIC_PORT=fake_3000\n"),
+        );
+        let original = project.read(".env.local");
+        let app_data = tempfile::tempdir().expect("app data");
+        let broker = Broker::with_workspace_and_app_data(
+            project.root().to_path_buf(),
+            app_data.path().to_path_buf(),
+        );
+
+        let plan = broker
+            .call_tool("plan_register_current_project", json!({}))
+            .expect("registration plan");
+        assert!(!plan.to_string().contains(CANARY));
+        let plan_id = plan["planId"].as_str().expect("plan id");
+        let applied = broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("registration apply");
+        assert_eq!(applied["registered"], true);
+        assert!(!applied.to_string().contains(CANARY));
+
+        let inspected = broker
+            .call_tool(
+                "inspect_project",
+                json!({ "projectPath": project.root().to_string_lossy() }),
+            )
+            .expect("registered project inspection");
+        assert!(!inspected.to_string().contains(CANARY));
+        assert_eq!(project.read(".env.local"), original);
+
+        let registry =
+            env_registry::read(&app_data.path().join("projects.json")).expect("local registry");
+        assert_eq!(registry.projects.len(), 1);
+        assert_eq!(registry.projects[0].id, applied["projectId"]);
+        let audit = fs::read_to_string(
+            app_data
+                .path()
+                .join("agent-activity")
+                .join(format!("{}.jsonl", registry.projects[0].id)),
+        )
+        .expect("registration audit");
+        assert!(audit.contains("register_current_project"));
+        assert!(!audit.contains(CANARY));
+    }
+
+    #[test]
+    fn registration_repairs_a_missing_manifest_without_overwriting_local_aliases() {
+        let project = SyntheticProject::new();
+        project.write(".env.local", &format!("DATABASE_PASSWORD={CANARY}\n"));
+        let service = ProjectService::open(project.root()).expect("service");
+        let app_data = tempfile::tempdir().expect("app data");
+        let registry_path = app_data.path().join("projects.json");
+        env_registry::write(
+            &registry_path,
+            &env_registry::RegistryData {
+                projects: vec![ProjectRegistration {
+                    id: service.project_id().to_owned(),
+                    name: "My local alias".to_owned(),
+                    display_path: service.root().to_string_lossy().into_owned(),
+                    root: service.root().to_path_buf(),
+                    file_labels: Default::default(),
+                }],
+                last_selected_project_id: Some(service.project_id().to_owned()),
+                ..env_registry::RegistryData::default()
+            },
+        )
+        .expect("registry without manifest");
+        let broker = Broker::with_workspace_and_app_data(
+            project.root().to_path_buf(),
+            app_data.path().to_path_buf(),
+        );
+
+        let plan = broker
+            .call_tool("plan_register_current_project", json!({}))
+            .expect("repair plan");
+        let plan_id = plan["planId"].as_str().expect("plan id");
+        broker
+            .call_tool("apply_plan", json!({ "planId": plan_id }))
+            .expect("repair apply");
+
+        assert!(project.root().join(env_core::MANIFEST_FILE_NAME).is_file());
+        let registry = env_registry::read(&registry_path).expect("repaired registry");
+        assert_eq!(registry.projects[0].name, "My local alias");
+        assert_eq!(
+            registry.last_selected_project_id.as_deref(),
+            Some(service.project_id())
+        );
+        assert!(
+            !serde_json::to_string(&registry)
+                .expect("registry json")
+                .contains(CANARY)
+        );
     }
 
     #[test]
@@ -1708,9 +2579,11 @@ mod tests {
             app_data.path().join("projects.json"),
             serde_json::to_vec(&json!({
                 "projects": [{
+                    "id": service.project_id(),
                     "name": "Synthetic project",
                     "displayPath": project.root().to_string_lossy(),
                     "root": project.root(),
+                    "fileLabels": {},
                 }],
                 "teamChannels": [{
                     "id": "folder_local_12345678",
@@ -1844,6 +2717,10 @@ mod tests {
                 "toolName": "create_file",
                 "toolInput": { "filePath": "C:\\fake-project\\.env.local" }
             }),
+            json!({
+                "tool_name": "Write",
+                "tool_input": { "file_path": "workers/api/.dev.vars.production" }
+            }),
         ] {
             assert_eq!(
                 guard_hook_decision(&input)["hookSpecificOutput"]["permissionDecision"],
@@ -1869,6 +2746,12 @@ mod tests {
             json!({
                 "tool_name": "Bash",
                 "tool_input": { "command": "npm test" }
+            }),
+            json!({
+                "tool_name": "Bash",
+                "tool_input": {
+                    "command": "openssl rand -base64 32 | env-manager-broker value apply-stdin --plan stdin-plan-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --trim-final-newline"
+                }
             }),
         ] {
             assert_eq!(guard_hook_decision(&input), json!({}));
@@ -2020,6 +2903,24 @@ mod tests {
         broker
             .call_tool("apply_plan", json!({ "planId": plan_id }))
             .expect("file apply");
+
+        let wrangler_plan = broker
+            .call_tool(
+                "plan_create_env_file",
+                json!({
+                    "projectPath": project.root().to_string_lossy(),
+                    "file": "apps/mobile/.dev.vars.staging"
+                }),
+            )
+            .expect("Wrangler file plan");
+        let wrangler_plan_id = wrangler_plan
+            .get("planId")
+            .and_then(Value::as_str)
+            .expect("Wrangler plan id");
+        broker
+            .call_tool("apply_plan", json!({ "planId": wrangler_plan_id }))
+            .expect("Wrangler file apply");
+        assert_eq!(project.read("apps/mobile/.dev.vars.staging"), b"");
 
         for key in [
             "EXPO_PUBLIC_API_BASE_URL",

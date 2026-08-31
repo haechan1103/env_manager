@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
@@ -11,30 +10,18 @@ use env_core::{
     EnvResult, MigrationPlan, MigrationPreview, MutationSummary, ProjectService, TeamImportPlan,
     TeamImportPreview, TeamImportSummary, TeamImportValueSide, is_env_candidate,
 };
-use env_team::TeamChannelRegistration;
+use env_registry::{ProjectRegistration, RegistryData};
 use notify::{
     Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
     event::{CreateKind, ModifyKind, RemoveKind},
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
-use tempfile::NamedTempFile;
 
 mod agent_activity;
 mod team_channels;
 
 pub use team_channels::TeamChannelProjection;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectRegistration {
-    pub id: String,
-    pub name: String,
-    pub display_path: String,
-    root: PathBuf,
-    #[serde(default)]
-    file_labels: BTreeMap<String, String>,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,31 +31,7 @@ pub struct ProjectSummary {
     pub display_path: String,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RegistryData {
-    #[serde(default)]
-    projects: Vec<ProjectRegistration>,
-    #[serde(default)]
-    last_selected_project_id: Option<String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "env_team::deserialize_team_channel_registrations")]
-    team_channels: Vec<TeamChannelRegistration>,
-    #[serde(default)]
-    provider_push_receipts: Vec<ProviderPushReceipt>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProviderPushReceipt {
-    pub timestamp_ms: u64,
-    pub project_id: String,
-    pub provider: String,
-    pub source_file: String,
-    pub destination: String,
-    pub succeeded_keys: Vec<String>,
-    pub failed_keys: Vec<String>,
-}
+pub use env_registry::ProviderPushReceipt;
 
 pub struct AppRuntime {
     registry_path: PathBuf,
@@ -135,14 +98,9 @@ impl AppRuntime {
         let app_data = app.path().app_data_dir()?;
         fs::create_dir_all(&app_data)?;
         let registry_path = app_data.join("projects.json");
-        let mut migrate_team_channels = false;
-        let mut registry: RegistryData = if registry_path.exists() {
-            let bytes = fs::read(&registry_path)?;
-            migrate_team_channels = env_team::registry_contains_legacy_team_channels(&bytes);
-            serde_json::from_slice(&bytes)?
-        } else {
-            RegistryData::default()
-        };
+        let migrate_team_channels = registry_path.exists()
+            && env_team::registry_contains_legacy_team_channels(&fs::read(&registry_path)?);
+        let mut registry = env_registry::read(&registry_path)?;
         migrate_legacy_file_labels(&registry_path, &mut registry)?;
         if migrate_team_channels {
             persist_registry(&registry_path, &registry)?;
@@ -171,6 +129,7 @@ impl AppRuntime {
     }
 
     pub fn list(&self) -> Vec<ProjectSummary> {
+        self.refresh_registry_best_effort();
         self.registry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -181,6 +140,7 @@ impl AppRuntime {
     }
 
     pub fn last_selected_project_id(&self) -> Option<String> {
+        self.refresh_registry_best_effort();
         let registry = self
             .registry
             .lock()
@@ -198,20 +158,18 @@ impl AppRuntime {
     }
 
     pub fn remember_selected_project(&self, project_id: Option<&str>) -> EnvResult<()> {
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(project_id) = project_id
-            && !registry
-                .projects
-                .iter()
-                .any(|project| project.id == project_id)
-        {
-            return Err(EnvError::unregistered_project(project_id));
-        }
-        registry.last_selected_project_id = project_id.map(str::to_owned);
-        self.persist(&registry)
+        self.update_registry(|registry| {
+            if let Some(project_id) = project_id
+                && !registry
+                    .projects
+                    .iter()
+                    .any(|project| project.id == project_id)
+            {
+                return Err(EnvError::unregistered_project(project_id));
+            }
+            registry.last_selected_project_id = project_id.map(str::to_owned);
+            Ok(())
+        })
     }
 
     pub fn register(&self, root: &Path) -> EnvResult<ProjectSummary> {
@@ -227,11 +185,7 @@ impl AppRuntime {
             root: service.root().to_path_buf(),
             file_labels: BTreeMap::new(),
         };
-        {
-            let mut registry = self
-                .registry
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (summary, file_labels, migrated_labels) = self.update_registry(|registry| {
             if let Some(existing) = registry
                 .projects
                 .iter_mut()
@@ -242,72 +196,49 @@ impl AppRuntime {
                 let migrated_labels = migrate_registration_labels(existing, &service)?;
                 let summary = ProjectSummary::from(&*existing);
                 let file_labels = existing.file_labels.clone();
-                self.persist(&registry)?;
-                if migrated_labels {
-                    env_core::ManifestStore::for_root(service.root()).take_legacy_file_labels()?;
-                }
-                service.initialize_with_file_labels(&file_labels)?;
-                return Ok(summary);
+                Ok((summary, file_labels, migrated_labels))
             } else {
-                registry.projects.push(registration.clone());
+                let mut registration = registration.clone();
+                let migrated_labels = migrate_registration_labels(&mut registration, &service)?;
+                let file_labels = registration.file_labels.clone();
+                let summary = ProjectSummary::from(&registration);
+                registry.projects.push(registration);
                 registry.projects.sort_by(|left, right| {
                     left.name
                         .to_ascii_lowercase()
                         .cmp(&right.name.to_ascii_lowercase())
                 });
+                Ok((summary, file_labels, migrated_labels))
             }
-            self.persist(&registry)?;
+        })?;
+        if migrated_labels {
+            env_core::ManifestStore::for_root(service.root()).take_legacy_file_labels()?;
         }
-        {
-            let mut registry = self
-                .registry
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if let Some(project) = registry
-                .projects
-                .iter_mut()
-                .find(|project| project.id == registration.id)
-            {
-                let migrated_labels = migrate_registration_labels(project, &service)?;
-                let file_labels = project.file_labels.clone();
-                self.persist(&registry)?;
-                if migrated_labels {
-                    env_core::ManifestStore::for_root(service.root()).take_legacy_file_labels()?;
-                }
-                service.initialize_with_file_labels(&file_labels)?;
-            }
-        }
-        Ok(ProjectSummary::from(&registration))
+        service.initialize_with_file_labels(&file_labels)?;
+        Ok(summary)
     }
 
     pub fn rename_project(&self, project_id: &str, name: &str) -> EnvResult<ProjectSummary> {
         env_core::validate_display_name(name)?;
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let project = registry
-            .projects
-            .iter_mut()
-            .find(|project| project.id == project_id)
-            .ok_or_else(|| EnvError::unregistered_project(project_id))?;
-        project.name = name.trim().to_owned();
-        let summary = ProjectSummary::from(&*project);
-        registry.projects.sort_by(|left, right| {
-            left.name
-                .to_ascii_lowercase()
-                .cmp(&right.name.to_ascii_lowercase())
-        });
-        self.persist(&registry)?;
-        Ok(summary)
+        self.update_registry(|registry| {
+            let project = registry
+                .projects
+                .iter_mut()
+                .find(|project| project.id == project_id)
+                .ok_or_else(|| EnvError::unregistered_project(project_id))?;
+            project.name = name.trim().to_owned();
+            let summary = ProjectSummary::from(&*project);
+            registry.projects.sort_by(|left, right| {
+                left.name
+                    .to_ascii_lowercase()
+                    .cmp(&right.name.to_ascii_lowercase())
+            });
+            Ok(summary)
+        })
     }
 
     pub fn remove(&self, project_id: &str) -> EnvResult<()> {
-        {
-            let mut registry = self
-                .registry
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.update_registry(|registry| {
             let before = registry.projects.len();
             registry.projects.retain(|project| project.id != project_id);
             if before == registry.projects.len() {
@@ -323,8 +254,8 @@ impl AppRuntime {
             registry
                 .provider_push_receipts
                 .retain(|receipt| receipt.project_id != project_id);
-            self.persist(&registry)?;
-        }
+            Ok(())
+        })?;
         self.watchers
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -338,6 +269,7 @@ impl AppRuntime {
     }
 
     pub fn scan(&self, project_id: &str) -> EnvResult<env_core::ProjectProjection> {
+        self.refresh_registry()?;
         let (root, file_labels) = {
             let registry = self
                 .registry
@@ -382,17 +314,15 @@ impl AppRuntime {
         env_core::validate_display_name(name)?;
         let service = self.service(project_id)?;
         let path = service.validate_file_for_display_name(file)?;
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let project = registry
-            .projects
-            .iter_mut()
-            .find(|project| project.id == project_id)
-            .ok_or_else(|| EnvError::unregistered_project(project_id))?;
-        project.file_labels.insert(path, name.trim().to_owned());
-        self.persist(&registry)
+        self.update_registry(|registry| {
+            let project = registry
+                .projects
+                .iter_mut()
+                .find(|project| project.id == project_id)
+                .ok_or_else(|| EnvError::unregistered_project(project_id))?;
+            project.file_labels.insert(path, name.trim().to_owned());
+            Ok(())
+        })
     }
 
     pub fn agent_activity(&self, project_id: &str) -> EnvResult<Vec<AgentActivityEvent>> {
@@ -407,6 +337,7 @@ impl AppRuntime {
 
     pub fn provider_push_receipts(&self, project_id: &str) -> EnvResult<Vec<ProviderPushReceipt>> {
         let _ = self.root(project_id)?;
+        self.refresh_registry()?;
         let registry = self
             .registry
             .lock()
@@ -422,13 +353,11 @@ impl AppRuntime {
 
     pub fn record_provider_push(&self, receipt: ProviderPushReceipt) -> EnvResult<()> {
         let _ = self.root(&receipt.project_id)?;
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        registry.provider_push_receipts.insert(0, receipt);
-        registry.provider_push_receipts.truncate(500);
-        self.persist(&registry)
+        self.update_registry(|registry| {
+            registry.provider_push_receipts.insert(0, receipt);
+            registry.provider_push_receipts.truncate(500);
+            Ok(())
+        })
     }
 
     pub fn plan_migration(
@@ -678,6 +607,7 @@ impl AppRuntime {
     }
 
     fn root(&self, project_id: &str) -> EnvResult<PathBuf> {
+        self.refresh_registry()?;
         self.registry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -688,8 +618,29 @@ impl AppRuntime {
             .ok_or_else(|| EnvError::unregistered_project(project_id))
     }
 
-    fn persist(&self, registry: &RegistryData) -> EnvResult<()> {
-        persist_registry(&self.registry_path, registry)
+    fn refresh_registry(&self) -> EnvResult<()> {
+        let latest = env_registry::read(&self.registry_path)?;
+        *self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = latest;
+        Ok(())
+    }
+
+    fn refresh_registry_best_effort(&self) {
+        let _ = self.refresh_registry();
+    }
+
+    fn update_registry<R>(
+        &self,
+        operation: impl FnOnce(&mut RegistryData) -> EnvResult<R>,
+    ) -> EnvResult<R> {
+        let (latest, result) = env_registry::update(&self.registry_path, operation)?;
+        *self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = latest;
+        Ok(result)
     }
 }
 
@@ -784,23 +735,7 @@ fn migrate_registration_labels(
 }
 
 fn persist_registry(path: &Path, registry: &RegistryData) -> EnvResult<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| EnvError::invalid("앱 상태 경로가 올바르지 않습니다."))?;
-    let mut staged = NamedTempFile::new_in(parent).map_err(|error| EnvError::io(parent, error))?;
-    serde_json::to_writer_pretty(staged.as_file_mut(), registry)
-        .map_err(EnvError::serialization)?;
-    staged
-        .write_all(b"\n")
-        .map_err(|error| EnvError::io(path, error))?;
-    staged
-        .as_file_mut()
-        .sync_all()
-        .map_err(|error| EnvError::io(path, error))?;
-    staged
-        .persist(path)
-        .map_err(|error| EnvError::io(path, error.error))?;
-    Ok(())
+    env_registry::write(path, registry)
 }
 
 fn team_import_plan_expired() -> EnvError {
@@ -850,6 +785,13 @@ mod tests {
         assert!(should_rescan_for_event(
             &root,
             &root.join("secrets/runtime.env"),
+            &EventKind::Any,
+            &managed_paths,
+            &ignored,
+        ));
+        assert!(should_rescan_for_event(
+            &root,
+            &root.join("workers/api/.dev.vars.staging"),
             &EventKind::Any,
             &managed_paths,
             &ignored,
@@ -942,6 +884,39 @@ mod tests {
 
         runtime.remove(&second_id).expect("remove selected project");
         assert_eq!(runtime.last_selected_project_id(), Some(first_id));
+    }
+
+    #[test]
+    fn refreshes_projects_registered_by_the_broker_without_restarting() {
+        let app_data = tempfile::tempdir().expect("app data");
+        let project = tempfile::tempdir().expect("project");
+        let service = ProjectService::open(project.path()).expect("service");
+        let registry_path = app_data.path().join("projects.json");
+        let runtime = AppRuntime {
+            registry_path: registry_path.clone(),
+            audit_dir: app_data.path().join("agent-activity"),
+            registry: Mutex::new(RegistryData::default()),
+            watchers: Mutex::new(HashMap::new()),
+            migration_plans: Mutex::new(HashMap::new()),
+            team_import_plans: Mutex::new(HashMap::new()),
+            next_plan_id: AtomicU64::new(1),
+        };
+
+        env_registry::update(&registry_path, |registry| {
+            registry.projects.push(ProjectRegistration {
+                id: service.project_id().to_owned(),
+                name: "Broker project".to_owned(),
+                display_path: service.root().to_string_lossy().into_owned(),
+                root: service.root().to_path_buf(),
+                file_labels: BTreeMap::new(),
+            });
+            Ok(())
+        })
+        .expect("external registration");
+
+        let projects = runtime.list();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "Broker project");
     }
 
     #[test]

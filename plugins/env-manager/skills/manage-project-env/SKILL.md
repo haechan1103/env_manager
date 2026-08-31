@@ -1,22 +1,28 @@
 ---
 name: manage-project-env
-description: Safely inspect, manage, deploy, compare, and coordinate encrypted sharing of environment variables in projects registered with Env Manager. Use when a user asks an AI coding agent to inspect env structure, create a new env file, classify agent access, manage groups or variables, link occurrences, reuse a same-name value from another project, inspect Folder Team Channels, push selected variables to GitHub, Cloudflare, Expo EAS, AWS, or a locally installed Personal Provider Pack, check deployed values without revealing them, or author a new stdin-only Provider Pack for an unsupported CLI. Trigger for natural requests mentioning `.env`, Expo/EAS environments, env groups, environment variables, local/development linkage, cross-project key reuse, encrypted team packages, NAS/shared folders, deployment secrets, provider CLIs, AWS Secrets Manager, SSM, KMS, remote value equality, or Env Manager.
+description: Safely register, inspect, manage, generate, deploy, compare, run trusted local Actions, and coordinate encrypted sharing of project environment variables with Env Manager. Use when an agent must work with env structure, access policy, groups, variables, links, opaque stdin generation, cross-project reuse, Folder Team Channels, deployment providers, value comparison, or stdin-only Provider and Action Packs. Trigger for `.env`, Wrangler `.dev.vars`, Expo/EAS environments, generated secrets such as `openssl rand`, local/development linkage, encrypted team packages, NAS folders, GitHub or Cloudflare secrets, API checks, AWS Secrets Manager, SSM, KMS, or Env Manager.
 ---
 
 # Manage Project Env
 
-Use only the `env-manager` MCP tools for every `.env` or `.env.*` operation, regardless
+Use only the `env-manager` MCP tools for every supported env-data operation, including
+`.env*`, `*.env*`, and Wrangler `.dev.vars*` files, regardless
 of whether the host is Codex, Claude Code, GitHub Copilot, or another compatible
 agent. Never read, search, print, patch, or write an env file with shell, filesystem,
 interpreter, or generic editing tools.
 
 ## Workflow
 
-1. Call `inspect_project` with the current registered project path.
+1. Call `inspect_project` with the current project path. If it reports that the
+   project is unregistered during a concrete env-management request, call
+   `plan_register_current_project`, verify that its displayed root is the current
+   workspace intended by the request, and apply it immediately. Then call
+   `inspect_project` again.
 2. Work only from its redacted structure, presence state, groups, descriptions,
    relationships, and policies.
-3. Treat `protected` and `unclassified` as unreadable. Direct protected-value input
-   and replacement belong in the desktop app.
+3. Treat `protected` and `unclassified` as unreadable. Human-known protected-value
+   input belongs in the desktop app; a requested local producer may use the opaque
+   stdin workflow below without making the value readable.
 4. Keep ambiguous unclassified names protected unless the current task explicitly
    requests an access-policy change.
 5. Create a plan for every mutation, verify that its paths, names, impact, and risk
@@ -26,6 +32,21 @@ interpreter, or generic editing tools.
    as the authoritative file for conflicting link values.
 7. Report only names, relative paths, groups, link membership, policy, and sanitized
    result codes.
+
+## Register the current project
+
+- Use `plan_register_current_project` only for the Broker's current workspace. The
+  tool intentionally accepts no path and must never be used to register some other
+  arbitrary folder.
+- A concrete request to manage env files in the current workspace authorizes the
+  required local registration; do not ask for a second approval. A recommendation
+  alone does not authorize registration.
+- Registration may create or update the value-free `.env-manager.json` policy
+  manifest and the per-computer project registry. It never creates, changes, or
+  returns an env file or value.
+- If the Broker cannot identify the current workspace safely, ask the user to open
+  that project as the agent workspace or register it in the desktop app. Never fall
+  back to a path-taking filesystem tool.
 
 ## Reuse from another project
 
@@ -54,6 +75,24 @@ interpreter, or generic editing tools.
   agent access change. Plan and apply it without another confirmation round trip.
 - Prefer `protected` for credential-like names and `unclassified` when uncertain.
 - A public/client prefix does not make a credential-looking key safe.
+
+## Generate or pipe a value without reading it
+
+Read [stdin-value-ingest.md](references/stdin-value-ingest.md) when the user asks to
+generate a secret locally or pipe a producer's output into an existing managed
+variable.
+
+- Create the target with the normal structural tools first when it does not exist.
+- Call `plan_stdin_value_write` with the exact managed file, key, and newline policy.
+  Verify every linked affected file, then use only the returned opaque plan ID with
+  the returned trusted `brokerExecutable` and its fixed `value apply-stdin`
+  subcommand.
+- Never put the env path, key, produced value, producer output, or a generic command
+  in the CLI arguments. Never use this route to read or transform an existing env
+  value.
+- The five-minute plan is single-use. A failure requires a fresh plan; do not retry
+  the old ID or fall back to `plan_set_allowed_value`.
+- `protected` and `unclassified` remain unreadable and keep their current policy.
 
 ## Push to a deployment provider
 
@@ -107,6 +146,26 @@ interpreter, or generic editing tools.
   Never run SSH, ECS Exec, shell `source`, SHA-256 commands, or arbitrary remote
   scripts yourself.
 
+## Run a locally trusted Action Pack
+
+- Call `list_action_packs` first. Use only an installed `available` Pack returned by
+  the Broker; never install, replace, remove, or trust a Pack for the user.
+- Require a concrete Pack, managed source file, and one managed variable name for
+  every returned binding ID. Ask one concise question if that mapping is ambiguous.
+- Call `plan_action` with the Pack ID, file, and binding-ID-to-variable-name map.
+  Verify the redacted Pack, file, names, and target summary, then call `apply_plan`
+  immediately when they match the user's request.
+- Never call the Pack executable, curl, an HTTP client, shell, or generic command
+  tool directly. Never pass a value, assignment, request body, header value, command,
+  or argument fragment to Broker tools.
+- Report only success, stable result code, optional HTTP status, duration, and exit
+  code. A successful status does not authorize reading or describing a response body.
+- Protected and unclassified values can run through this opaque path. Do not call
+  `read_allowed_value` or downgrade policy first.
+- The installed CLI or fixed API receives the value by design. Do not describe the
+  action as local-only, encryption, equality verification, or proof that the target
+  handles the value safely.
+
 ## Encrypted team folders
 
 - Call `list_team_channels` when the user asks which Folder Team Channels are
@@ -142,12 +201,27 @@ asks to support an unsupported CLI or create a reusable local integration.
   installed, future provider requests use the semantic Broker workflow above rather
   than reproducing CLI syntax in chat.
 
+## Author an Action Pack
+
+Read [action-packs.md](references/action-packs.md) when the user asks to create a
+reusable non-provider CLI task, fixed API check, or Action Pack.
+
+- Verify the intended executable/API and CLI version contract from official
+  documentation before authoring.
+- Create source files only. Never install, replace, trust, or execute the generated
+  Pack on the user's behalf.
+- Keep endpoints fixed and keep values out of manifests, URLs, arguments, examples,
+  and tests. Use unmistakably fake canaries in test fixtures.
+- Tell the user to inspect the target and install `action.json` from Env Manager.
+  Future executions must use `list_action_packs → plan_action → apply_plan`.
+
 ## Structural changes
 
 - Use `plan_create_env_file` when the requested env file does not exist. It creates
-  only an empty `.env` or `.env.*` file inside an existing registered-project
-  directory and never overwrites a path. Apply it immediately, inspect again, then
-  add empty variables with `plan_add_variable`.
+  only an empty supported env-data file inside an existing registered-project
+  directory and never overwrites a path. This includes `.env*`, `*.env*`, and
+  Wrangler's `.dev.vars` or `.dev.vars.<environment>` names. Apply it immediately,
+  inspect again, then add empty variables with `plan_add_variable`.
 - Use `plan_create_group` to create an empty explicit group and
   `plan_rename_group` to rename exactly one existing group. `기타` is the virtual
   ungrouped area and cannot be created or renamed as an explicit group.

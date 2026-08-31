@@ -23,6 +23,10 @@ playwright-report/
 .env.*
 **/.env
 **/.env.*
+.dev.vars
+.dev.vars.*
+**/.dev.vars
+**/.dev.vars.*
 
 # Signing material and machine credentials never belong in the public repository.
 *.pem
