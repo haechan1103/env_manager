@@ -230,6 +230,7 @@ fn execute_http(
         headers.insert(name, header_value);
     }
 
+    ensure_http_crypto_provider()?;
     let client = reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
@@ -273,6 +274,19 @@ fn execute_http(
         }
         .to_owned(),
     })
+}
+
+fn ensure_http_crypto_provider() -> Result<(), ActionPackError> {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    }
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        return Err(ActionPackError::new(
+            "ACTION_HTTP_FAILED",
+            "HTTP Action의 암호화 구성을 준비하지 못했습니다.",
+        ));
+    }
+    Ok(())
 }
 
 fn http_method(method: HttpActionMethod) -> reqwest::Method {
