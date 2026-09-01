@@ -1,6 +1,6 @@
 # Security Policy
 
-Env Manager edits environment files that may contain credentials. Please treat every report, screenshot, log, and fixture as potentially sensitive.
+Kavranta edits environment files that may contain credentials. Please treat every report, screenshot, log, and fixture as potentially sensitive.
 
 ## Supported versions
 
@@ -11,11 +11,11 @@ Env Manager edits environment files that may contain credentials. Please treat e
 
 ## Report a vulnerability privately
 
-Use [GitHub's private vulnerability reporting](https://github.com/haechan1103/env_manager/security/advisories/new). Do not open a public issue for a suspected vulnerability.
+Use [GitHub's private vulnerability reporting](https://github.com/haechan1103/kavranta/security/advisories/new). Do not open a public issue for a suspected vulnerability.
 
 Include:
 
-- the affected Env Manager version and operating system;
+- the affected Kavranta version and operating system;
 - a minimal reproduction using synthetic values only;
 - the expected and observed security boundary;
 - relevant logs with project paths, key names, tokens, URLs, and values redacted.
@@ -42,7 +42,7 @@ Secret Scanning and push protection remain an independent server-side layer.
 
 ## Security boundary
 
-Env Manager is a local file manager, not a secret vault or operating-system sandbox.
+Kavranta is a local file manager, not a secret vault or operating-system sandbox.
 
 - Values stay in the original env files and are processed in memory when required.
 - Only projects explicitly registered in the desktop app are accepted by the local broker.
@@ -59,11 +59,11 @@ Env Manager is a local file manager, not a secret vault or operating-system sand
   it. Selected values are sent to the displayed GitHub Actions, Cloudflare Workers,
   AWS Secrets Manager, SSM Parameter Store, or locally installed Personal Provider
   Pack target. They are never placed in command arguments or a temporary env file.
-- Env Manager does not store provider credentials, fetch remote secret values, or
+- Kavranta does not store provider credentials, fetch remote secret values, or
   continuously synchronize a provider. Authentication remains owned by the official
   CLI, the AWS SDK credential chain, or the locally trusted Pack executable.
 - Folder Team Channels write only passphrase-encrypted packages to a folder already
-  mounted or synchronized by the operating system. Env Manager does not store the
+  mounted or synchronized by the operating system. Kavranta does not store the
   passphrase, change folder permissions, mount a NAS, delete shared packages, or
   claim that another device has received them. Anyone with folder read access can
   copy the ciphertext, so send the passphrase through a separate trusted channel.

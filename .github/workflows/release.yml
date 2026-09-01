@@ -124,10 +124,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: Env Manager v__VERSION__
+          releaseName: Kavranta v__VERSION__
           releaseBody: |
-            Env Manager v__VERSION__ for macOS and Windows.
+            Kavranta v__VERSION__ for macOS and Windows.
 
+            - Renamed Env Manager to Kavranta while preserving existing app data, project manifests, Broker commands, and agent plugin selectors.
             - Windows 10/11 (x64 beta, unsigned): download the `x64-setup.exe` installer. Microsoft Defender SmartScreen may warn; use only the installer attached to this official release.
             - Apple Silicon: download the aarch64 DMG
             - Intel Mac: download the x86_64 DMG
@@ -141,12 +142,13 @@ jobs:
             - Add local Personal Provider Packs for stdin-only custom CLI integrations.
             - Use the same redacted provider-push flow from supported AI coding agents.
             - Reuse a protected same-name value across registered projects without exposing it to the agent.
-            - Push selected values to Expo EAS environments through the CLI hidden-value prompt without placing values in arguments, temporary files, or Env Manager output.
+            - Push selected values to Expo EAS environments through the CLI hidden-value prompt without placing values in arguments, temporary files, or Kavranta output.
 
             ---
 
-            Env Manager v__VERSION__ Windows 및 macOS 설치 파일입니다.
+            Kavranta v__VERSION__ Windows 및 macOS 설치 파일입니다.
 
+            - Env Manager에서 Kavranta로 이름을 바꾸면서 기존 앱 데이터, 프로젝트 manifest, Broker 명령과 AI 플러그인 선택자를 그대로 유지합니다.
             - Windows 10/11(x64 베타, 미서명): `x64-setup.exe` 설치 파일. Microsoft Defender SmartScreen 경고가 나타날 수 있으므로 이 공식 릴리스에 첨부된 파일만 사용하세요.
             - Apple Silicon: aarch64 DMG
             - Intel Mac: x86_64 DMG
@@ -160,7 +162,7 @@ jobs:
             - 표준 입력 전용 사용자 CLI 연동을 Personal Provider Pack으로 추가할 수 있습니다.
             - 지원 AI 코딩 에이전트에서도 같은 값 비노출 Provider 전송 흐름을 사용할 수 있습니다.
             - 같은 이름의 보호된 값을 에이전트에 노출하지 않고 등록 프로젝트 사이에서 재사용할 수 있습니다.
-            - 선택한 값을 명령 인자·임시 파일·Env Manager 출력에 넣지 않고 EAS CLI 숨김 입력으로 Expo EAS 환경에 전송할 수 있습니다.
+            - 선택한 값을 명령 인자·임시 파일·Kavranta 출력에 넣지 않고 EAS CLI 숨김 입력으로 Expo EAS 환경에 전송할 수 있습니다.
           generateReleaseNotes: true
           prerelease: false
           releaseDraft: true
@@ -251,10 +253,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: Env Manager v__VERSION__
+          releaseName: Kavranta v__VERSION__
           releaseBody: |
-            Env Manager v__VERSION__ for macOS and Windows.
+            Kavranta v__VERSION__ for macOS and Windows.
 
+            - Renamed Env Manager to Kavranta while preserving existing app data, project manifests, Broker commands, and agent plugin selectors.
             - Windows 10/11 (x64 beta, unsigned): download the `x64-setup.exe` installer. Microsoft Defender SmartScreen may warn; use only the installer attached to this official release.
             - Apple Silicon: download the aarch64 DMG
             - Intel Mac: download the x86_64 DMG
@@ -268,12 +271,13 @@ jobs:
             - Add local Personal Provider Packs for stdin-only custom CLI integrations.
             - Use the same redacted provider-push flow from supported AI coding agents.
             - Reuse a protected same-name value across registered projects without exposing it to the agent.
-            - Push selected values to Expo EAS environments through the CLI hidden-value prompt without placing values in arguments, temporary files, or Env Manager output.
+            - Push selected values to Expo EAS environments through the CLI hidden-value prompt without placing values in arguments, temporary files, or Kavranta output.
 
             ---
 
-            Env Manager v__VERSION__ Windows 및 macOS 설치 파일입니다.
+            Kavranta v__VERSION__ Windows 및 macOS 설치 파일입니다.
 
+            - Env Manager에서 Kavranta로 이름을 바꾸면서 기존 앱 데이터, 프로젝트 manifest, Broker 명령과 AI 플러그인 선택자를 그대로 유지합니다.
             - Windows 10/11(x64 베타, 미서명): `x64-setup.exe` 설치 파일. Microsoft Defender SmartScreen 경고가 나타날 수 있으므로 이 공식 릴리스에 첨부된 파일만 사용하세요.
             - Apple Silicon: aarch64 DMG
             - Intel Mac: x86_64 DMG
@@ -287,7 +291,7 @@ jobs:
             - 표준 입력 전용 사용자 CLI 연동을 Personal Provider Pack으로 추가할 수 있습니다.
             - 지원 AI 코딩 에이전트에서도 같은 값 비노출 Provider 전송 흐름을 사용할 수 있습니다.
             - 같은 이름의 보호된 값을 에이전트에 노출하지 않고 등록 프로젝트 사이에서 재사용할 수 있습니다.
-            - 선택한 값을 명령 인자·임시 파일·Env Manager 출력에 넣지 않고 EAS CLI 숨김 입력으로 Expo EAS 환경에 전송할 수 있습니다.
+            - 선택한 값을 명령 인자·임시 파일·Kavranta 출력에 넣지 않고 EAS CLI 숨김 입력으로 Expo EAS 환경에 전송할 수 있습니다.
           generateReleaseNotes: true
           prerelease: false
           releaseDraft: true
