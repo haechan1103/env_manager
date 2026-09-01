@@ -45,7 +45,7 @@ vi.mock("../../lib/api", () => ({
     accountId: "123456789012",
     principalArn: "arn:aws:iam::123456789012:user/demo",
     region: region || "ap-northeast-2",
-    kmsAliases: ["alias/env-manager-demo"],
+    kmsAliases: ["alias/kavranta-demo"],
     kmsAliasesAvailable: true,
   })),
   chooseAndInstallPersonalProviderPack: vi.fn(async () => null),
@@ -278,7 +278,7 @@ describe("ProviderPushModal", () => {
     await user.clear(screen.getByLabelText(/AWS Region/));
     await user.type(screen.getByLabelText(/AWS Region/), "ap-northeast-2");
     await user.type(screen.getByLabelText(/Secret path prefix/), "demo/staging");
-    await user.type(screen.getByLabelText(/KMS key or alias/), "alias/env-manager-demo");
+    await user.type(screen.getByLabelText(/KMS key or alias/), "alias/kavranta-demo");
     await waitFor(() => expect(screen.getByText("AWS account verified")).toBeInTheDocument());
     const checkboxes = screen.getAllByRole("checkbox").filter((item) => !item.hasAttribute("disabled"));
     await user.click(checkboxes[0]!);
@@ -291,7 +291,7 @@ describe("ProviderPushModal", () => {
         awsProfile: "staging",
         awsRegion: "ap-northeast-2",
         awsPathPrefix: "demo/staging",
-        awsKmsKeyId: "alias/env-manager-demo",
+        awsKmsKeyId: "alias/kavranta-demo",
         selections: [expect.objectContaining({ kind: "secret" })],
       }),
     );

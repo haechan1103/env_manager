@@ -1,7 +1,7 @@
 # Action Pack authoring
 
 Use an Action Pack only for one bounded, locally trusted CLI or HTTP operation. It is
-not a generic shell or HTTP client. The user installs `action.json` in Env Manager;
+not a generic shell or HTTP client. The user installs `action.json` in Kavranta;
 an agent never installs or executes source files directly.
 
 ## HTTP

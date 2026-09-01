@@ -1162,7 +1162,7 @@ fn project_file(
             Node::Comment { content, .. } => {
                 let comment = document.text(*content).trim_start().to_owned();
                 if comment.starts_with('@') {
-                    warnings.push("알 수 없는 Env Manager 지시문이 있습니다.".to_owned());
+                    warnings.push("알 수 없는 Kavranta 지시문이 있습니다.".to_owned());
                     pending_comments.clear();
                 } else {
                     pending_comments.push(comment);

@@ -1,6 +1,6 @@
 ---
 name: manage-project-env
-description: Safely register, inspect, manage, generate, deploy, compare, run trusted local Actions, and coordinate encrypted sharing of project environment variables with Env Manager. Use when an agent must work with env structure, access policy, groups, variables, links, opaque stdin generation, cross-project reuse, Folder Team Channels, deployment providers, value comparison, or stdin-only Provider and Action Packs. Trigger for `.env`, Wrangler `.dev.vars`, Expo/EAS environments, generated secrets such as `openssl rand`, local/development linkage, encrypted team packages, NAS folders, GitHub or Cloudflare secrets, API checks, AWS Secrets Manager, SSM, KMS, or Env Manager.
+description: Safely register, inspect, manage, generate, deploy, compare, run trusted local Actions, and coordinate encrypted sharing of project environment variables with Kavranta. Use when an agent must work with env structure, access policy, groups, variables, links, opaque stdin generation, cross-project reuse, Folder Team Channels, deployment providers, value comparison, or stdin-only Provider and Action Packs. Trigger for `.env`, Wrangler `.dev.vars`, Expo/EAS environments, generated secrets such as `openssl rand`, local/development linkage, encrypted team packages, NAS folders, GitHub or Cloudflare secrets, API checks, AWS Secrets Manager, SSM, KMS, or Kavranta.
 ---
 
 # Manage Project Env
@@ -175,7 +175,7 @@ variable.
   Never infer package contents or claim that one package is the canonical latest.
 - Never ask for or accept a sharing passphrase in chat or any Broker argument. The
   passphrase-based publish, decrypt, conflict review, and apply flows are focused
-  actions in the Env Manager desktop app.
+  actions in the Kavranta desktop app.
 - If the requested action needs package values, tell the user exactly which channel
   and package to open in **Team sharing**. Do not read the shared folder with shell or
   generic filesystem tools, even when its path is known outside the Broker.
@@ -183,7 +183,7 @@ variable.
   ACLs, mount storage, delete packages, or attempt a vendor-specific workaround.
 - The Broker leaves publish capability unchecked to keep inspection read-only. Tell
   the user to open **Team sharing** for the desktop app's focused write-capability
-  probe. Do not promise that Env Manager can bypass the storage provider's
+  probe. Do not promise that Kavranta can bypass the storage provider's
   permissions.
 
 ## Author a Personal Provider Pack
@@ -197,7 +197,7 @@ asks to support an unsupported CLI or create a reusable local integration.
   trust, or execute the Pack on the user's behalf.
 - Keep values out of the manifest and arguments. A Pack may interpolate `key` and one
   declared target placeholder; the selected value always arrives through stdin.
-- Tell the user to install the generated `provider.json` from Env Manager. Once
+- Tell the user to install the generated `provider.json` from Kavranta. Once
   installed, future provider requests use the semantic Broker workflow above rather
   than reproducing CLI syntax in chat.
 
@@ -212,7 +212,7 @@ reusable non-provider CLI task, fixed API check, or Action Pack.
   Pack on the user's behalf.
 - Keep endpoints fixed and keep values out of manifests, URLs, arguments, examples,
   and tests. Use unmistakably fake canaries in test fixtures.
-- Tell the user to inspect the target and install `action.json` from Env Manager.
+- Tell the user to inspect the target and install `action.json` from Kavranta.
   Future executions must use `list_action_packs → plan_action → apply_plan`.
 
 ## Structural changes

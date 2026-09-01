@@ -1,7 +1,7 @@
 # Opaque stdin value ingest
 
 Use this workflow only when the user has requested that a local producer create the
-new value for one existing managed occurrence. The producer and Env Manager receive
+new value for one existing managed occurrence. The producer and Kavranta receive
 the value; the agent, MCP arguments, process arguments, normal output, and audit log
 must not.
 
@@ -55,7 +55,7 @@ approved typed capability owns that source.
   code, key, and affected relative files.
 
 This reduces accidental exposure to the agent. It does not isolate the value from
-the selected producer, Env Manager's Rust process, malware, a debugger, or another
+the selected producer, Kavranta's Rust process, malware, a debugger, or another
 process with the same operating-system user's authority.
 
 ## PowerShell

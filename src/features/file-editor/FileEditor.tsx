@@ -635,7 +635,7 @@ function localizedWarnings(
 ) {
   if (locale === "ko") return warnings.join(" ");
   const translated = warnings.map((warning) => {
-    if (warning.includes("알 수 없는 Env Manager 지시문")) {
+    if (warning.includes("알 수 없는 Kavranta 지시문")) {
       return t("file.warningUnknownDirective");
     }
     if (warning.includes("해석하지 못한 줄")) return t("file.warningUnknownLine");

@@ -42,7 +42,7 @@ describe("I18nProvider", () => {
     };
 
     expect(localizeError(backendError, "en", "error.unknown")).toBe(
-      "The env file changed outside Env Manager. Refresh it and try again.",
+      "The env file changed outside Kavranta. Refresh it and try again.",
     );
     expect(localizeError(backendError, "ko", "error.unknown")).toBe(
       backendError.message,

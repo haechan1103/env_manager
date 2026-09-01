@@ -40,7 +40,7 @@ test("navigates the redacted V1 workflow", async ({ page }) => {
   await apiKeyInput.fill("fake_e2e_replacement");
   await expect(page.getByRole("button", { name: "Save to 2 files" })).toBeVisible();
   await page.screenshot({
-    path: "test-results/env-manager-file-editor.png",
+    path: "test-results/kavranta-file-editor.png",
     fullPage: true,
   });
 
@@ -59,7 +59,7 @@ test("shows a compact product-style empty project screen", async ({ page }) => {
   await expect(page.getByText(".env.example")).toBeVisible();
 
   await page.screenshot({
-    path: "test-results/env-manager-empty-project.png",
+    path: "test-results/kavranta-empty-project.png",
     fullPage: true,
   });
 });
@@ -76,7 +76,7 @@ test("shows one shared integration bundle for supported AI tools", async ({ page
   await expect(page.getByText(/API_KEY=/)).toHaveCount(0);
 
   await page.screenshot({
-    path: "test-results/env-manager-ai-integrations.png",
+    path: "test-results/kavranta-ai-integrations.png",
     fullPage: true,
   });
 });
@@ -110,7 +110,7 @@ test("offers four persistent text-size levels with the current size as small", a
   );
   expect(extraLargeFontSize).toBeGreaterThan(smallFontSize);
   await page.screenshot({
-    path: "test-results/env-manager-extra-large-text.png",
+    path: "test-results/kavranta-extra-large-text.png",
     fullPage: true,
   });
 
@@ -129,7 +129,7 @@ test("offers four persistent text-size levels with the current size as small", a
   expect(finalHeaderActionBox).not.toBeNull();
   expect(finalHeaderActionBox!.x + finalHeaderActionBox!.width).toBeLessThanOrEqual(920);
   await page.screenshot({
-    path: "test-results/env-manager-extra-large-text-min-window.png",
+    path: "test-results/kavranta-extra-large-text-min-window.png",
     fullPage: true,
   });
 });
@@ -175,7 +175,7 @@ test("reviews encrypted-share conflicts individually before applying", async ({ 
   await expect(page.getByText("Use received 2")).toBeVisible();
   await expect(page.getByText("fake_local_value")).toHaveCount(0);
   await page.screenshot({
-    path: "test-results/env-manager-import-conflicts.png",
+    path: "test-results/kavranta-import-conflicts.png",
     fullPage: true,
   });
 });

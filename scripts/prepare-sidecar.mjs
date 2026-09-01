@@ -27,7 +27,7 @@ await mkdir(dirname(destination), { recursive: true });
 await copyFile(source, destination);
 if (!isWindows) await chmod(destination, 0o755);
 
-process.stdout.write(`Prepared Env Manager broker sidecar for ${targetTriple}.\n`);
+process.stdout.write(`Prepared Kavranta broker sidecar for ${targetTriple}.\n`);
 
 function commandOutput(command, args) {
   const result = spawnSync(command, args, {

@@ -33,7 +33,7 @@ describe("AppUpdater", () => {
 
     await act(async () => vi.advanceTimersByTimeAsync(1500));
 
-    expect(screen.getByText("Env Manager 0.4.1")).toBeInTheDocument();
+    expect(screen.getByText("Kavranta 0.4.1")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Update now" }));
     await act(async () => undefined);
     expect(updateApi.installAppUpdate).toHaveBeenCalledOnce();
@@ -70,10 +70,10 @@ describe("AppUpdater", () => {
     render(<AppUpdater />);
 
     await act(async () => vi.advanceTimersByTimeAsync(1500));
-    expect(screen.getByText("Env Manager 0.4.1")).toBeInTheDocument();
+    expect(screen.getByText("Kavranta 0.4.1")).toBeInTheDocument();
 
     await act(async () => vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS));
-    expect(screen.getByText("Env Manager 0.4.1")).toBeInTheDocument();
+    expect(screen.getByText("Kavranta 0.4.1")).toBeInTheDocument();
   });
 
   it("shows only the Korean section of bilingual release notes in Korean", async () => {
@@ -81,7 +81,7 @@ describe("AppUpdater", () => {
     vi.mocked(updateApi.checkForAppUpdate).mockResolvedValue({
       currentVersion: "0.5.0",
       version: "0.5.1",
-      notes: "Env Manager v0.5.1 for macOS.\n\n- English note\n\n---\n\nEnv Manager v0.5.1 macOS 설치 파일입니다.\n\n- 한국어 안내",
+      notes: "Kavranta v0.5.1 for macOS.\n\n- English note\n\n---\n\nKavranta v0.5.1 macOS 설치 파일입니다.\n\n- 한국어 안내",
     });
     render(<I18nProvider><AppUpdater /></I18nProvider>);
 

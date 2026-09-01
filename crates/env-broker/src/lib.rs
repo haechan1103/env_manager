@@ -406,7 +406,7 @@ impl Broker {
             "plan_provider_push" => self.plan_provider_push(parse(arguments)?),
             "plan_action" => self.plan_action(parse(arguments)?),
             "apply_plan" => self.apply(parse(arguments)?),
-            _ => Err(EnvError::invalid("지원하지 않는 Env Manager 도구입니다.")),
+            _ => Err(EnvError::invalid("지원하지 않는 Kavranta 도구입니다.")),
         }
     }
 
@@ -434,14 +434,14 @@ impl Broker {
             && service.root().join(env_core::MANIFEST_FILE_NAME).is_file()
         {
             return Err(EnvError::invalid(
-                "현재 작업 프로젝트는 이미 Env Manager에 등록되고 초기화되어 있습니다.",
+                "현재 작업 프로젝트는 이미 Kavranta에 등록되고 초기화되어 있습니다.",
             ));
         }
         self.store_plan(
             &service,
             PlannedOperation::RegisterProject,
             format!(
-                "현재 작업 프로젝트 {}을(를) Env Manager에 등록하고 값 없이 구조를 초기화합니다.",
+                "현재 작업 프로젝트 {}을(를) Kavranta에 등록하고 값 없이 구조를 초기화합니다.",
                 service.root().display()
             ),
             Vec::new(),
@@ -1486,7 +1486,7 @@ pub fn guard_hook_decision(input: &Value) -> Value {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": "Direct env-file access is blocked by Env Manager. Use the env-manager MCP tools instead."
+                "permissionDecisionReason": "Direct env-file access is blocked by Kavranta. Use the env-manager MCP tools instead."
             }
         });
     }
