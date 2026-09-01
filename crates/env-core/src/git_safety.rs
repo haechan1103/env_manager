@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 use crate::{EnvError, EnvResult, FileRevision};
 
 const GITIGNORE_PATH: &str = ".gitignore";
-const GUARD_COMMENT: &str = "# Env Manager: local environment values";
+const GUARD_COMMENT: &str = "# Kavranta: local environment values";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -455,7 +455,7 @@ mod tests {
             .expect("read synthetic gitignore");
         assert_eq!(
             gitignore,
-            "# Env Manager: local environment values\n/apps/web/.env.local\n"
+            "# Kavranta: local environment values\n/apps/web/.env.local\n"
         );
         let projection =
             inspect_git_safety(project.root(), &[PathBuf::from("apps/web/.env.local")]);
@@ -487,7 +487,7 @@ mod tests {
         let gitignore = fs::read_to_string(&gitignore_path).expect("read synthetic gitignore");
         assert_eq!(
             gitignore,
-            "*.log\n\n# Env Manager: local environment values\n/.env.local\n"
+            "*.log\n\n# Kavranta: local environment values\n/.env.local\n"
         );
         assert_eq!(
             fs::metadata(&gitignore_path).expect("metadata").mode() & 0o777,
@@ -512,7 +512,7 @@ mod tests {
             vec!["add", "-f", "--", ".env.local"],
             vec![
                 "-c",
-                "user.name=Env Manager Test",
+                "user.name=Kavranta Test",
                 "-c",
                 "user.email=test@example.invalid",
                 "commit",

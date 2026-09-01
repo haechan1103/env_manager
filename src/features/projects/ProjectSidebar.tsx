@@ -53,9 +53,9 @@ export function ProjectSidebar({
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          <img src="/brand/env-manager-logo-v1.png" alt="" />
+          <img src="/brand/kavranta-logo-v1.png" alt="" />
         </span>
-        <span>Env Manager</span>
+        <span>Kavranta</span>
       </div>
 
       <section className="current-project-panel" aria-label={t("projectSwitcher.currentProject")}>

@@ -100,7 +100,7 @@ export function AppUpdater() {
             <>
               <div>
                 <span className="update-kicker">{t("updater.availableTitle")}</span>
-                <strong>Env Manager {update?.version}</strong>
+                <strong>Kavranta {update?.version}</strong>
                 {updateNotes && <p>{updateNotes}</p>}
               </div>
               <button type="button" onClick={() => void install()} disabled={state === "installing"}>

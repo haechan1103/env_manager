@@ -117,7 +117,7 @@ pub fn install(
             if !owns_existing_installation && !cached_bundle_is_official(id) {
                 return Err(IntegrationError {
                     code: "AGENT_MARKETPLACE_CONFLICT",
-                    message: "같은 이름의 다른 Env Manager marketplace가 연결되어 있습니다. 해당 연결을 제거한 뒤 다시 시도해주세요.",
+                    message: "같은 이름의 다른 Kavranta marketplace가 연결되어 있습니다. 해당 연결을 제거한 뒤 다시 시도해주세요.",
                 });
             }
             reconnect_owned_marketplace(&executable, id, catalog.as_os_str().to_owned())?;
@@ -138,7 +138,7 @@ pub fn install(
     if !connection_configuration_is_current(app, id, &broker) {
         return Err(IntegrationError {
             code: "AGENT_CONFIGURATION_NOT_APPLIED",
-            message: "AI 도구가 Env Manager broker 설정을 적용하지 않았습니다. 기존 marketplace 연결을 확인해주세요.",
+            message: "AI 도구가 Kavranta broker 설정을 적용하지 않았습니다. 기존 marketplace 연결을 확인해주세요.",
         });
     }
 
@@ -202,11 +202,11 @@ fn status(
         ),
         (_, false, false, true, _) => (
             "inactive",
-            "도구를 감지했습니다. Env Manager 연동을 설치할 수 있습니다.".to_owned(),
+            "도구를 감지했습니다. Kavranta 연동을 설치할 수 있습니다.".to_owned(),
         ),
         _ => (
             "inactive",
-            "도구가 설치되면 Env Manager에서 연동할 수 있습니다.".to_owned(),
+            "도구가 설치되면 Kavranta에서 연동할 수 있습니다.".to_owned(),
         ),
     };
 
@@ -731,7 +731,7 @@ fn reconnect_owned_marketplace(
     } else {
         Err(IntegrationError {
             code: "AGENT_MARKETPLACE_FAILED",
-            message: "AI 도구의 Env Manager marketplace를 연결하지 못했습니다.",
+            message: "AI 도구의 Kavranta marketplace를 연결하지 못했습니다.",
         })
     }
 }
@@ -757,7 +757,7 @@ fn refresh_owned_codex_marketplace(
     } else {
         Err(IntegrationError {
             code: "AGENT_MARKETPLACE_FAILED",
-            message: "Codex의 기존 Env Manager 연결을 새 연동 번들로 교체하지 못했습니다.",
+            message: "Codex의 기존 Kavranta 연결을 새 연동 번들로 교체하지 못했습니다.",
         })
     }
 }
@@ -877,7 +877,7 @@ fn cached_bundle_is_official(id: AgentIntegrationId) -> bool {
         return false;
     };
     manifest["name"].as_str() == Some(PLUGIN_NAME)
-        && manifest["repository"].as_str() == Some("https://github.com/haechan1103/env_manager")
+        && manifest["repository"].as_str() == Some("https://github.com/haechan1103/kavranta")
 }
 
 fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
@@ -1054,7 +1054,7 @@ fn legacy_codex_bundle_is_official() -> bool {
     };
     read_json(&root.join(".codex-plugin/plugin.json")).is_ok_and(|manifest| {
         manifest["name"].as_str() == Some(PLUGIN_NAME)
-            && manifest["repository"].as_str() == Some("https://github.com/haechan1103/env_manager")
+            && manifest["repository"].as_str() == Some("https://github.com/haechan1103/kavranta")
     })
 }
 
@@ -1302,7 +1302,7 @@ mod tests {
 
     #[test]
     fn agent_bundle_version_is_independent_from_the_app_release() {
-        assert_eq!(agent_bundle_version(), "1.9.0");
+        assert_eq!(agent_bundle_version(), "1.9.1");
         assert_ne!(agent_bundle_version(), env!("CARGO_PKG_VERSION"));
     }
 

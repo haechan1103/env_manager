@@ -5,14 +5,31 @@ const root = resolve(import.meta.dirname, "..");
 const version = (await read("plugins/env-manager/VERSION")).trim();
 const codex = JSON.parse(await read("plugins/env-manager/.codex-plugin/plugin.json"));
 const claude = JSON.parse(await read("plugins/env-manager/.claude-plugin/plugin.json"));
+const codexMarketplace = JSON.parse(await read(".agents/plugins/marketplace.json"));
 const claudeMarketplace = JSON.parse(await read(".claude-plugin/marketplace.json"));
 const mcp = JSON.parse(await read("plugins/env-manager/.mcp.json"));
 const hooks = JSON.parse(await read("plugins/env-manager/hooks/hooks.json"));
 const skill = await read("plugins/env-manager/skills/manage-project-env/SKILL.md");
 const normalizedSkill = skill.replace(/\r\n?/g, "\n");
+const productName = "Kavranta";
+const repository = "https://github.com/haechan1103/kavranta";
 
 assert(codex.name === "env-manager", "Codex plugin name must be env-manager");
 assert(claude.name === "env-manager", "Claude plugin name must be env-manager");
+assert(
+  codex.interface?.displayName === productName,
+  `Codex plugin display name must be ${productName}`,
+);
+assert(codex.repository === repository, "Codex plugin must reference the Kavranta repository");
+assert(claude.repository === repository, "Claude plugin must reference the Kavranta repository");
+assert(
+  codexMarketplace.interface?.displayName === productName,
+  `Codex marketplace display name must be ${productName}`,
+);
+assert(
+  codex.interface?.defaultPrompt?.length <= 3,
+  "Codex plugin must expose at most three starter prompts",
+);
 assert(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version), "Agent bundle version must be semantic");
 assert(codex.version === version, "Codex plugin version must match the agent bundle");
 assert(claude.version === version, "Claude plugin version must match the agent bundle");

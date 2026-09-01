@@ -98,5 +98,5 @@ pub fn run() {
             apply_migration,
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Env Manager");
+        .expect("failed to run Kavranta");
 }

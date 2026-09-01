@@ -31,7 +31,7 @@ if ($endpoint.Scheme -ne "https") {
   -e $endpoint.AbsoluteUri `
   -a $env:AZURE_ARTIFACT_SIGNING_ACCOUNT `
   -c $env:AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE `
-  -d "Env Manager" `
+  -d "Kavranta" `
   $resolvedFile
 
 if ($LASTEXITCODE -ne 0) {

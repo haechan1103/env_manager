@@ -209,7 +209,7 @@ export async function chooseAndInstallPersonalProviderPack(
     directory: false,
     multiple: false,
     title: dialogTitle,
-    filters: [{ name: "Env Manager Provider Pack", extensions: ["json"] }],
+    filters: [{ name: "Kavranta Provider Pack", extensions: ["json"] }],
   });
   if (typeof path !== "string") return null;
   return call("install_personal_provider_pack", {
@@ -248,7 +248,7 @@ export async function chooseAndInstallActionPack(
     directory: false,
     multiple: false,
     title: dialogTitle,
-    filters: [{ name: "Env Manager Action Pack", extensions: ["json"] }],
+    filters: [{ name: "Kavranta Action Pack", extensions: ["json"] }],
   });
   if (typeof path !== "string") return null;
   return call("install_action_pack", { request: { path, replace: true } });
@@ -387,7 +387,7 @@ export async function inspectAwsAccess(
       accountId: "123456789012",
       principalArn: "arn:aws:iam::123456789012:user/demo",
       region: region || "ap-northeast-2",
-      kmsAliases: ["alias/env-manager-demo"],
+      kmsAliases: ["alias/kavranta-demo"],
       kmsAliasesAvailable: true,
     };
   }

@@ -1,15 +1,16 @@
 {
   "name": "env-manager",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Manage registered project env files through a redacted local MCP broker and a portable Agent Skill.",
   "author": {
     "name": "haechan1103",
     "url": "https://github.com/haechan1103"
   },
-  "homepage": "https://github.com/haechan1103/env_manager",
-  "repository": "https://github.com/haechan1103/env_manager",
+  "homepage": "https://github.com/haechan1103/kavranta",
+  "repository": "https://github.com/haechan1103/kavranta",
   "license": "MIT",
   "keywords": [
+    "kavranta",
     "environment-variables",
     "env",
     "claude-code",

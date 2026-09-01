@@ -31,7 +31,7 @@ export const demoAgentIntegrations: AgentIntegrationStatus[] = [
     updateAvailable: false,
     needsRepair: false,
     protection: "inactive",
-    detail: "The tool was detected and can be connected to Env Manager.",
+    detail: "The tool was detected and can be connected to Kavranta.",
     canInstall: true,
     actionBlocker: null,
   },

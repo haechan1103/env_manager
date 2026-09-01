@@ -1,6 +1,6 @@
 # Personal Provider Pack contract
 
-Use this reference only when authoring a local Pack for a CLI that Env Manager does
+Use this reference only when authoring a local Pack for a CLI that Kavranta does
 not support officially. A Pack is trusted local configuration, not a security review
 or an official integration.
 
@@ -56,6 +56,6 @@ the target CLI's current official documentation.
 ## Handoff
 
 Return the Pack path, ID, version, verified CLI version range, and semantic target
-meaning. Do not run it. Ask the user to open Env Manager, choose **Push variables →
+meaning. Do not run it. Ask the user to open Kavranta, choose **Push variables →
 Add CLI Pack**, and select `provider.json`. Installation is the user's local trust
 decision and is never shared automatically through a project checkout.

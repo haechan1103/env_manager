@@ -18,7 +18,7 @@ playwright-report/
 /src-tauri/gen/
 /src-tauri/icons/icon.ppm
 
-# Env Manager values are never committed.
+# Kavranta values are never committed.
 .env
 .env.*
 **/.env

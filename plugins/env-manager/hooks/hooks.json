@@ -1,5 +1,5 @@
 {
-  "description": "Redirect direct env-file access to the Env Manager MCP broker.",
+  "description": "Redirect direct env-file access to the Kavranta MCP broker.",
   "hooks": {
     "PreToolUse": [
       {
@@ -9,7 +9,7 @@
             "type": "command",
             "command": "env-manager-broker guard-hook",
             "timeout": 5,
-            "statusMessage": "Checking Env Manager file boundary"
+            "statusMessage": "Checking Kavranta file boundary"
           }
         ]
       }
