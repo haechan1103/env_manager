@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions and ideas
-    url: https://github.com/haechan1103/env_manager/discussions
+    url: https://github.com/haechan1103/kavranta/discussions
     about: Ask for help or explore an idea with the community
   - name: Private security report
-    url: https://github.com/haechan1103/env_manager/security/advisories/new
+    url: https://github.com/haechan1103/kavranta/security/advisories/new
     about: Report a suspected vulnerability without disclosing it publicly

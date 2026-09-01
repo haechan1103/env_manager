@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest a focused improvement to the Env Manager workflow
+description: Suggest a focused improvement to the Kavranta workflow
 title: "[Feature]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Start with the user problem, not a proposed implementation. Open-ended ideas can begin in [Discussions](https://github.com/haechan1103/env_manager/discussions).
+        Start with the user problem, not a proposed implementation. Open-ended ideas can begin in [Discussions](https://github.com/haechan1103/kavranta/discussions).
   - type: textarea
     id: problem
     attributes:

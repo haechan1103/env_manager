@@ -1,37 +1,46 @@
 <div align="center">
-  <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager 로고" />
-  <h1>Env Manager</h1>
+  <img src="assets/brand/kavranta-logo-v1.png" width="104" alt="Kavranta 로고" />
+  <h1>Kavranta</h1>
   <p><strong>프로젝트가 이미 사용하는 모든 <code>.env</code>를 한곳에서.</strong></p>
   <p>실행 방식을 바꾸거나 보호된 값을 AI 채팅에 붙여 넣지 않고 환경변수를 편집하고, 연결하고, 공유하고, 배포하세요.</p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
   <p>
-    <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="최신 릴리스" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
-    <a href="https://github.com/haechan1103/env_manager/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/env_manager/ci.yml?branch=main&style=flat-square&label=CI" /></a>
-    <a href="LICENSE"><img alt="MIT 라이선스" src="https://img.shields.io/github/license/haechan1103/env_manager?style=flat-square" /></a>
+    <a href="https://github.com/haechan1103/kavranta/releases/latest"><img alt="최신 릴리스" src="https://img.shields.io/github/v/release/haechan1103/kavranta?style=flat-square&color=168463" /></a>
+    <a href="https://github.com/haechan1103/kavranta/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/kavranta/ci.yml?branch=main&style=flat-square&label=CI" /></a>
+    <a href="LICENSE"><img alt="MIT 라이선스" src="https://img.shields.io/github/license/haechan1103/kavranta?style=flat-square" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple" />
     <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows" />
   </p>
 </div>
 
-![프로젝트 개요, env 편집, AWS 배포, 팀 공유, AI 도구 연결을 보여주는 Env Manager 데모](assets/screenshots/env-manager-demo.gif)
+![프로젝트 개요, env 편집, AWS 배포, 팀 공유, AI 도구 연결을 보여주는 Kavranta 데모](assets/screenshots/kavranta-demo.gif)
 
 <div align="center">
-  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>macOS·Windows용 다운로드</strong></a>
+  <a href="https://github.com/haechan1103/kavranta/releases/latest"><strong>macOS·Windows용 다운로드</strong></a>
   ·
   <a href="#ai-코딩-에이전트-연결">AI 에이전트 연결</a>
   ·
   <a href="SECURITY.md">보안 모델</a>
 </div>
 
-Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 그 프로젝트가 실제로 사용하는 `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, 하위 앱 env 파일을 찾아줍니다. 값은 원래 파일에 남으며, 계정이나 호스팅된 vault, 새로운 실행 명령을 도입하지 않습니다.
+> Kavranta의 이전 제품명은 **Env Manager**입니다. 기존 사용자 데이터와
+> `env-manager` 플러그인·Broker·manifest 기술 식별자는 하위 호환성을 위해
+> 그대로 유지합니다.
 
-## 왜 Env Manager인가요?
+Kavranta는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록하면 그 프로젝트가 실제로 사용하는 `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, 하위 앱 env 파일을 찾아줍니다. 값은 원래 파일에 남으며, 계정이나 호스팅된 vault, 새로운 실행 명령을 도입하지 않습니다.
+
+## 왜 Kavranta인가요?
 
 | 지금 쓰는 방식을 그대로 | 연결된 값은 한 번만 수정 | AI에는 필요한 권한만 |
 | --- | --- | --- |
 | 기존 파일과 실행 명령이 계속 기준입니다. 경로, 주석, 순서와 관련 없는 형식을 보존합니다. | 같은 키를 2개, 3개 이상의 파일에서 명시적으로 연결합니다. 어느 파일에서 수정해도 연결된 모든 위치에 한 번에 저장합니다. | Codex, Claude Code, Copilot이 값이 제거된 로컬 Broker를 통해 구조를 확인하고 허용된 작업을 수행합니다. 보호된 값은 일반 조회 응답에 포함되지 않습니다. |
 | **env 파일을 커밋하지 않고 공유** | **고른 값만 배포** | **Git 실수를 먼저 발견** |
 | 전체 또는 일부 변수를 암호화 패키지로 내보내거나, 마운트한 팀 폴더에 변경 불가능한 새 패키지로 게시합니다. | 임시 env 파일을 만들지 않고 GitHub Actions, Cloudflare Workers, Expo EAS, AWS 또는 직접 설치한 CLI Pack으로 선택한 값만 보냅니다. | 누락된 ignore 규칙, 이미 추적된 env 파일, 과거 기록과 위험한 공개 프론트엔드 변수명을 구분해 알려줍니다. |
+
+## 0.7.1의 새로운 기능
+
+- **Kavranta 브랜드:** 앱, 설치 파일, 릴리스 정보, 문서, 스크린샷과 AI 연동 표시 이름을 Kavranta로 통일했습니다.
+- **업데이트 호환성:** 기존 프로젝트 manifest, 로컬 앱 데이터, Broker 명령과 `env-manager` 플러그인 선택자는 안정적인 기술 식별자로 유지합니다.
 
 ## 0.7.0의 새로운 기능
 
@@ -41,7 +50,7 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
 
 ## 0.6.5의 새로운 기능
 
-- **Expo EAS 배포:** 선택한 값을 EAS CLI의 숨김 입력으로 `development`, `preview`, `production`에 보냅니다. 값은 명령 인자, 임시 파일, Env Manager 출력에 들어가지 않습니다.
+- **Expo EAS 배포:** 선택한 값을 EAS CLI의 숨김 입력으로 `development`, `preview`, `production`에 보냅니다. 값은 명령 인자, 임시 파일, Kavranta 출력에 들어가지 않습니다.
 - **프로젝트 단위 사전 확인:** 가장 가까운 EAS 프로젝트를 찾고 로그인한 Expo 계정과 프로젝트 식별자를 확인한 뒤, 변수마다 `Sensitive` 또는 `Plain text` 공개 범위를 적용합니다.
 - **AI에서도 같은 보호 흐름:** Codex, Claude Code, Copilot이 데스크톱 앱과 같은 값 비노출 Broker 계획과 활동 기록을 사용합니다.
 
@@ -64,13 +73,13 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
 
 프로젝트와 파일에 로컬 표시 이름을 붙여도 실제 경로는 그대로 보이고 바뀌지 않습니다. 값은 기본적으로 가려지며, 변수명 복사, 그룹 빠른 이동, 연결 파일과 저장 영향 범위를 한 화면에서 확인할 수 있습니다.
 
-![마스킹된 합성 값, 연결 파일, 그룹 빠른 이동을 보여주는 Env Manager 파일 편집기](assets/screenshots/env-manager-editor.png)
+![마스킹된 합성 값, 연결 파일, 그룹 빠른 이동을 보여주는 Kavranta 파일 편집기](assets/screenshots/kavranta-editor.png)
 
 ### 지금 확인해야 할 것만 모아봅니다
 
 프로젝트 개요는 값이 비어 있는 변수, 조치가 필요한 AI 접근 검토, 파싱 경고, Git 유출 위험과 관리 파일 이동을 한곳에 모읍니다. 이 점검을 위해 값을 읽지는 않습니다.
 
-![Git 보호와 AI 접근 상태를 보여주는 Env Manager 프로젝트 개요](assets/screenshots/env-manager-overview.png)
+![Git 보호와 AI 접근 상태를 보여주는 Kavranta 프로젝트 개요](assets/screenshots/kavranta-overview.png)
 
 ### 전체 설정도, 팀원에게 필요한 일부만도 공유합니다
 
@@ -80,14 +89,14 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
     <td width="50%"><strong>팀이 이미 쓰는 폴더 활용</strong><br />마운트한 NAS나 동기화 폴더에는 암호문 패키지만 저장합니다. 기존 폴더 권한이 그대로 기준이 됩니다.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-encrypted-share.png" alt="암호화 Env Manager 패키지에 넣을 개별 변수 선택" /></td>
-    <td><img src="assets/screenshots/env-manager-team-sharing.png" alt="Folder Team Channel의 변경 불가능한 암호화 패키지 목록" /></td>
+    <td><img src="assets/screenshots/kavranta-encrypted-share.png" alt="암호화 Kavranta 패키지에 넣을 개별 변수 선택" /></td>
+    <td><img src="assets/screenshots/kavranta-team-sharing.png" alt="Folder Team Channel의 변경 불가능한 암호화 패키지 목록" /></td>
   </tr>
 </table>
 
 가져올 때는 없는 변수만 추가하고 받는 사람에게만 있는 내용은 유지합니다. 서로 다른 값은 하나씩 선택하며 기본값은 내 값 유지입니다. 독립된 충돌은 각각 선택할 수 있고 기존 연결 그룹은 하나의 선택으로 유지됩니다.
 
-![적용 전에 대상 파일과 암호화 패키지 충돌을 검토하는 화면](assets/screenshots/env-manager-import-conflicts.png)
+![적용 전에 대상 파일과 암호화 패키지 충돌을 검토하는 화면](assets/screenshots/kavranta-import-conflicts.png)
 
 ### 필요한 값만 올리고, 확인 가능한 대상은 값 없이 비교합니다
 
@@ -97,14 +106,14 @@ Env Manager는 로컬 우선 데스크톱 앱입니다. 프로젝트를 등록�
     <td width="50%"><strong>AWS Secrets Manager·SSM</strong><br />로컬 AWS Profile 또는 SSO를 사용해 계정·Region·KMS를 확인하고 실제 값을 표시하지 않은 채 일치 여부를 확인합니다.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-cloudflare-push.png" alt="Wrangler를 통해 선택한 마스킹 변수를 Cloudflare Worker로 전송" /></td>
-    <td><img src="assets/screenshots/env-manager-aws-compare.png" alt="AWS로 선택한 변수를 전송하고 값 없이 배포 상태를 비교" /></td>
+    <td><img src="assets/screenshots/kavranta-cloudflare-push.png" alt="Wrangler를 통해 선택한 마스킹 변수를 Cloudflare Worker로 전송" /></td>
+    <td><img src="assets/screenshots/kavranta-aws-compare.png" alt="AWS로 선택한 변수를 전송하고 값 없이 배포 상태를 비교" /></td>
   </tr>
 </table>
 
-프로젝트 밖의 서버 env 파일은 관리자가 고정 Env Manager Verifier를 설치하고 대상과 변수명을 허용 목록에 넣을 수 있습니다. Env Manager는 age 암호화 stdin 프레임을 SSH로 전송하며 고정된 Verifier 명령만 실행합니다.
+프로젝트 밖의 서버 env 파일은 관리자가 고정 Kavranta Verifier를 설치하고 대상과 변수명을 허용 목록에 넣을 수 있습니다. Kavranta는 age 암호화 stdin 프레임을 SSH로 전송하며 고정된 Verifier 명령만 실행합니다.
 
-![암호화 Verifier를 통해 선택한 로컬 변수와 허용된 서버 Runtime을 비교](assets/screenshots/env-manager-runtime-compare.png)
+![암호화 Verifier를 통해 선택한 로컬 변수와 허용된 서버 Runtime을 비교](assets/screenshots/kavranta-runtime-compare.png)
 
 Provider 전송은 항상 명시적으로 시작하는 단방향 작업입니다. GitHub와 Cloudflare Secret은 다시 읽을 수 없으므로 일치한다고 추측하지 않습니다. AWS와 등록한 Runtime 대상만 별도 비교 기능으로 일치 상태를 반환합니다. 선택하지 않은 원격 항목은 삭제하지 않습니다.
 
@@ -132,8 +141,8 @@ GitHub, Cloudflare, Expo EAS를 사용하기 전 [`gh`](https://cli.github.com/m
     <td width="50%"><strong>값 없는 AI 활동 기록</strong><br />Broker 구조 확인, 값 읽기 시도, 수정, Provider 확인과 허용·차단 결과를 봅니다. 실제 값과 값 일부는 기록하지 않습니다.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-ai-integrations.png" alt="Codex, Claude Code, GitHub Copilot용 Env Manager 연결 화면" /></td>
-    <td><img src="assets/screenshots/env-manager-ai-activity.png" alt="허용과 차단 결과가 표시되는 값 없는 AI Broker 활동 기록" /></td>
+    <td><img src="assets/screenshots/kavranta-ai-integrations.png" alt="Codex, Claude Code, GitHub Copilot용 Kavranta 연결 화면" /></td>
+    <td><img src="assets/screenshots/kavranta-ai-activity.png" alt="허용과 차단 결과가 표시되는 값 없는 AI Broker 활동 기록" /></td>
   </tr>
 </table>
 
@@ -143,7 +152,7 @@ GitHub, Cloudflare, Expo EAS를 사용하기 전 [`gh`](https://cli.github.com/m
   <summary><strong>Codex</strong></summary>
 
 ```bash
-codex plugin marketplace add haechan1103/env_manager
+codex plugin marketplace add haechan1103/kavranta
 codex plugin add env-manager@env-manager
 ```
 </details>
@@ -152,7 +161,7 @@ codex plugin add env-manager@env-manager
   <summary><strong>Claude Code</strong></summary>
 
 ```bash
-claude plugin marketplace add haechan1103/env_manager
+claude plugin marketplace add haechan1103/kavranta
 claude plugin install env-manager@env-manager
 ```
 </details>
@@ -161,12 +170,12 @@ claude plugin install env-manager@env-manager
   <summary><strong>GitHub Copilot CLI / VS Code</strong></summary>
 
 ```bash
-copilot plugin marketplace add haechan1103/env_manager
+copilot plugin marketplace add haechan1103/kavranta
 copilot plugin install env-manager@env-manager
 ```
 </details>
 
-먼저 Env Manager에 프로젝트를 등록하고 새 에이전트 세션에서 자연스럽게 요청하세요.
+먼저 Kavranta에 프로젝트를 등록하고 새 에이전트 세션에서 자연스럽게 요청하세요.
 
 ```text
 이 프로젝트 env 구조를 값 없이 점검해줘.
@@ -190,11 +199,11 @@ AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고
 
 일반 구조 조회는 `read-write` 값도 반환하지 않습니다. 연결 저장, 프로젝트 간 복사, Provider 전송, 값 없는 비교, 요청받은 일회용 stdin 생성 작업은 접근 정책을 낮추지 않습니다.
 
-> Env Manager는 실수로 값이 노출될 가능성을 줄여주지만 운영체제 수준의 샌드박스나 운영용 Secret Manager의 대체재는 아닙니다. 값은 원래 env 파일에 남습니다. 전체 경계는 [SECURITY.md](SECURITY.md)를 확인하세요.
+> Kavranta는 실수로 값이 노출될 가능성을 줄여주지만 운영체제 수준의 샌드박스나 운영용 Secret Manager의 대체재는 아닙니다. 값은 원래 env 파일에 남습니다. 전체 경계는 [SECURITY.md](SECURITY.md)를 확인하세요.
 
 ## 설치
 
-[GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest)에서 컴퓨터에 맞는 설치 파일을 받으세요.
+[GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest)에서 컴퓨터에 맞는 설치 파일을 받으세요.
 
 - Windows 10/11 x64 베타(미서명): `x64-setup.exe`
 - Apple Silicon(M1 이상): `aarch64` DMG
@@ -204,9 +213,9 @@ AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고
 
 현재 Windows 설치 파일은 오픈소스 코드 서명을 신청하는 동안 무료로 배포하는 **미서명 베타**입니다. Microsoft Defender SmartScreen이 **Windows의 PC 보호** 경고를 표시할 수 있습니다.
 
-1. [공식 GitHub Release](https://github.com/haechan1103/env_manager/releases/latest)에서 `x64-setup.exe`를 받습니다.
+1. [공식 GitHub Release](https://github.com/haechan1103/kavranta/releases/latest)에서 `x64-setup.exe`를 받습니다.
 2. 설치 파일을 열고 SmartScreen이 나타나면 **추가 정보**를 누릅니다.
-3. 앱 이름이 Env Manager인지 확인한 뒤 **실행**을 누릅니다.
+3. 앱 이름이 Kavranta인지 확인한 뒤 **실행**을 누릅니다.
 
 다른 사이트에서 받았거나 파일 정보가 예상과 다르면 실행하지 마세요. 조직에서 관리하는 컴퓨터는 미서명 앱을 완전히 차단할 수 있으며, 이때는 보안 정책을 우회하지 말고 관리자에게 문의해야 합니다.
 
@@ -214,7 +223,7 @@ AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고
 
 `0.6.4`부터 macOS DMG 두 종류 모두 Apple Developer ID로 서명하고, 내부 앱의 Apple 공증과 스테이플링을 확인한 뒤 공개합니다. 인터넷에서 받은 앱이라는 일반 확인 창은 나타날 수 있지만, Apple이 앱을 확인할 수 없다는 경고 대신 확인된 개발자 정보가 표시되어야 합니다.
 
-확인되지 않은 개발자 또는 검증할 수 없는 앱이라는 경고가 나오면 우회 실행하지 마세요. [공식 GitHub Release](https://github.com/haechan1103/env_manager/releases/latest)에서 받은 파일인지 확인한 뒤 버전과 Mac 종류를 알려주세요.
+확인되지 않은 개발자 또는 검증할 수 없는 앱이라는 경고가 나오면 우회 실행하지 마세요. [공식 GitHub Release](https://github.com/haechan1103/kavranta/releases/latest)에서 받은 파일인지 확인한 뒤 버전과 Mac 종류를 알려주세요.
 
 앱은 고정된 GitHub Releases 주소에서 서명된 업데이트만 확인합니다. 업데이트 확인 중 프로젝트 경로, env 메타데이터, 값이나 텔레메트리를 보내지 않습니다.
 
@@ -223,8 +232,8 @@ AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고
 Node.js, npm, Rust 1.85 이상과 [Tauri 2 사전 요구 사항](https://v2.tauri.app/start/prerequisites/)이 필요합니다.
 
 ```bash
-git clone https://github.com/haechan1103/env_manager.git
-cd env_manager
+git clone https://github.com/haechan1103/kavranta.git
+cd kavranta
 npm install
 npm run tauri dev
 ```
@@ -241,11 +250,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 프로젝트 상태
 
-Env Manager는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.7.0`은 서명·공증된 macOS 빌드와 명확히 표시된 Windows x64 미서명 베타를 배포하고, 기존 배포·공유·AI 값 비노출 흐름 위에 Action Pack, 생성값 비노출 저장, Wrangler `.dev.vars*` 지원, 앱·AI 연동 백그라운드 업데이트 확인을 추가합니다. Windows 코드 서명, ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
+Kavranta는 초기 단계의 macOS·Windows 데스크톱 프로젝트입니다. `0.7.1`은 기존 앱 데이터, 프로젝트 manifest, Broker 명령과 AI 플러그인 선택자를 유지하면서 제품 이름을 Kavranta로 전환합니다. 서명·공증된 macOS 빌드와 명확히 표시된 Windows x64 미서명 베타를 제공합니다. Windows 코드 서명, ARM64와 더 많은 언어는 이후 작업으로 남아 있습니다.
 
 ## 커뮤니티
 
-질문과 아이디어는 [GitHub Discussions](https://github.com/haechan1103/env_manager/discussions), 버그와 범위가 정해진 기능 요청은 [Issues](https://github.com/haechan1103/env_manager/issues)에 남겨주세요.
+질문과 아이디어는 [GitHub Discussions](https://github.com/haechan1103/kavranta/discussions), 버그와 범위가 정해진 기능 요청은 [Issues](https://github.com/haechan1103/kavranta/issues)에 남겨주세요.
 
 [Code of Conduct](CODE_OF_CONDUCT.md)를 따라주세요. 보안 문제는 [SECURITY.md](SECURITY.md)의 비공개 절차로 신고해야 합니다.
 

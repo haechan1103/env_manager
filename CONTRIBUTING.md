@@ -1,11 +1,11 @@
-# Contributing to Env Manager
+# Contributing to Kavranta
 
 Thanks for helping make environment-variable work less error-prone. Small, focused changes with clear tests are the easiest to review.
 
 ## Before you start
 
-- Use [GitHub Discussions](https://github.com/haechan1103/env_manager/discussions) for open-ended ideas and questions.
-- Search [Issues](https://github.com/haechan1103/env_manager/issues) before filing a bug or feature request.
+- Use [GitHub Discussions](https://github.com/haechan1103/kavranta/discussions) for open-ended ideas and questions.
+- Search [Issues](https://github.com/haechan1103/kavranta/issues) before filing a bug or feature request.
 - Open an issue before a large product, security-model, file-format, or architecture change.
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md) and report vulnerabilities through [SECURITY.md](SECURITY.md).
 
@@ -14,15 +14,15 @@ Thanks for helping make environment-variable work less error-prone. Small, focus
 You need Node.js, npm, Rust 1.85+, and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
-git clone https://github.com/haechan1103/env_manager.git
-cd env_manager
+git clone https://github.com/haechan1103/kavranta.git
+cd kavranta
 npm install
 npm run tauri dev
 ```
 
 ## Non-negotiable fixture rule
 
-Never read, copy, commit, log, screenshot, or attach real `.env*` values while developing Env Manager.
+Never read, copy, commit, log, screenshot, or attach real `.env*` values while developing Kavranta.
 
 - Use the synthetic fixtures under `tests/fixtures` or `crates/env-test-support/fixtures`.
 - Use obviously fake values such as `fake_test_token`.

@@ -1,37 +1,48 @@
 <div align="center">
-  <img src="assets/brand/env-manager-logo-v1.png" width="104" alt="Env Manager logo" />
-  <h1>Env Manager</h1>
+  <img src="assets/brand/kavranta-logo-v1.png" width="104" alt="Kavranta logo" />
+  <h1>Kavranta</h1>
   <p><strong>One place for every <code>.env</code> file your project already uses.</strong></p>
   <p>Edit, link, share, and deploy environment variables—without changing your runtime or pasting protected values into AI chat.</p>
   <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
   <p>
-    <a href="https://github.com/haechan1103/env_manager/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/haechan1103/env_manager?style=flat-square&color=168463" /></a>
-    <a href="https://github.com/haechan1103/env_manager/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/env_manager/ci.yml?branch=main&style=flat-square&label=CI" /></a>
-    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/haechan1103/env_manager?style=flat-square" /></a>
+    <a href="https://github.com/haechan1103/kavranta/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/haechan1103/kavranta?style=flat-square&color=168463" /></a>
+    <a href="https://github.com/haechan1103/kavranta/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/haechan1103/kavranta/ci.yml?branch=main&style=flat-square&label=CI" /></a>
+    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/haechan1103/kavranta?style=flat-square" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple" />
     <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows" />
   </p>
 </div>
 
-![Env Manager demo showing project overview, env editing, AWS deployment, team sharing, and AI tool connections](assets/screenshots/env-manager-demo.gif)
+![Kavranta demo showing project overview, env editing, AWS deployment, team sharing, and AI tool connections](assets/screenshots/kavranta-demo.gif)
 
 <div align="center">
-  <a href="https://github.com/haechan1103/env_manager/releases/latest"><strong>Download for macOS or Windows</strong></a>
+  <a href="https://github.com/haechan1103/kavranta/releases/latest"><strong>Download for macOS or Windows</strong></a>
   ·
   <a href="#connect-your-ai-coding-agent">Connect an AI agent</a>
   ·
   <a href="SECURITY.md">Security model</a>
 </div>
 
-Env Manager is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
+> Kavranta was previously published as **Env Manager**. Existing app data and the
+> technical `env-manager` plugin, broker, and manifest identifiers are retained for
+> backward compatibility.
+
+Kavranta is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
 
 ## Why use it?
 
 | Keep your current workflow | Update linked values once | Work with AI more safely |
 | --- | --- | --- |
-| Your existing files and commands remain authoritative. Env Manager preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
+| Your existing files and commands remain authoritative. Kavranta preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
 | **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
 | Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, Expo EAS, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
+
+## New in 0.7.1
+
+- **Kavranta identity:** the application, installers, release metadata, documentation,
+  screenshots, and agent-integration display name now use Kavranta.
+- **Upgrade continuity:** existing project manifests, local app data, Broker commands,
+  and `env-manager` plugin selectors keep their stable technical identifiers.
 
 ## New in 0.7.0
 
@@ -41,8 +52,8 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 
 ## New in 0.6.5
 
-- **Expo EAS deployment:** send selected values to `development`, `preview`, and `production` through the EAS CLI hidden-value prompt. Values never enter command arguments, temporary files, or Env Manager output.
-- **Project-aware checks:** Env Manager detects the nearest EAS project, confirms the signed-in Expo account and project identity, and applies `Sensitive` or `Plain text` visibility per variable.
+- **Expo EAS deployment:** send selected values to `development`, `preview`, and `production` through the EAS CLI hidden-value prompt. Values never enter command arguments, temporary files, or Kavranta output.
+- **Project-aware checks:** Kavranta detects the nearest EAS project, confirms the signed-in Expo account and project identity, and applies `Sensitive` or `Plain text` visibility per variable.
 - **AI-safe EAS operations:** Codex, Claude Code, and Copilot use the same redacted Broker plan and activity trail as the desktop app.
 
 ## New in 0.6.4
@@ -54,7 +65,7 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 - **Folder Team Channels:** use a mounted NAS or existing sync folder to exchange immutable encrypted packages, then review conflicts before applying.
 - **AWS deployment:** push to Secrets Manager or SSM `SecureString`, choose an optional KMS key, and compare selected values with redacted `same` / `different` / `unset` results.
 - **Remote Runtime checks:** compare a managed file with an allowlisted server target through an age-encrypted SSH verifier; the UI receives equality states, never remote values or hashes.
-- **Personal Provider Packs:** add a locally trusted stdin-only CLI integration without waiting for an Env Manager app release.
+- **Personal Provider Packs:** add a locally trusted stdin-only CLI integration without waiting for a Kavranta app release.
 - **AI provider operations:** supported agents can use the same opaque provider engine and value-free activity log as the desktop app.
 - **Cross-project reuse:** copy a protected same-name value between registered projects inside Rust without returning it to the agent or normal UI projection.
 
@@ -64,13 +75,13 @@ Env Manager is a local-first desktop app. Register a project and it discovers th
 
 Projects and files can have local display names while their physical paths remain visible and unchanged. Values are masked by default; variable names can be copied, groups can be jumped to quickly, and linked rows show every file affected by Save.
 
-![Env Manager file editor with masked synthetic values, linked files, and group navigation](assets/screenshots/env-manager-editor.png)
+![Kavranta file editor with masked synthetic values, linked files, and group navigation](assets/screenshots/kavranta-editor.png)
 
 ### Know what needs attention
 
 The project overview combines missing values, actionable AI-access reviews, parse warnings, Git leak checks, and managed-file navigation without reading values for those checks.
 
-![Env Manager project overview with Git safety and AI access status](assets/screenshots/env-manager-overview.png)
+![Kavranta project overview with Git safety and AI access status](assets/screenshots/kavranta-overview.png)
 
 ### Share the whole setup—or only the part a teammate needs
 
@@ -80,14 +91,14 @@ The project overview combines missing values, actionable AI-access reviews, pars
     <td width="50%"><strong>Use a folder your team already has</strong><br />A mounted NAS or sync folder stores ciphertext packages only. Existing folder permissions remain authoritative.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-encrypted-share.png" alt="Choose individual variables for a passphrase-encrypted Env Manager package" /></td>
-    <td><img src="assets/screenshots/env-manager-team-sharing.png" alt="Browse immutable encrypted packages in a Folder Team Channel" /></td>
+    <td><img src="assets/screenshots/kavranta-encrypted-share.png" alt="Choose individual variables for a passphrase-encrypted Kavranta package" /></td>
+    <td><img src="assets/screenshots/kavranta-team-sharing.png" alt="Browse immutable encrypted packages in a Folder Team Channel" /></td>
   </tr>
 </table>
 
 Imports add missing variables, preserve receiver-only content, and make differing values explicit. Keep-local is the default; each unlinked conflict is independent, while an existing linked group stays one atomic choice.
 
-![Review target-file mapping and resolve encrypted package conflicts before applying](assets/screenshots/env-manager-import-conflicts.png)
+![Review target-file mapping and resolve encrypted package conflicts before applying](assets/screenshots/kavranta-import-conflicts.png)
 
 ### Push selected values, then verify where verification is possible
 
@@ -97,16 +108,16 @@ Imports add missing variables, preserve receiver-only content, and make differin
     <td width="50%"><strong>AWS Secrets Manager and SSM</strong><br />Use the local AWS profile or SSO chain, verify account and Region, select KMS, and check equality without displaying values.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-cloudflare-push.png" alt="Push selected masked variables to a Cloudflare Worker through Wrangler" /></td>
-    <td><img src="assets/screenshots/env-manager-aws-compare.png" alt="Push selected variables to AWS and compare deployment values with redacted results" /></td>
+    <td><img src="assets/screenshots/kavranta-cloudflare-push.png" alt="Push selected masked variables to a Cloudflare Worker through Wrangler" /></td>
+    <td><img src="assets/screenshots/kavranta-aws-compare.png" alt="Push selected variables to AWS and compare deployment values with redacted results" /></td>
   </tr>
 </table>
 
-For a server env file outside a project, an administrator can install the fixed Env Manager Verifier and allowlist a target and variable names. Env Manager sends an age-encrypted stdin frame over SSH and runs only the fixed verifier command.
+For a server env file outside a project, an administrator can install the fixed Kavranta Verifier and allowlist a target and variable names. Kavranta sends an age-encrypted stdin frame over SSH and runs only the fixed verifier command.
 
-![Compare selected local variables with an allowlisted server Runtime through the encrypted verifier](assets/screenshots/env-manager-runtime-compare.png)
+![Compare selected local variables with an allowlisted server Runtime through the encrypted verifier](assets/screenshots/kavranta-runtime-compare.png)
 
-Provider push is always explicit and one-way. GitHub and Cloudflare secret values cannot be read back, so Env Manager does not pretend to verify them. AWS and registered Runtime targets expose a separate comparison operation that returns only equality states. Unselected remote entries are never deleted.
+Provider push is always explicit and one-way. GitHub and Cloudflare secret values cannot be read back, so Kavranta does not pretend to verify them. AWS and registered Runtime targets expose a separate comparison operation that returns only equality states. Unselected remote entries are never deleted.
 
 ## Supported deployment targets
 
@@ -124,7 +135,7 @@ Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set), [Wra
 
 ## Connect your AI coding agent
 
-One independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The app detects supported tools and installs or updates their Env Manager connection.
+One independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The app detects supported tools and installs or updates their Kavranta connection.
 
 <table>
   <tr>
@@ -132,8 +143,8 @@ One independently versioned local bundle supports **Codex**, **Claude Code**, an
     <td width="50%"><strong>Value-free activity history</strong><br />See broker structure checks, value-read attempts, mutations, provider checks, and allowed/blocked results. Values and value fragments are never logged.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/env-manager-ai-integrations.png" alt="Env Manager connections for Codex, Claude Code, and GitHub Copilot" /></td>
-    <td><img src="assets/screenshots/env-manager-ai-activity.png" alt="Value-free AI broker activity with allowed and blocked outcomes" /></td>
+    <td><img src="assets/screenshots/kavranta-ai-integrations.png" alt="Kavranta connections for Codex, Claude Code, and GitHub Copilot" /></td>
+    <td><img src="assets/screenshots/kavranta-ai-activity.png" alt="Value-free AI broker activity with allowed and blocked outcomes" /></td>
   </tr>
 </table>
 
@@ -143,7 +154,7 @@ You can also install the integration from a terminal:
   <summary><strong>Codex</strong></summary>
 
 ```bash
-codex plugin marketplace add haechan1103/env_manager
+codex plugin marketplace add haechan1103/kavranta
 codex plugin add env-manager@env-manager
 ```
 </details>
@@ -152,7 +163,7 @@ codex plugin add env-manager@env-manager
   <summary><strong>Claude Code</strong></summary>
 
 ```bash
-claude plugin marketplace add haechan1103/env_manager
+claude plugin marketplace add haechan1103/kavranta
 claude plugin install env-manager@env-manager
 ```
 </details>
@@ -161,12 +172,12 @@ claude plugin install env-manager@env-manager
   <summary><strong>GitHub Copilot CLI / VS Code</strong></summary>
 
 ```bash
-copilot plugin marketplace add haechan1103/env_manager
+copilot plugin marketplace add haechan1103/kavranta
 copilot plugin install env-manager@env-manager
 ```
 </details>
 
-Register the project in Env Manager first, start a new agent session, and ask naturally:
+Register the project in Kavranta first, start a new agent session, and ask naturally:
 
 ```text
 Inspect this project's env structure without reading values.
@@ -190,11 +201,11 @@ The integration never registers arbitrary projects. Only projects already regist
 
 Normal structure inspection never returns values, including `read-write` values. Internal operations such as linked saves, cross-project copies, provider pushes, redacted comparisons, and a requested one-time stdin generator do not downgrade this policy.
 
-> Env Manager reduces accidental value exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
+> Kavranta reduces accidental value exposure, but it is not an operating-system sandbox or a production secret manager. Values remain in the original env files. See [SECURITY.md](SECURITY.md) for the complete boundary.
 
 ## Install
 
-Download the installer for your computer from [GitHub Releases](https://github.com/haechan1103/env_manager/releases/latest):
+Download the installer for your computer from [GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest):
 
 - Windows 10/11 x64 beta (unsigned): `x64-setup.exe`
 - Apple Silicon (M1 or newer): `aarch64` DMG
@@ -204,9 +215,9 @@ Download the installer for your computer from [GitHub Releases](https://github.c
 
 The Windows installer is a free **unsigned beta** while the project applies for open-source code signing. Microsoft Defender SmartScreen may show **Windows protected your PC**.
 
-1. Download `x64-setup.exe` only from the [official GitHub Release](https://github.com/haechan1103/env_manager/releases/latest).
+1. Download `x64-setup.exe` only from the [official GitHub Release](https://github.com/haechan1103/kavranta/releases/latest).
 2. Open the installer. If SmartScreen appears, select **More info**.
-3. Confirm the app name is Env Manager, then select **Run anyway**.
+3. Confirm the app name is Kavranta, then select **Run anyway**.
 
 Do not continue if the file came from another site or its details are unexpected. An organization-managed computer may block unsigned applications completely; in that case, contact its administrator instead of bypassing the policy.
 
@@ -214,17 +225,17 @@ Do not continue if the file came from another site or its details are unexpected
 
 Starting with `0.6.4`, both macOS DMGs are signed with an Apple Developer ID and contain an app notarized and stapled by Apple before the release is published. macOS may still show the normal confirmation for an app downloaded from the internet; it should identify the developer instead of reporting that Apple cannot verify the app.
 
-If macOS reports an unidentified or unverifiable developer, do not bypass the warning. Confirm that the file came from the [official GitHub Release](https://github.com/haechan1103/env_manager/releases/latest) and report the affected version and Mac architecture.
+If macOS reports an unidentified or unverifiable developer, do not bypass the warning. Confirm that the file came from the [official GitHub Release](https://github.com/haechan1103/kavranta/releases/latest) and report the affected version and Mac architecture.
 
-Env Manager checks one fixed GitHub Releases endpoint for signed app updates. It sends no project path, env metadata, value, or telemetry during the check.
+Kavranta checks one fixed GitHub Releases endpoint for signed app updates. It sends no project path, env metadata, value, or telemetry during the check.
 
 ## Develop locally
 
 Requirements: Node.js, npm, Rust 1.85+, and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
-git clone https://github.com/haechan1103/env_manager.git
-cd env_manager
+git clone https://github.com/haechan1103/kavranta.git
+cd kavranta
 npm install
 npm run tauri dev
 ```
@@ -241,11 +252,11 @@ Use synthetic env fixtures only. Never commit or attach real `.env*` values. Rea
 
 ## Project status
 
-Env Manager is an early-stage macOS and Windows desktop project. Version `0.7.0` ships signed and notarized macOS builds plus an explicitly unsigned Windows x64 beta, and adds Action Packs, opaque generated-value ingestion, Wrangler `.dev.vars*` support, and background app/AI-integration update checks on top of the existing deploy, share, and redacted-agent workflows. Windows code signing, ARM64, and additional languages remain planned.
+Kavranta is an early-stage macOS and Windows desktop project. Version `0.7.1` introduces the Kavranta identity while preserving existing app data, project manifests, Broker commands, and agent plugin selectors. It ships signed and notarized macOS builds plus an explicitly unsigned Windows x64 beta. Windows code signing, ARM64, and additional languages remain planned.
 
 ## Community
 
-Questions and ideas belong in [GitHub Discussions](https://github.com/haechan1103/env_manager/discussions). Bugs and scoped feature requests belong in [Issues](https://github.com/haechan1103/env_manager/issues).
+Questions and ideas belong in [GitHub Discussions](https://github.com/haechan1103/kavranta/discussions). Bugs and scoped feature requests belong in [Issues](https://github.com/haechan1103/kavranta/issues).
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security reports must use the private process in [SECURITY.md](SECURITY.md).
 

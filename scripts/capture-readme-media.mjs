@@ -11,18 +11,18 @@ const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 const outputDir = path.join(root, "assets", "screenshots");
 const brandDir = path.join(root, "assets", "brand");
 const workDir = path.join(root, "test-results", "readme-media");
-const overviewPath = path.join(outputDir, "env-manager-overview.png");
-const heroPath = path.join(outputDir, "env-manager-editor.png");
-const integrationsPath = path.join(outputDir, "env-manager-ai-integrations.png");
-const providerPath = path.join(outputDir, "env-manager-cloudflare-push.png");
-const awsPath = path.join(outputDir, "env-manager-aws-compare.png");
-const runtimePath = path.join(outputDir, "env-manager-runtime-compare.png");
-const sharingPath = path.join(outputDir, "env-manager-encrypted-share.png");
-const teamChannelPath = path.join(outputDir, "env-manager-team-sharing.png");
-const importPath = path.join(outputDir, "env-manager-import-conflicts.png");
-const activityPath = path.join(outputDir, "env-manager-ai-activity.png");
-const gifPath = path.join(outputDir, "env-manager-demo.gif");
-const socialPreviewPath = path.join(brandDir, "env-manager-social-preview.png");
+const overviewPath = path.join(outputDir, "kavranta-overview.png");
+const heroPath = path.join(outputDir, "kavranta-editor.png");
+const integrationsPath = path.join(outputDir, "kavranta-ai-integrations.png");
+const providerPath = path.join(outputDir, "kavranta-cloudflare-push.png");
+const awsPath = path.join(outputDir, "kavranta-aws-compare.png");
+const runtimePath = path.join(outputDir, "kavranta-runtime-compare.png");
+const sharingPath = path.join(outputDir, "kavranta-encrypted-share.png");
+const teamChannelPath = path.join(outputDir, "kavranta-team-sharing.png");
+const importPath = path.join(outputDir, "kavranta-import-conflicts.png");
+const activityPath = path.join(outputDir, "kavranta-ai-activity.png");
+const gifPath = path.join(outputDir, "kavranta-demo.gif");
+const socialPreviewPath = path.join(brandDir, "kavranta-social-preview.png");
 
 await mkdir(outputDir, { recursive: true });
 await mkdir(brandDir, { recursive: true });
@@ -153,7 +153,7 @@ async function captureDemoFrames() {
 async function renderSocialPreview() {
   const appImage = (await readFile(heroPath)).toString("base64");
   const logoImage = (
-    await readFile(path.join(brandDir, "env-manager-logo-v1.png"))
+    await readFile(path.join(brandDir, "kavranta-logo-v1.png"))
   ).toString("base64");
   const context = await browser.newContext({ viewport: { width: 1280, height: 640 } });
   const page = await context.newPage();
@@ -208,7 +208,7 @@ async function renderSocialPreview() {
         <main class="canvas">
           <div class="brand">
             <img class="logo" src="data:image/png;base64,${logoImage}" />
-            <span class="name">Env Manager</span>
+            <span class="name">Kavranta</span>
           </div>
           <section class="copy">
             <h1>Edit. Share.<br />Deploy your .env.</h1>
