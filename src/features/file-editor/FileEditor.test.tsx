@@ -141,13 +141,93 @@ describe("FileEditor", () => {
     clientWidth.mockRestore();
     scrollWidth.mockRestore();
   });
+
+  it("filters the file view to variables whose values are empty", async () => {
+    const user = userEvent.setup();
+    const filterProjection: ProjectProjection = {
+      ...projection,
+      files: [{
+        ...projection.files[0]!,
+        groups: [
+          {
+            name: "GPT",
+            variables: [variable("GPT_API_KEY", "empty"), variable("GPT_MODEL")],
+          },
+          {
+            name: "Database",
+            variables: [variable("DATABASE_URL")],
+          },
+        ],
+      }],
+    };
+
+    render(
+      <FileEditor
+        projectId="demo"
+        projection={filterProjection}
+        filePath=".env.local"
+        onRefresh={vi.fn(async () => undefined)}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+        onRenameFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("GPT_API_KEY")).toBeInTheDocument();
+    expect(screen.getByText("GPT_MODEL")).toBeInTheDocument();
+    expect(screen.getByText("DATABASE_URL")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Missing values only/ }));
+
+    expect(screen.getByText("GPT_API_KEY")).toBeInTheDocument();
+    expect(screen.queryByText("GPT_MODEL")).not.toBeInTheDocument();
+    expect(screen.queryByText("DATABASE_URL")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Database" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 3 variables")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Missing values only/ }));
+    expect(screen.getByText("DATABASE_URL")).toBeInTheDocument();
+  });
+
+  it("explains when the selected file has no empty variables", async () => {
+    const user = userEvent.setup();
+    const completeProjection: ProjectProjection = {
+      ...projection,
+      files: [{
+        ...projection.files[0]!,
+        groups: [{ name: "GPT", variables: [variable("GPT_API_KEY")] }],
+      }],
+    };
+
+    render(
+      <FileEditor
+        projectId="demo"
+        projection={completeProjection}
+        filePath=".env.local"
+        onRefresh={vi.fn(async () => undefined)}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+        onRenameFile={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Missing values only/ }));
+
+    expect(screen.getByText("Every variable has a value")).toBeInTheDocument();
+    expect(screen.queryByText("GPT_API_KEY")).not.toBeInTheDocument();
+  });
 });
 
-function variable(key: string): OccurrenceProjection {
+function variable(
+  key: string,
+  valueState: OccurrenceProjection["valueState"] = "present",
+): OccurrenceProjection {
   return {
     key,
     description: [],
-    valueState: "present",
+    valueState,
     displayValue: null,
     codexAccess: "protected",
     linkedCount: 1,

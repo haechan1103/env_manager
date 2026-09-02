@@ -4,12 +4,13 @@ mod runtime;
 
 use commands::{
     add_variable, apply_gitignore_guard, apply_migration, apply_team_import,
-    compare_provider_values, connect_folder_team_channel, copy_key, copy_value,
-    create_github_environment, create_group, create_link, delete_variable, detach_link_member,
-    detect_cloudflare_target, detect_eas_target, detect_github_repository, discard_team_import,
-    execute_action_pack, export_env_files, get_last_selected_project_id, inspect_aws_access,
-    inspect_cloudflare_access, inspect_eas_access, install_action_pack, install_agent_integration,
-    install_personal_provider_pack, list_action_packs, list_agent_activity,
+    compare_provider_values, connect_folder_team_channel, copy_account_field, copy_key, copy_value,
+    create_account, create_github_environment, create_group, create_link, delete_account,
+    delete_variable, detach_link_member, detect_cloudflare_target, detect_eas_target,
+    detect_github_repository, discard_team_import, execute_action_pack, export_env_files,
+    get_last_selected_project_id, inspect_aws_access, inspect_cloudflare_access,
+    inspect_eas_access, install_action_pack, install_agent_integration,
+    install_personal_provider_pack, list_accounts, list_action_packs, list_agent_activity,
     list_agent_integrations, list_deployment_providers, list_github_environments,
     list_github_repositories, list_projects, list_provider_push_receipts, list_runtime_targets,
     list_team_channels, move_variable, plan_migration, plan_team_channel_import, plan_team_import,
@@ -17,9 +18,9 @@ use commands::{
     remap_team_import_file, remove_action_pack, remove_personal_provider_pack, remove_project,
     remove_runtime_target, remove_team_channel, rename_env_file, rename_group, rename_project,
     reveal_team_import_conflict, save_description, save_runtime_target, save_value, scan_project,
-    set_codex_access, set_last_selected_project,
+    set_account_project_access, set_codex_access, set_last_selected_project, update_account,
 };
-use runtime::AppRuntime;
+use runtime::{AppRuntime, CredentialRuntime};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,11 +32,20 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
             let runtime = AppRuntime::load(app.handle())?;
+            let app_data = app.path().app_data_dir()?;
+            let credentials = CredentialRuntime::load(&app_data);
             app.manage(runtime);
+            app.manage(credentials);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             list_projects,
+            list_accounts,
+            create_account,
+            update_account,
+            delete_account,
+            set_account_project_access,
+            copy_account_field,
             get_last_selected_project_id,
             set_last_selected_project,
             list_agent_integrations,

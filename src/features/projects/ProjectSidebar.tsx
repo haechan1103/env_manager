@@ -13,7 +13,7 @@ import { useAgentIntegrationStatus } from "../integrations/AgentIntegrationStatu
 import { ProjectSwitcherModal } from "./ProjectSwitcherModal";
 
 interface View {
-  kind: "overview" | "file" | "integrations" | "activity" | "review";
+  kind: "overview" | "file" | "integrations" | "activity" | "review" | "accounts";
   path?: string;
 }
 
@@ -24,7 +24,7 @@ interface Props {
   view: View;
   onSelectProject: (projectId: string) => void;
   onSelectView: (
-    view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" } | { kind: "activity" } | { kind: "review" },
+    view: { kind: "overview" } | { kind: "file"; path: string } | { kind: "integrations" } | { kind: "activity" } | { kind: "review" } | { kind: "accounts" },
   ) => void;
   onRegister: () => void;
   onRenameFile: (projectId: string, path: string, name: string) => void;
@@ -98,6 +98,12 @@ export function ProjectSidebar({
             onClick={() => onSelectView({ kind: "activity" })}
           >
             <span>◷</span> {t("sidebar.activity")}
+          </button>
+          <button
+            className={view.kind === "accounts" ? "nav-item active" : "nav-item"}
+            onClick={() => onSelectView({ kind: "accounts" })}
+          >
+            <span>⌾</span> {t("sidebar.accounts")}
           </button>
           <p className="file-label">ENV FILES</p>
           {projection.files.map((file) => (

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/env-core",
+  "crates/env-credentials",
   "crates/env-registry",
   "crates/env-broker",
   "crates/env-provider",
@@ -28,6 +29,7 @@ arboard = "3.6"
 blake3 = "1.8"
 directories = "6.0"
 getrandom = "0.4"
+keyring = "4.2.0"
 notify = "8.2"
 portable-pty = "=0.9.0"
 proptest = "1.8"

@@ -40,6 +40,7 @@ export function FileEditor({
   const [migration, setMigration] = useState<MigrationPlanProjection | null>(null);
   const [renamingFile, setRenamingFile] = useState(false);
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
+  const [showEmptyOnly, setShowEmptyOnly] = useState(false);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   const editorRef = useRef<HTMLElement>(null);
 
@@ -66,11 +67,26 @@ export function FileEditor({
   }, [linking, occurrenceFilesByKey, projection.files]);
 
   const variableCount = file ? countVariables(file) : 0;
-  const showGroupNavigation = Boolean(file && variableCount >= 10 && file.groups.length > 1);
+  const emptyVariableCount = file ? countEmptyVariables(file) : 0;
+  const visibleGroups = useMemo(() => {
+    if (!file) return [];
+    if (!showEmptyOnly) return file.groups;
+    return file.groups
+      .map((group) => ({
+        ...group,
+        variables: group.variables.filter((variable) => variable.valueState === "empty"),
+      }))
+      .filter((group) => group.variables.length > 0);
+  }, [file, showEmptyOnly]);
+  const visibleVariableCount = visibleGroups.reduce(
+    (total, group) => total + group.variables.length,
+    0,
+  );
+  const showGroupNavigation = visibleVariableCount >= 10 && visibleGroups.length > 1;
 
   useEffect(() => {
     setActiveGroupIndex(0);
-  }, [filePath]);
+  }, [filePath, showEmptyOnly]);
 
   useEffect(() => {
     if (!showGroupNavigation || !editorRef.current) return;
@@ -98,7 +114,7 @@ export function FileEditor({
       scrollRoot.removeEventListener("scroll", updateActiveGroup);
       window.removeEventListener("resize", updateActiveGroup);
     };
-  }, [file?.groups, filePath, showGroupNavigation]);
+  }, [filePath, showGroupNavigation, visibleGroups]);
 
   if (!file) {
     return (
@@ -161,9 +177,29 @@ export function FileEditor({
         </div>
       )}
 
+      {variableCount > 0 && (
+        <div className="file-filter-bar" role="toolbar" aria-label={t("file.filters")}>
+          <button
+            className={`file-filter-toggle${showEmptyOnly ? " active" : ""}`}
+            aria-pressed={showEmptyOnly}
+            onClick={() => setShowEmptyOnly((current) => !current)}
+          >
+            <span>{t("file.emptyOnly")}</span>
+            <strong aria-label={t("file.emptyCount", { count: emptyVariableCount })}>
+              {emptyVariableCount}
+            </strong>
+          </button>
+          {showEmptyOnly && (
+            <span className="file-filter-result">
+              {t("file.filteredCount", { visible: visibleVariableCount, total: variableCount })}
+            </span>
+          )}
+        </div>
+      )}
+
       {showGroupNavigation && (
         <GroupJumpNavigation
-          groups={file.groups}
+          groups={visibleGroups}
           activeGroupIndex={activeGroupIndex}
           onJump={(groupIndex) => {
             setActiveGroupIndex(groupIndex);
@@ -175,7 +211,13 @@ export function FileEditor({
       )}
 
       <div className="groups-stack">
-        {file.groups.map((group, groupIndex) => (
+        {showEmptyOnly && visibleGroups.length === 0 && (
+          <div className="file-filter-empty">
+            <strong>{t("file.noEmptyVariables")}</strong>
+            <span>{t("file.noEmptyVariablesBody")}</span>
+          </div>
+        )}
+        {visibleGroups.map((group, groupIndex) => (
           <section
             className="group-card"
             data-env-group={groupIndex}
@@ -468,6 +510,14 @@ function MigrationModal({
 
 function countVariables(file: FileProjection) {
   return file.groups.reduce((total, group) => total + group.variables.length, 0);
+}
+
+function countEmptyVariables(file: FileProjection) {
+  return file.groups.reduce(
+    (total, group) =>
+      total + group.variables.filter((variable) => variable.valueState === "empty").length,
+    0,
+  );
 }
 
 function CreateGroupModal({
