@@ -244,6 +244,34 @@ export interface ProjectSummary {
   displayPath: string;
 }
 
+export interface AccountProjection {
+  id: string;
+  displayName: string;
+  service: string;
+  allowedForProject: boolean;
+  allowedProjectCount: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface CreateAccountRequest {
+  displayName: string;
+  service: string;
+  username: string;
+  password: string;
+  allowCurrentProject: boolean;
+}
+
+export interface UpdateAccountRequest {
+  accountId: string;
+  displayName: string;
+  service: string;
+  username: string | null;
+  password: string | null;
+}
+
+export type AccountField = "username" | "password";
+
 export interface OccurrenceProjection {
   key: string;
   description: string[];

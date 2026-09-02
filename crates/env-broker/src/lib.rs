@@ -2068,6 +2068,32 @@ mod tests {
         (project, service)
     }
 
+    #[test]
+    fn broker_exposes_no_account_storage_or_permission_capability() {
+        let definitions = tool_definitions();
+        let names = definitions
+            .as_array()
+            .expect("tool definitions")
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+
+        for forbidden in [
+            "list_accounts",
+            "create_account",
+            "update_account",
+            "delete_account",
+            "set_account_project_access",
+            "copy_account_field",
+            "run_login_test",
+        ] {
+            assert!(
+                !names.contains(&forbidden),
+                "unexpected Broker capability: {forbidden}"
+            );
+        }
+    }
+
     fn register_for_stdin_apply(app_data: &Path, service: &ProjectService) -> PathBuf {
         let registry_path = app_data.join("projects.json");
         env_registry::write(

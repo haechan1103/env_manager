@@ -8,6 +8,7 @@ import { ImportEnvModal } from "../features/export/ImportEnvModal";
 import { ProviderPushModal } from "../features/provider-push/ProviderPushModal";
 import { TeamChannelModal } from "../features/team-channel/TeamChannelModal";
 import { AgentActivity } from "../features/activity/AgentActivity";
+import { AccountVault } from "../features/accounts/AccountVault";
 import { AgentIntegrations } from "../features/integrations/AgentIntegrations";
 import { Overview } from "../features/overview/Overview";
 import { ProjectSidebar } from "../features/projects/ProjectSidebar";
@@ -20,6 +21,7 @@ type View =
   | { kind: "file"; path: string }
   | { kind: "integrations" }
   | { kind: "activity" }
+  | { kind: "accounts" }
   | { kind: "review" };
 
 export function App() {
@@ -234,6 +236,14 @@ export function App() {
               )}
               {view.kind === "activity" && (
                 <AgentActivity projectId={manager.selectedProject.id} onError={manager.showError} />
+              )}
+              {view.kind === "accounts" && (
+                <AccountVault
+                  projectId={manager.selectedProject.id}
+                  projectName={manager.selectedProject.name}
+                  onError={manager.showError}
+                  onNotice={manager.showNotice}
+                />
               )}
             </div>
             {renamingProject && (

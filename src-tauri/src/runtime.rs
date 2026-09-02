@@ -19,8 +19,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 mod agent_activity;
+mod credentials;
 mod team_channels;
 
+pub use credentials::CredentialRuntime;
 pub use team_channels::TeamChannelProjection;
 
 #[derive(Debug, Clone, Serialize)]
