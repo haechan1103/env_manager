@@ -13,6 +13,8 @@ use tauri::{AppHandle, Manager};
 const PLUGIN_NAME: &str = "env-manager";
 const MARKETPLACE_NAME: &str = "env-manager";
 const CODEX_MARKETPLACE_NAME: &str = "env-manager-desktop";
+const KAVRANTA_REPOSITORY: &str = "https://github.com/haechan1103/kavranta";
+const LEGACY_ENV_MANAGER_REPOSITORY: &str = "https://github.com/haechan1103/env_manager";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const AGENT_BUNDLE_VERSION: &str = include_str!("../../plugins/env-manager/VERSION");
 
@@ -63,6 +65,12 @@ struct InstallationMarker {
     bundle_version: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CodexMarketplaceAlias {
+    name: String,
+    remove_marketplace: bool,
+}
+
 pub fn list(app: &AppHandle) -> Vec<AgentIntegrationStatus> {
     let broker = ensure_current_broker(app).ok();
     let catalog_available = catalog_source(app).is_some();
@@ -86,20 +94,18 @@ pub fn install(
     })?;
     let broker = ensure_current_broker(app)?;
     let catalog = materialize_catalog(app, &broker, id)?;
-    let installed_before_update = installed_version(app, id);
-    let owns_existing_installation =
-        marker_version(app, id).is_some() || cached_bundle_is_official(id);
-    let migrate_legacy_codex_alias = id == AgentIntegrationId::Codex
-        && (legacy_codex_bundle_is_official()
-            || installed_before_update
-                .as_deref()
-                .is_some_and(|version| is_update_available(version, "1.8.0")));
+    let owned_codex_aliases = (id == AgentIntegrationId::Codex)
+        .then(official_codex_marketplace_aliases)
+        .unwrap_or_default();
+    let owns_existing_installation = marker_version(app, id).is_some()
+        || cached_bundle_is_official(id)
+        || !owned_codex_aliases.is_empty();
 
     if id == AgentIntegrationId::Codex && owns_existing_installation {
         refresh_owned_codex_marketplace(
             &executable,
             catalog.as_os_str().to_owned(),
-            migrate_legacy_codex_alias,
+            &owned_codex_aliases,
         )?;
     } else {
         let _ = run_agent_command(
@@ -744,15 +750,12 @@ fn install_or_update(executable: &Path, id: AgentIntegrationId) -> bool {
 fn refresh_owned_codex_marketplace(
     executable: &Path,
     catalog: OsString,
-    remove_legacy_alias: bool,
+    legacy_aliases: &[CodexMarketplaceAlias],
 ) -> Result<(), IntegrationError> {
     let remove_legacy_plugin = legacy_codex_bundle_is_official();
-    if refresh_owned_codex_marketplace_with(
-        catalog,
-        remove_legacy_alias,
-        remove_legacy_plugin,
-        |args| run_agent_command(executable, args),
-    ) {
+    if refresh_owned_codex_marketplace_with(catalog, legacy_aliases, remove_legacy_plugin, |args| {
+        run_agent_command(executable, args)
+    }) {
         Ok(())
     } else {
         Err(IntegrationError {
@@ -764,7 +767,7 @@ fn refresh_owned_codex_marketplace(
 
 fn refresh_owned_codex_marketplace_with(
     catalog: OsString,
-    remove_legacy_alias: bool,
+    legacy_aliases: &[CodexMarketplaceAlias],
     remove_legacy_plugin: bool,
     mut run: impl FnMut(Vec<OsString>) -> bool,
 ) -> bool {
@@ -778,13 +781,24 @@ fn refresh_owned_codex_marketplace_with(
     // first, remove the current config source plus the legacy alias only during
     // migration, and finally add exactly one source.
     let _ = run(remove_args(id));
-    if remove_legacy_plugin {
+    if remove_legacy_plugin
+        && !legacy_aliases
+            .iter()
+            .any(|alias| alias.name == MARKETPLACE_NAME)
+    {
         let legacy = format!("{PLUGIN_NAME}@{MARKETPLACE_NAME}");
         let _ = run(vec!["plugin".into(), "remove".into(), legacy.into()]);
     }
+    for alias in legacy_aliases {
+        let selector = format!("{PLUGIN_NAME}@{}", alias.name);
+        let _ = run(vec!["plugin".into(), "remove".into(), selector.into()]);
+    }
     let _ = run(marketplace_remove_named_args(CODEX_MARKETPLACE_NAME));
-    if remove_legacy_alias {
-        let _ = run(marketplace_remove_named_args(MARKETPLACE_NAME));
+    for alias in legacy_aliases
+        .iter()
+        .filter(|alias| alias.remove_marketplace)
+    {
+        let _ = run(marketplace_remove_named_args(&alias.name));
     }
 
     run(marketplace_add_args(id, catalog)) && run(install_args(id))
@@ -876,8 +890,74 @@ fn cached_bundle_is_official(id: AgentIntegrationId) -> bool {
     let Ok(manifest) = read_json(&root.join(manifest_name)) else {
         return false;
     };
+    manifest_is_official(&manifest)
+}
+
+fn manifest_is_official(manifest: &Value) -> bool {
     manifest["name"].as_str() == Some(PLUGIN_NAME)
-        && manifest["repository"].as_str() == Some("https://github.com/haechan1103/kavranta")
+        && matches!(
+            manifest["repository"].as_str(),
+            Some(KAVRANTA_REPOSITORY) | Some(LEGACY_ENV_MANAGER_REPOSITORY)
+        )
+}
+
+fn official_codex_marketplace_aliases() -> Vec<CodexMarketplaceAlias> {
+    let Some(base) = BaseDirs::new() else {
+        return Vec::new();
+    };
+    official_codex_marketplace_aliases_from_config(&base.home_dir().join(".codex/config.toml"))
+}
+
+fn official_codex_marketplace_aliases_from_config(
+    config_path: &Path,
+) -> Vec<CodexMarketplaceAlias> {
+    let Ok(source) = fs::read_to_string(config_path) else {
+        return Vec::new();
+    };
+    let Ok(config) = toml::from_str::<toml::Table>(&source) else {
+        return Vec::new();
+    };
+    let Some(marketplaces) = config.get("marketplaces").and_then(toml::Value::as_table) else {
+        return Vec::new();
+    };
+
+    marketplaces
+        .iter()
+        .filter(|(name, _)| name.as_str() != CODEX_MARKETPLACE_NAME)
+        .filter_map(|(name, settings)| {
+            let settings = settings.as_table()?;
+            if settings.get("source_type").and_then(toml::Value::as_str) != Some("local") {
+                return None;
+            }
+            let root = PathBuf::from(settings.get("source")?.as_str()?);
+            Some(CodexMarketplaceAlias {
+                name: name.clone(),
+                remove_marketplace: codex_marketplace_is_official(&root)?,
+            })
+        })
+        .collect()
+}
+
+fn codex_marketplace_is_official(root: &Path) -> Option<bool> {
+    let root = fs::canonicalize(root).ok()?;
+    let marketplace = read_json(&root.join(".agents/plugins/marketplace.json")).ok()?;
+    let plugins = marketplace["plugins"].as_array()?;
+    let plugin = plugins
+        .iter()
+        .find(|plugin| plugin["name"].as_str() == Some(PLUGIN_NAME))?;
+    let source = &plugin["source"];
+    let relative = source
+        .as_str()
+        .or_else(|| source.get("path").and_then(Value::as_str))?;
+    if source.is_object() && source.get("source").and_then(Value::as_str) != Some("local") {
+        return None;
+    }
+    let plugin_root = fs::canonicalize(root.join(relative)).ok()?;
+    if !plugin_root.starts_with(&root) {
+        return None;
+    }
+    let manifest = read_json(&plugin_root.join(".codex-plugin/plugin.json")).ok()?;
+    manifest_is_official(&manifest).then_some(plugins.len() == 1)
 }
 
 fn install_args(id: AgentIntegrationId) -> Vec<OsString> {
@@ -1052,10 +1132,8 @@ fn legacy_codex_bundle_is_official() -> bool {
     let Some((_, root)) = legacy_cached_bundle(AgentIntegrationId::Codex) else {
         return false;
     };
-    read_json(&root.join(".codex-plugin/plugin.json")).is_ok_and(|manifest| {
-        manifest["name"].as_str() == Some(PLUGIN_NAME)
-            && manifest["repository"].as_str() == Some("https://github.com/haechan1103/kavranta")
-    })
+    read_json(&root.join(".codex-plugin/plugin.json"))
+        .is_ok_and(|manifest| manifest_is_official(&manifest))
 }
 
 fn newest_manifest_bundle(root: &Path, manifest: &str) -> Option<(String, PathBuf)> {
@@ -1197,10 +1275,14 @@ mod tests {
     #[test]
     fn codex_update_replaces_all_app_owned_marketplace_aliases_before_installing() {
         let catalog = OsString::from("/catalogs/1.9.0/codex");
+        let aliases = vec![CodexMarketplaceAlias {
+            name: "personal".to_owned(),
+            remove_marketplace: true,
+        }];
         let mut commands = Vec::new();
 
         let refreshed =
-            refresh_owned_codex_marketplace_with(catalog.clone(), true, false, |args| {
+            refresh_owned_codex_marketplace_with(catalog.clone(), &aliases, false, |args| {
                 commands.push(args);
                 true
             });
@@ -1216,6 +1298,11 @@ mod tests {
                 ],
                 vec![
                     OsString::from("plugin"),
+                    OsString::from("remove"),
+                    OsString::from("env-manager@personal"),
+                ],
+                vec![
+                    OsString::from("plugin"),
                     OsString::from("marketplace"),
                     OsString::from("remove"),
                     OsString::from("env-manager-desktop"),
@@ -1224,7 +1311,7 @@ mod tests {
                     OsString::from("plugin"),
                     OsString::from("marketplace"),
                     OsString::from("remove"),
-                    OsString::from("env-manager"),
+                    OsString::from("personal"),
                 ],
                 vec![
                     OsString::from("plugin"),
@@ -1246,7 +1333,7 @@ mod tests {
         let mut commands = Vec::new();
         let refreshed = refresh_owned_codex_marketplace_with(
             OsString::from("/catalogs/1.6.2/codex"),
-            false,
+            &[],
             false,
             |args| {
                 commands.push(args);
@@ -1267,7 +1354,7 @@ mod tests {
         let mut add_marketplace_succeeds = false;
         let refreshed = refresh_owned_codex_marketplace_with(
             OsString::from("/catalogs/1.9.0/codex"),
-            false,
+            &[],
             false,
             |args| {
                 if args.get(1).is_some_and(|value| value == "marketplace")
@@ -1282,6 +1369,95 @@ mod tests {
 
         assert!(!refreshed);
         assert!(add_marketplace_succeeds);
+    }
+
+    #[test]
+    fn codex_update_removes_only_the_plugin_from_a_shared_legacy_marketplace() {
+        let aliases = vec![CodexMarketplaceAlias {
+            name: "personal".to_owned(),
+            remove_marketplace: false,
+        }];
+        let mut commands = Vec::new();
+
+        assert!(refresh_owned_codex_marketplace_with(
+            OsString::from("/catalogs/1.9.2/codex"),
+            &aliases,
+            false,
+            |args| {
+                commands.push(args);
+                true
+            },
+        ));
+        assert!(commands.iter().any(|args| {
+            args == &vec![
+                OsString::from("plugin"),
+                OsString::from("remove"),
+                OsString::from("env-manager@personal"),
+            ]
+        }));
+        assert!(!commands.iter().any(|args| {
+            args.get(1).is_some_and(|value| value == "marketplace")
+                && args.get(2).is_some_and(|value| value == "remove")
+                && args.get(3).is_some_and(|value| value == "personal")
+        }));
+    }
+
+    #[test]
+    fn codex_discovers_the_config_key_for_an_official_legacy_marketplace() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let marketplace_root = directory.path().join("marketplace");
+        let plugin_root = marketplace_root.join("plugins/env-manager");
+        fs::create_dir_all(plugin_root.join(".codex-plugin")).expect("plugin directory");
+        fs::create_dir_all(marketplace_root.join(".agents/plugins"))
+            .expect("marketplace directory");
+        write_json(
+            &plugin_root.join(".codex-plugin/plugin.json"),
+            &json!({
+                "name": PLUGIN_NAME,
+                "repository": LEGACY_ENV_MANAGER_REPOSITORY,
+            }),
+        )
+        .expect("plugin manifest");
+        write_json(
+            &marketplace_root.join(".agents/plugins/marketplace.json"),
+            &json!({
+                "name": MARKETPLACE_NAME,
+                "plugins": [{
+                    "name": PLUGIN_NAME,
+                    "source": { "source": "local", "path": "./plugins/env-manager" },
+                }],
+            }),
+        )
+        .expect("marketplace manifest");
+        assert_eq!(codex_marketplace_is_official(&marketplace_root), Some(true));
+        let config = directory.path().join("config.toml");
+        fs::write(
+            &config,
+            format!(
+                "[marketplaces.personal]\nsource_type = \"local\"\nsource = {:?}\n",
+                marketplace_root.to_string_lossy()
+            ),
+        )
+        .expect("Codex config");
+        let config_source = fs::read_to_string(&config).expect("read Codex config fixture");
+        let parsed =
+            toml::from_str::<toml::Table>(&config_source).expect("parse Codex config fixture");
+        assert_eq!(
+            parsed["marketplaces"]["personal"]["source_type"].as_str(),
+            Some("local")
+        );
+        assert_eq!(
+            parsed["marketplaces"]["personal"]["source"].as_str(),
+            Some(marketplace_root.to_string_lossy().as_ref())
+        );
+
+        assert_eq!(
+            official_codex_marketplace_aliases_from_config(&config),
+            vec![CodexMarketplaceAlias {
+                name: "personal".to_owned(),
+                remove_marketplace: true,
+            }]
+        );
     }
 
     #[test]
@@ -1302,8 +1478,29 @@ mod tests {
 
     #[test]
     fn agent_bundle_version_is_independent_from_the_app_release() {
-        assert_eq!(agent_bundle_version(), "1.9.1");
+        assert_eq!(agent_bundle_version(), "1.9.2");
         assert_ne!(agent_bundle_version(), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn official_bundle_recognizes_the_current_and_pre_rename_repositories() {
+        for repository in [KAVRANTA_REPOSITORY, LEGACY_ENV_MANAGER_REPOSITORY] {
+            assert!(manifest_is_official(&json!({
+                "name": PLUGIN_NAME,
+                "repository": repository,
+            })));
+        }
+    }
+
+    #[test]
+    fn official_bundle_rejects_unrelated_or_unidentified_plugins() {
+        assert!(!manifest_is_official(&json!({
+            "name": PLUGIN_NAME,
+            "repository": "https://github.com/example/env-manager",
+        })));
+        assert!(!manifest_is_official(&json!({
+            "name": PLUGIN_NAME,
+        })));
     }
 
     #[test]

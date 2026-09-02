@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Manage registered project env files through a redacted local MCP broker and a portable Agent Skill.",
   "author": {
     "name": "haechan1103",

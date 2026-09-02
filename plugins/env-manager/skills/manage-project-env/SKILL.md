@@ -1,9 +1,9 @@
 ---
 name: manage-project-env
-description: Safely register, inspect, manage, generate, deploy, compare, run trusted local Actions, and coordinate encrypted sharing of project environment variables with Kavranta. Use when an agent must work with env structure, access policy, groups, variables, links, opaque stdin generation, cross-project reuse, Folder Team Channels, deployment providers, value comparison, or stdin-only Provider and Action Packs. Trigger for `.env`, Wrangler `.dev.vars`, Expo/EAS environments, generated secrets such as `openssl rand`, local/development linkage, encrypted team packages, NAS folders, GitHub or Cloudflare secrets, API checks, AWS Secrets Manager, SSM, KMS, or Kavranta.
+description: Safely manage registered project environment variables through Kavranta's redacted local broker. Use for `.env` or Wrangler `.dev.vars` inspection and edits, groups, access policies, links, value-hidden generation or reuse, deployment and comparison, encrypted team sharing, and Provider or Action Packs. 한국어로 “환경변수 관리·정리”, “.env를 값 없이 확인”, “키 연결·재사용”, “환경변수 올리기”, “카브란타로 처리”를 요청할 때도 사용한다.
 ---
 
-# Manage Project Env
+# Kavranta Environment Management
 
 Use only the `env-manager` MCP tools for every supported env-data operation, including
 `.env*`, `*.env*`, and Wrangler `.dev.vars*` files, regardless

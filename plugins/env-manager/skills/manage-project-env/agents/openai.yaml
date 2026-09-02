@@ -1,7 +1,7 @@
 interface:
-  display_name: "Manage Project Env"
-  short_description: "Manage, share, deploy, and use registered environment variables safely"
-  default_prompt: "Use $manage-project-env to inspect, update, generate, share, deploy, compare, or run an installed Action Pack with registered environment configuration safely."
+  display_name: "Kavranta Env Management"
+  short_description: "Safely manage registered env files with Kavranta"
+  default_prompt: "Use $manage-project-env to inspect and safely manage this project's environment variables with Kavranta; 한국어 요청도 같은 보호 흐름으로 처리해줘."
 dependencies:
   tools:
     - type: "mcp"
