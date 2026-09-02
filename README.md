@@ -27,7 +27,7 @@
 > technical `env-manager` plugin, broker, and manifest identifiers are retained for
 > backward compatibility.
 
-Kavranta is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, and nested app env files already used by that project. Values stay in those files; there is no account, hosted vault, or new runtime command to adopt.
+Kavranta is a local-first desktop app. Register a project and it discovers the real `.env`, `.env.local`, `.env.development`, `runtime.env`, Wrangler `.dev.vars`, and nested app env files already used by that project. Environment values stay in those files. Reusable sign-in details are optional and stay in the operating system's secure store—Kavranta does not require a hosted vault or a new runtime command.
 
 ## Why use it?
 
@@ -36,6 +36,15 @@ Kavranta is a local-first desktop app. Register a project and it discovers the r
 | Your existing files and commands remain authoritative. Kavranta preserves paths, comments, ordering, and unrelated formatting. | Explicitly link the same key across two, three, or more files. Edit from any member and save every linked occurrence together. | Codex, Claude Code, and Copilot can inspect structure and perform approved operations through a redacted local broker. Protected values stay out of normal inspection responses. |
 | **Share without committing env files** | **Deploy only what you select** | **Catch Git mistakes early** |
 | Export all or selected variables as a passphrase-encrypted package, or publish immutable packages through a mounted team folder. | Send selected values to GitHub Actions, Cloudflare Workers, Expo EAS, AWS, or a locally installed CLI Pack without creating a temporary env file. | Detect missing ignore rules, already tracked env files, historical paths, and suspicious public frontend variable names. |
+| **Finish incomplete setup faster** | **Keep reusable accounts out of project files** | **Grant access per project** |
+| Filter an env file to only variables that still need a value, with the remaining count visible at a glance. | Store optional usernames and passwords in Apple Keychain or Windows Credential Manager instead of `.env`, Git, or Kavranta's local metadata. | New accounts start blocked. Explicitly allow or revoke each project; a grant never lets an AI agent run a login on its own. |
+
+## Available on `main`
+
+- **Missing-values filter:** show only variables without a value in the current env file, including a live remaining count and a clear empty state.
+- **Project-scoped local accounts:** save reusable sign-in details in Apple Keychain on macOS or Windows Credential Manager, then explicitly choose which registered projects may use each account.
+- **Safe local handling:** Kavranta stores only labels, timestamps, and project grants in local app metadata. Account fields can be copied only from an allowed project and the clipboard is cleared after 45 seconds if it has not changed.
+- **No autonomous AI login:** account CRUD, secret reads, and login execution are not exposed through the AI Broker. A project grant marks eligibility only; a future login action must still require a separate, explicit user action.
 
 ## New in 0.7.1
 
@@ -79,9 +88,15 @@ Projects and files can have local display names while their physical paths remai
 
 ### Know what needs attention
 
-The project overview combines missing values, actionable AI-access reviews, parse warnings, Git leak checks, and managed-file navigation without reading values for those checks.
+The project overview combines missing values, actionable AI-access reviews, parse warnings, Git leak checks, and managed-file navigation without reading values for those checks. Inside a file, turn on **Missing values only** to focus on unfinished setup.
 
 ![Kavranta project overview with Git safety and AI access status](assets/screenshots/kavranta-overview.png)
+
+### Reuse an account without putting it in `.env`
+
+The optional Accounts screen stores usernames and passwords in Apple Keychain or Windows Credential Manager. Kavranta keeps only non-secret labels and project grants in its local app data. Every new account is blocked from all projects until you explicitly allow one.
+
+An allowed project may copy a field on your direct desktop action; Kavranta clears an unchanged clipboard after 45 seconds. Project access does not authorize an AI agent to retrieve credentials or run a login test, and this feature is not browser autofill, cloud sync, or a replacement for an organization password manager.
 
 ### Share the whole setup—or only the part a teammate needs
 
@@ -135,7 +150,7 @@ Install and sign in to [`gh`](https://cli.github.com/manual/gh_secret_set), [Wra
 
 ## Connect your AI coding agent
 
-One independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The app detects supported tools and installs or updates their Kavranta connection.
+One independently versioned local bundle supports **Codex**, **Claude Code**, and **GitHub Copilot / VS Code**. The app detects supported tools and installs or updates their Kavranta connection. Its single `manage-project-env` Skill recognizes both English and Korean env-management requests, so separate language-specific installations are not required.
 
 <table>
   <tr>
