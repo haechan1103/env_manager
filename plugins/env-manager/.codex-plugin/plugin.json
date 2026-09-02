@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Safely inspect, plan, and manage registered project env files through a redacted local broker shared by AI coding agents.",
   "author": {
     "name": "haechan1103",
@@ -45,9 +45,8 @@
       "Multi-agent compatible workflow"
     ],
     "defaultPrompt": [
-      "이 프로젝트 env 구조를 값 없이 점검해줘.",
-      "GPT 그룹을 만들고 빈 환경변수를 추가해줘.",
-      "기존 env 주석을 관리 형식으로 정리할 계획을 만들어줘."
+      "Inspect this project's env structure without reading values.",
+      "이 프로젝트의 환경변수 구조를 값 없이 점검해줘."
     ],
     "brandColor": "#16765A"
   },

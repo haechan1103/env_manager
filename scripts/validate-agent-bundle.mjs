@@ -10,6 +10,7 @@ const claudeMarketplace = JSON.parse(await read(".claude-plugin/marketplace.json
 const mcp = JSON.parse(await read("plugins/env-manager/.mcp.json"));
 const hooks = JSON.parse(await read("plugins/env-manager/hooks/hooks.json"));
 const skill = await read("plugins/env-manager/skills/manage-project-env/SKILL.md");
+const skillInterface = await read("plugins/env-manager/skills/manage-project-env/agents/openai.yaml");
 const normalizedSkill = skill.replace(/\r\n?/g, "\n");
 const productName = "Kavranta";
 const repository = "https://github.com/haechan1103/kavranta";
@@ -37,6 +38,10 @@ assert(claudeMarketplace.plugins?.[0]?.version === version, "Claude marketplace 
 assert(mcp.mcpServers?.["env-manager"]?.command === "env-manager-broker", "MCP must use the portable broker command");
 assert(Array.isArray(hooks.hooks?.PreToolUse), "PreToolUse Guard is required");
 assert(normalizedSkill.startsWith("---\nname: manage-project-env\n"), "Skill frontmatter is missing");
+assert(normalizedSkill.includes("Kavranta"), "Skill discovery must include the Kavranta product name");
+assert(normalizedSkill.includes("환경변수"), "Skill discovery must include a Korean environment-variable trigger");
+assert(skillInterface.includes('display_name: "Kavranta Env Management"'), "Skill display name must use Kavranta");
+assert(skillInterface.includes("한국어"), "Skill default prompt must advertise the Korean workflow");
 assert(normalizedSkill.includes("plan_register_current_project"), "Skill must route safe current-project registration");
 assert(normalizedSkill.includes("find_reusable_variable_sources"), "Skill must route redacted cross-project source discovery");
 assert(normalizedSkill.includes("plan_copy_variable_from_project"), "Skill must route opaque cross-project copy plans");
