@@ -153,7 +153,7 @@ async function captureDemoFrames() {
 async function renderSocialPreview() {
   const appImage = (await readFile(heroPath)).toString("base64");
   const logoImage = (
-    await readFile(path.join(brandDir, "kavranta-logo-v1.png"))
+    await readFile(path.join(brandDir, "kavranta-logo.svg"))
   ).toString("base64");
   const context = await browser.newContext({ viewport: { width: 1280, height: 640 } });
   const page = await context.newPage();
@@ -178,8 +178,8 @@ async function renderSocialPreview() {
           .canvas { position: relative; width: 100%; height: 100%; padding: 72px 66px; }
           .brand { display: flex; align-items: center; gap: 15px; }
           .logo {
-            width: 64px; height: 64px; object-fit: cover; border-radius: 17px;
-            box-shadow: 0 10px 35px rgba(0, 0, 0, .22);
+            width: 64px; height: 64px; object-fit: contain;
+            filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .28));
           }
           .name { font-size: 24px; font-weight: 760; letter-spacing: -.02em; }
           .copy { position: relative; z-index: 2; width: 535px; margin-top: 68px; }
@@ -207,7 +207,7 @@ async function renderSocialPreview() {
       <body>
         <main class="canvas">
           <div class="brand">
-            <img class="logo" src="data:image/png;base64,${logoImage}" />
+            <img class="logo" src="data:image/svg+xml;base64,${logoImage}" />
             <span class="name">Kavranta</span>
           </div>
           <section class="copy">

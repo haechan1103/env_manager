@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/brand/kavranta-logo-v1.png" width="104" alt="Kavranta 로고" />
+  <img src="assets/brand/kavranta-logo.svg" width="104" alt="Kavranta 로고" />
   <h1>Kavranta</h1>
   <p><strong>프로젝트가 이미 사용하는 모든 <code>.env</code>를 한곳에서.</strong></p>
   <p>실행 방식을 바꾸거나 보호된 값을 AI 채팅에 붙여 넣지 않고 환경변수를 편집하고, 연결하고, 공유하고, 배포하세요.</p>
@@ -218,7 +218,17 @@ AUTH_SECRET을 `openssl rand -base64 32`로 만들고 값은 보여주지 말고
 
 ## 설치
 
-[GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest)에서 컴퓨터에 맞는 설치 파일을 받으세요.
+macOS에서는 Homebrew로 서명·공증된 앱을 설치할 수 있습니다.
+
+```bash
+brew install --cask haechan1103/tap/kavranta
+```
+
+현재 Mac에 맞춰 Apple Silicon 또는 Intel DMG가 자동으로 선택됩니다. 이후 새 버전은
+`brew upgrade --cask haechan1103/tap/kavranta`로 설치할 수 있습니다.
+
+직접 설치하거나 Windows에서 설치하려면
+[GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest)에서 컴퓨터에 맞는 파일을 받으세요.
 
 - Windows 10/11 x64 베타(미서명): `x64-setup.exe`
 - Apple Silicon(M1 이상): `aarch64` DMG
