@@ -113,6 +113,38 @@ describe("VariableRow", () => {
     }
   });
 
+  it("shows the newly saved value instead of the stale revealed value", async () => {
+    const user = userEvent.setup();
+    render(
+      <VariableRow
+        projectId="demo"
+        file=".env.local"
+        variable={variable}
+        currentGroup="GPT"
+        groups={["GPT", "App"]}
+        sameKeyFiles={[".env.local", ".env.development", "apps/api/.env"]}
+        onMutate={async (operation) => {
+          await operation();
+        }}
+        onLink={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByTitle("Show value · hides after 30 seconds of inactivity"));
+    const revealed = await screen.findByDisplayValue("fake_preview_value");
+    await user.clear(revealed);
+    await user.type(revealed, "fake_replacement_value");
+    await user.click(screen.getByRole("button", { name: "Save to 3 files" }));
+
+    expect(api.saveValue).toHaveBeenCalledWith("demo", {
+      file: ".env.local",
+      key: "GPT_API_KEY",
+      newValue: "fake_replacement_value",
+    });
+    expect(await screen.findByDisplayValue("fake_replacement_value")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("fake_preview_value")).not.toBeInTheDocument();
+  });
+
   it("shows every file in a linked peer group", () => {
     render(
       <VariableRow
