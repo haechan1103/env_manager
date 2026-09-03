@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "env-broker"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "directories",
@@ -1922,7 +1922,7 @@ dependencies = [
 
 [[package]]
 name = "env-core"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "blake3",
@@ -1940,7 +1940,7 @@ dependencies = [
 
 [[package]]
 name = "env-credentials"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "getrandom 0.4.3",
  "keyring",
@@ -1953,7 +1953,7 @@ dependencies = [
 
 [[package]]
 name = "env-manager-app"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "arboard",
@@ -1982,7 +1982,7 @@ dependencies = [
 
 [[package]]
 name = "env-provider"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "aws-config",
@@ -2010,7 +2010,7 @@ dependencies = [
 
 [[package]]
 name = "env-registry"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "env-core",
  "env-team",
@@ -2021,7 +2021,7 @@ dependencies = [
 
 [[package]]
 name = "env-remote-verifier"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "env-core",
@@ -2034,7 +2034,7 @@ dependencies = [
 
 [[package]]
 name = "env-team"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "age",
  "blake3",
@@ -2047,7 +2047,7 @@ dependencies = [
 
 [[package]]
 name = "env-test-support"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "tempfile",
 ]
