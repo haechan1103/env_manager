@@ -213,17 +213,20 @@ export function VariableRow({
             <button
               className="primary-button compact"
               disabled={variable.duplicate}
-              onClick={() =>
+              onClick={() => {
+                const submittedValue = draft;
                 void onMutate(
-                  () => api.saveValue(projectId, { file, key: variable.key, newValue: draft }),
+                  () => api.saveValue(projectId, { file, key: variable.key, newValue: submittedValue }),
                   variable.linkedCount > 1
                     ? t("row.savedLinked", { count: variable.linkedCount })
                     : t("row.saved", { key: variable.key }),
                 ).then(() => {
+                  setRevealed((current) => current === null ? null : submittedValue);
+                  setRevealActivity((activity) => activity + 1);
                   setDirty(false);
                   setDraft("");
-                })
-              }
+                });
+              }}
             >
               {variable.linkedCount > 1 ? t("row.saveLinked", { count: variable.linkedCount }) : t("common.save")}
             </button>
