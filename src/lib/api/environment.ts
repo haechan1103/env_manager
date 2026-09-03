@@ -1,0 +1,202 @@
+import { demoProjection } from "../demo";
+import type { AgentActivityEvent, CodexAccess, GitignoreUpdateSummary, MigrationPlanProjection, MutationSummary, ProjectProjection } from "../types";
+import { call, isTauriRuntime } from "./shared";
+
+export async function scanProject(projectId: string): Promise<ProjectProjection> {
+  if (!isTauriRuntime) return demoProjection;
+  return call("scan_project", { request: { projectId } });
+}
+
+export async function applyGitignoreGuard(projectId: string): Promise<GitignoreUpdateSummary> {
+  if (!isTauriRuntime) {
+    return {
+      addedPatterns: demoProjection.gitSafety.missingIgnoreFiles.map((path) => `/${path}`),
+      trackedFiles: demoProjection.gitSafety.trackedFiles,
+    };
+  }
+  return call("apply_gitignore_guard", { request: { projectId } });
+}
+
+export async function saveValue(
+  projectId: string,
+  request: { file: string; key: string; newValue: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) {
+    return { affectedFiles: [request.file], keys: [request.key] };
+  }
+  return call("save_value", { payload: { projectId, request } });
+}
+
+export async function saveDescription(
+  projectId: string,
+  request: { file: string; key: string; lines: string[] },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) {
+    return { affectedFiles: [request.file], keys: [request.key] };
+  }
+  return call("save_description", { payload: { projectId, request } });
+}
+
+export async function createGroup(
+  projectId: string,
+  request: { file: string; name: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
+  return call("create_group", { payload: { projectId, request } });
+}
+
+export async function renameGroup(
+  projectId: string,
+  request: { file: string; currentName: string; newName: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [] };
+  return call("rename_group", { payload: { projectId, request } });
+}
+
+export async function addVariable(
+  projectId: string,
+  request: {
+    file: string;
+    key: string;
+    group: string;
+    description: string[];
+    value: string;
+  },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [request.key] };
+  return call("add_variable", { payload: { projectId, request } });
+}
+
+export async function deleteVariable(
+  projectId: string,
+  request: { file: string; key: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [request.key] };
+  return call("delete_variable", {
+    payload: { projectId, request },
+    confirmed: true,
+  });
+}
+
+export async function moveVariable(
+  projectId: string,
+  request: { file: string; key: string; targetGroup: string },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [request.file], keys: [request.key] };
+  return call("move_variable", { payload: { projectId, request } });
+}
+
+export async function createLink(
+  projectId: string,
+  request: { key: string; files: string[]; sourceFile: string | null },
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: request.files, keys: [request.key] };
+  return call("create_link", { payload: { projectId, request } });
+}
+
+export async function detachLink(
+  projectId: string,
+  linkId: string,
+  file: string,
+): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("detach_link_member", { request: { projectId, linkId, file } });
+}
+
+export async function setCodexAccess(
+  projectId: string,
+  key: string,
+  access: CodexAccess,
+  confirmed: boolean,
+): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("set_codex_access", { request: { projectId, key, access, confirmed } });
+}
+
+export async function protectVariables(projectId: string, keys: string[]): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("protect_variables", { request: { projectId, keys } });
+}
+
+export async function listAgentActivity(projectId: string): Promise<AgentActivityEvent[]> {
+  if (!isTauriRuntime) {
+    return [
+      {
+        timestampMs: Date.now() - 45_000,
+        projectId,
+        actor: "codex",
+        category: "structure-inspection",
+        operation: "inspect_project",
+        relativePaths: [],
+        variableNames: [],
+        policyDecision: "redacted",
+        outcome: "allowed",
+        resultCode: "OK",
+      },
+      {
+        timestampMs: Date.now() - 180_000,
+        projectId,
+        actor: "claude-code",
+        category: "value-read",
+        operation: "read_allowed_value",
+        relativePaths: [".env.local"],
+        variableNames: ["GPT_API_KEY"],
+        policyDecision: "policy-checked",
+        outcome: "blocked",
+        resultCode: "CODEX_ACCESS_BLOCKED",
+      },
+    ];
+  }
+  return call("list_agent_activity", { request: { projectId } });
+}
+
+export async function readValue(
+  projectId: string,
+  file: string,
+  key: string,
+): Promise<string> {
+  if (!isTauriRuntime) return "fake_preview_value";
+  return call("read_value", { request: { projectId, file, key } });
+}
+
+export async function copyValue(projectId: string, file: string, key: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("copy_value", { request: { projectId, file, key } });
+}
+
+export async function copyKey(projectId: string, key: string): Promise<void> {
+  if (!isTauriRuntime) return;
+  return call("copy_key", { request: { projectId, key } });
+}
+
+export async function planMigration(
+  projectId: string,
+  file: string,
+): Promise<MigrationPlanProjection> {
+  if (!isTauriRuntime) {
+    return {
+      planId: "demo-migration-plan",
+      expiresInSeconds: 300,
+      preview: {
+        file,
+        summary:
+          "Convert 2 group markers to the `# @group` format without changing values or variable order.",
+        suggestions: [
+          { currentMarker: "# === GPT ===", groupName: "GPT" },
+          { currentMarker: "# [Database]", groupName: "Database" },
+        ],
+      },
+    };
+  }
+  return call("plan_migration", { request: { projectId, file } });
+}
+
+export async function applyMigration(
+  projectId: string,
+  planId: string,
+): Promise<MutationSummary> {
+  if (!isTauriRuntime) return { affectedFiles: [], keys: [] };
+  return call("apply_migration", {
+    request: { projectId, planId, confirmed: true },
+  });
+}
