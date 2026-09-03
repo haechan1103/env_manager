@@ -20,6 +20,7 @@
     "validate:provider-catalog": "node scripts/validate-provider-catalog.mjs",
     "validate:public-boundary": "node scripts/check-public-boundary.mjs",
     "media:readme": "node scripts/capture-readme-media.mjs",
+    "media:jocohunt": "node scripts/render-jocohunt-assets.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

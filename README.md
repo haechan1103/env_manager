@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/brand/kavranta-logo-v1.png" width="104" alt="Kavranta logo" />
+  <img src="assets/brand/kavranta-logo.svg" width="104" alt="Kavranta logo" />
   <h1>Kavranta</h1>
   <p><strong>One place for every <code>.env</code> file your project already uses.</strong></p>
   <p>Edit, link, share, and deploy environment variables—without changing your runtime or pasting protected values into AI chat.</p>
@@ -220,7 +220,17 @@ Normal structure inspection never returns values, including `read-write` values.
 
 ## Install
 
-Download the installer for your computer from [GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest):
+On macOS, install the signed and notarized app with Homebrew:
+
+```bash
+brew install --cask haechan1103/tap/kavranta
+```
+
+Homebrew selects the Apple Silicon or Intel DMG for the current Mac. Future releases
+can be installed with `brew upgrade --cask haechan1103/tap/kavranta`.
+
+For a manual installation or Windows, download the installer for your computer from
+[GitHub Releases](https://github.com/haechan1103/kavranta/releases/latest):
 
 - Windows 10/11 x64 beta (unsigned): `x64-setup.exe`
 - Apple Silicon (M1 or newer): `aarch64` DMG

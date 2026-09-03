@@ -53,7 +53,7 @@ export function ProjectSidebar({
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          <img src="/brand/kavranta-logo-v1.png" alt="" />
+          <img src="/brand/kavranta-logo.svg" alt="" />
         </span>
         <span>Kavranta</span>
       </div>

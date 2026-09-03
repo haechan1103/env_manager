@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Kavranta</title>
+  <desc id="desc">An open shield surrounding the letter K</desc>
+  <defs>
+    <linearGradient id="shield" x1="96" y1="60" x2="422" y2="444" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9bffb9" />
+      <stop offset="0.46" stop-color="#56efa0" />
+      <stop offset="1" stop-color="#20d985" />
+    </linearGradient>
+    <linearGradient id="letter" x1="202" y1="160" x2="279" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8dffb2" />
+      <stop offset="0.54" stop-color="#44e994" />
+      <stop offset="1" stop-color="#13cc78" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M449 198V111c0-27-22-49-49-49H112c-27 0-49 22-49 49v196c0 54 29 104 76 131l117 67 117-67c47-27 76-77 76-131v-16"
+    fill="none"
+    stroke="url(#shield)"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="27"
+  />
+  <path d="M153 352l34-192h61l-34 192h-61Z" fill="url(#letter)" />
+  <path d="m217 251 108-91h76L273 268l-56-17Z" fill="url(#letter)" />
+  <path d="m250 243 116 109h-77l-77-78 38-31Z" fill="url(#letter)" />
+</svg>
